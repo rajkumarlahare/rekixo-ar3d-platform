@@ -124,6 +124,8 @@ type PendingHandleFrame = {
 
 const COMPLETED_PROJECT_ID = "tiyansh-prime-square";
 const MAX_MAPPER_ZOOM = 18;
+const MAPPER_LABEL_SCREEN_FONT_PX = 14;
+const MAPPER_LABEL_SCREEN_STROKE_PX = 2.4;
 const MAX_MAPPING_DIMENSION = 6144;
 const MAX_MAPPING_PIXELS = 24_000_000;
 const TARGET_MAPPING_BYTES = 12 * 1024 * 1024;
@@ -2140,6 +2142,16 @@ export default function PlotMapper({
   const mapperViewportWidth =
     `min(${zoom * 100}%, ${(zoom * 58 * visualAspect).toFixed(4)}vh)`;
 
+  // REKIXO_MAPPER_ZOOM_STABLE_LABELS_V1
+  // The whole SVG scales linearly with mapper zoom. Counter-scale ONLY the
+  // assistive mapped-plot labels so 1800% zoom cannot turn "29" into a giant
+  // overlay that hides adjacent plot boundaries. Geometry itself stays untouched.
+  const mappedPlotLabelZoom = Math.max(1, zoom);
+  const mappedPlotLabelStyle = {
+    fontSize: `${(MAPPER_LABEL_SCREEN_FONT_PX / mappedPlotLabelZoom).toFixed(4)}px`,
+    strokeWidth: `${(MAPPER_LABEL_SCREEN_STROKE_PX / mappedPlotLabelZoom).toFixed(4)}px`,
+  };
+
   // Image, SVG, saved polygons and handles all live on the exact same natural-ratio
   // source plane. Quarter-turn rotation changes orientation, never geometry ratio.
   const sourceSceneWidth = rotationSwapsAxes
@@ -2450,7 +2462,7 @@ export default function PlotMapper({
                     const center = polygonCenter(polygon);
                     return <g key={plot.id} className={editingId === plot.id ? "mapped-plot editing" : "mapped-plot"}>
                       <polygon points={polygon.map(([x, y]) => `${x * 1000},${y * 1000}`).join(" ")} />
-                      <text x={center[0] * 1000} y={center[1] * 1000}>{plot.id}</text>
+                      <text x={center[0] * 1000} y={center[1] * 1000} style={mappedPlotLabelStyle}>{plot.id}</text>
                     </g>;
                   })}
                   {showCadOverlay && liveMatrix && cadTransformed.map(({ candidate, points: polygon }) => (
