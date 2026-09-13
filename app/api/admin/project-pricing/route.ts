@@ -5,6 +5,8 @@ import { expandPricingRules, parsePricingSheetText } from "../../../plot-pricing
 
 const PRICING_ENABLED_KEY = "pricingEnabled";
 const PRICING_SHEET_NAME_KEY = "pricingSheetName";
+const CLIENT_PRICING_EDIT_KEY = "clientPricingEditEnabled";
+const PRICING_SOURCE_KEY = "pricingLastEditSource";
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
 
@@ -34,9 +36,18 @@ function settingUpsert(projectId: string, key: string, value: string, now: strin
 }
 
 async function readSummary(projectId: string) {
-  const [enabledValue, sheetName, inventory, pricingRows] = await Promise.all([
+  const [
+    enabledValue,
+    sheetName,
+    clientEditableValue,
+    sourceValue,
+    inventory,
+    pricingRows,
+  ] = await Promise.all([
     setting(projectId, PRICING_ENABLED_KEY),
     setting(projectId, PRICING_SHEET_NAME_KEY),
+    setting(projectId, CLIENT_PRICING_EDIT_KEY),
+    setting(projectId, PRICING_SOURCE_KEY),
     env.DB.prepare("SELECT COUNT(*) AS count FROM plots WHERE project_id=?")
       .bind(projectId)
       .first<{ count: number }>(),
@@ -53,10 +64,15 @@ async function readSummary(projectId: string) {
         currency: string;
       }>(),
   ]);
+  const enabled = enabledValue === "1";
   const inventoryCount = Number(inventory?.count || 0);
   return {
-    enabled: enabledValue === "1",
+    enabled,
+    clientEditable: enabled && clientEditableValue === "1",
     sheetName,
+    source:
+      sourceValue ||
+      (sheetName ? "sheet" : pricingRows.results.length ? "existing" : ""),
     inventoryCount,
     pricedCount: pricingRows.results.length,
     unpricedCount: Math.max(0, inventoryCount - pricingRows.results.length),
@@ -85,19 +101,68 @@ export async function PATCH(request: Request) {
     return Response.json({ error: "Invalid request origin" }, { status: 403 });
 
   const body = (await request.json().catch(() => null)) as
-    | { projectId?: unknown; enabled?: unknown }
+    | {
+        projectId?: unknown;
+        enabled?: unknown;
+        clientEditable?: unknown;
+      }
     | null;
   const projectId = String(body?.projectId || "");
   if (!(await projectExists(projectId)))
     return Response.json({ error: "Project nahi mila" }, { status: 404 });
-  if (typeof body?.enabled !== "boolean")
-    return Response.json({ error: "Pricing checkbox value invalid hai" }, { status: 400 });
+
+  const hasEnabled = typeof body?.enabled === "boolean";
+  const hasClientEditable = typeof body?.clientEditable === "boolean";
+  if (!hasEnabled && !hasClientEditable)
+    return Response.json(
+      { error: "Pricing setting value invalid hai" },
+      { status: 400 },
+    );
 
   const now = new Date().toISOString();
-  await settingUpsert(projectId, PRICING_ENABLED_KEY, body.enabled ? "1" : "0", now).run();
-  await writeAudit(actor, "project.pricing_toggled", projectId, null, {
-    enabled: body.enabled,
-  });
+
+  if (hasEnabled) {
+    await env.DB.batch([
+      settingUpsert(
+        projectId,
+        PRICING_ENABLED_KEY,
+        body?.enabled ? "1" : "0",
+        now,
+      ),
+      ...(body?.enabled
+        ? []
+        : [settingUpsert(projectId, CLIENT_PRICING_EDIT_KEY, "0", now)]),
+    ]);
+    await writeAudit(actor, "project.pricing_toggled", projectId, null, {
+      enabled: Boolean(body?.enabled),
+      clientPricingEditDisabled: body?.enabled === false,
+    });
+  }
+
+  if (hasClientEditable) {
+    const pricingEnabled = hasEnabled
+      ? Boolean(body?.enabled)
+      : (await setting(projectId, PRICING_ENABLED_KEY)) === "1";
+    if (body?.clientEditable && !pricingEnabled)
+      return Response.json(
+        { error: "Pehle project pricing ON karein" },
+        { status: 409 },
+      );
+
+    await settingUpsert(
+      projectId,
+      CLIENT_PRICING_EDIT_KEY,
+      body?.clientEditable ? "1" : "0",
+      now,
+    ).run();
+    await writeAudit(
+      actor,
+      "project.client_pricing_permission_updated",
+      projectId,
+      null,
+      { enabled: Boolean(body?.clientEditable) },
+    );
+  }
 
   return Response.json({ projectId, ...(await readSummary(projectId)) });
 }
@@ -164,6 +229,7 @@ export async function POST(request: Request) {
         ),
       ),
       settingUpsert(projectId, PRICING_SHEET_NAME_KEY, file.name.slice(0, 240), now),
+      settingUpsert(projectId, PRICING_SOURCE_KEY, "sheet", now),
     ];
     await env.DB.batch(statements);
 

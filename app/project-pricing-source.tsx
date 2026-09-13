@@ -1,12 +1,14 @@
 "use client";
 
-import { CheckCircle2, Download, FileText, IndianRupee } from "lucide-react";
+import { CheckCircle2, Download, FileText, IndianRupee, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type PricingSummary = {
   projectId?: string;
   enabled?: boolean;
+  clientEditable?: boolean;
   sheetName?: string;
+  source?: string;
   inventoryCount?: number;
   pricedCount?: number;
   unpricedCount?: number;
@@ -27,7 +29,9 @@ export default function ProjectPricingSource({
   notify: (message: string) => void;
 }) {
   const [enabled, setEnabled] = useState(false);
+  const [clientEditable, setClientEditable] = useState(false);
   const [sheetName, setSheetName] = useState("");
+  const [source, setSource] = useState("");
   const [inventoryCount, setInventoryCount] = useState(0);
   const [pricedCount, setPricedCount] = useState(0);
   const [unpricedCount, setUnpricedCount] = useState(0);
@@ -36,7 +40,9 @@ export default function ProjectPricingSource({
 
   function applySummary(data: PricingSummary) {
     setEnabled(Boolean(data.enabled));
+    setClientEditable(Boolean(data.clientEditable));
     setSheetName(String(data.sheetName || ""));
+    setSource(String(data.source || ""));
     setInventoryCount(Number(data.inventoryCount || 0));
     setPricedCount(Number(data.pricedCount || 0));
     setUnpricedCount(Number(data.unpricedCount || 0));
@@ -61,21 +67,29 @@ export default function ProjectPricingSource({
     );
   }, [projectId]);
 
+  async function patchSetting(payload: {
+    enabled?: boolean;
+    clientEditable?: boolean;
+  }) {
+    const response = await fetch("/api/admin/project-pricing", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ projectId, ...payload }),
+    });
+    const data = await jsonResult(response);
+    applySummary(data);
+    return data;
+  }
+
   async function togglePricing(next: boolean) {
     if (busy) return;
     setBusy(true);
     try {
-      const response = await fetch("/api/admin/project-pricing", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId, enabled: next }),
-      });
-      const data = await jsonResult(response);
-      applySummary(data);
+      await patchSetting({ enabled: next });
       notify(
         next
           ? "Pricing feature ON — ab pricing CSV/JSON upload karein"
-          : "Pricing feature OFF — saved rates safe hain aur public site se hidden hain",
+          : "Pricing feature OFF — saved rates safe hain; Client Admin pricing permission bhi OFF hai",
       );
     } catch (error) {
       notify(error instanceof Error ? error.message : "Pricing setting save nahi hui");
@@ -84,8 +98,38 @@ export default function ProjectPricingSource({
     }
   }
 
+  async function toggleClientEditing(next: boolean) {
+    if (busy || !enabled) return;
+    setBusy(true);
+    try {
+      await patchSetting({ clientEditable: next });
+      notify(
+        next
+          ? "Client Admin ab plot pricing edit kar sakta hai"
+          : "Client Admin pricing edit permission OFF ho gayi",
+      );
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Client pricing permission save nahi hui",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function uploadPricing(file: File) {
     if (busy || !enabled) return;
+    if (
+      source === "client" &&
+      pricedCount > 0 &&
+      !window.confirm(
+        "Pricing sheet upload existing Client Admin/manual pricing ko replace karegi. Continue?",
+      )
+    )
+      return;
+
     setBusy(true);
     try {
       const form = new FormData();
@@ -145,6 +189,24 @@ export default function ProjectPricingSource({
 
       {enabled ? (
         <div className="mapper-pricing-body">
+          <label className="mapper-pricing-client-permission">
+            <input
+              type="checkbox"
+              checked={clientEditable}
+              disabled={loading || busy}
+              onChange={(event) => void toggleClientEditing(event.target.checked)}
+            />
+            <span><ShieldCheck /></span>
+            <div>
+              <b>Allow Client Admin to edit pricing</b>
+              <small>
+                Default OFF · Client sirf pricing rows edit karega; polygon, area,
+                status aur plot details permission nahi milti.
+              </small>
+            </div>
+            <em>{clientEditable ? "ALLOWED" : "OFF"}</em>
+          </label>
+
           <label className={`mapper-upload-card mapper-pricing-upload ${sheetName && pricedCount ? "ready" : ""}`}>
             <span><FileText /></span>
             <div>
@@ -168,6 +230,7 @@ export default function ProjectPricingSource({
             <span>Inventory <b>{inventoryCount}</b></span>
             <span>Priced <b>{pricedCount}</b></span>
             <span>Unpriced <b>{unpricedCount}</b></span>
+            <span>Last source <b>{source === "client" ? "Client Admin" : source === "sheet" ? "Sheet" : source || "—"}</b></span>
           </div>
 
           <div className="mapper-pricing-actions">
