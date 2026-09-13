@@ -2293,7 +2293,13 @@ body {
 .mapper-source-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:11px}.mapper-source-actions button{min-height:36px;display:inline-flex;align-items:center;gap:6px;border:1px solid #304764;border-radius:9px;background:#0b1a2c;color:#9fc6ff;padding:0 10px;font-size:10px;font-weight:900}.mapper-source-actions button svg{width:15px}.mapper-source-actions small{color:#74849e;font-size:10px;line-height:1.4}
 
 /* Rekixo Plot Mapper V4 — image-first mobile precision workflow ---------------- */
-.mapper-v4-work{grid-template-columns:minmax(0,1fr) 300px}
+/* REKIXO_MAPPER_DESKTOP_FULL_WIDTH_SELECTION_V1
+   Precision mapping owns the full row. Project plots remains available as a
+   bounded tray below it instead of permanently consuming 300px on the right. */
+.mapper-v4-work{grid-template-columns:minmax(0,1fr)}
+.mapper-v4-work>.mapper-v4-canvas{grid-column:1;min-width:0}
+.mapper-v4-work>.mapper-review-list{grid-column:1;min-width:0;max-height:min(38vh,360px);overflow:auto}
+@media(min-width:981px){.mapper-v4-work>.mapper-review-list .review-summary{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .mapper-v4-canvas{position:relative;overflow:auto;overscroll-behavior:contain;background:#050b15}
 .mapper-v4-current{position:sticky;z-index:8;top:0;left:0;display:grid;grid-template-columns:44px minmax(0,1fr) auto 44px;align-items:center;gap:7px;min-width:100%;padding:8px;background:#071322f5;border-bottom:1px solid #273a55;backdrop-filter:blur(10px)}
 .mapper-v4-current>button{width:44px;height:44px;border:1px solid #30425f;border-radius:11px;background:#0f1e32;color:#b9c8de;display:grid;place-items:center}
