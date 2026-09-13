@@ -67,9 +67,10 @@ test("public 2D runtime applies project theme through CSS variables", () => {
 
 test("STATUS toggle stays visible while selected polygon keeps stronger tint", () => {
   assert.match(page, /\.show-all \.plot\[data-status="available"\]\{fill:rgba\(var\(--plot-available-rgb\),\.26\)/);
-  assert.match(page, /\.show-all \.plot\.selected\[data-status="available"\][\s\S]*fill:rgba\(var\(--plot-available-rgb\),\.36\)/);
-  assert.match(page, /\.show-all \.plot\.selected\[data-status="booked"\][\s\S]*fill:rgba\(var\(--plot-booked-rgb\),\.38\)/);
-  assert.match(page, /\.show-all \.plot\.selected\[data-status="sold"\][\s\S]*fill:rgba\(var\(--plot-sold-rgb\),\.38\)/);
+  assert.match(page, /REKIXO_PUBLIC_2D_SELECTED_STATUS_PRIORITY_V1/);
+  assert.match(page, /\.show-all \.plot\.selected\[data-status="available"\][\s\S]*fill:rgba\(var\(--plot-available-rgb\),\.60\)/);
+  assert.match(page, /\.show-all \.plot\.selected\[data-status="booked"\][\s\S]*fill:rgba\(var\(--plot-booked-rgb\),\.62\)/);
+  assert.match(page, /\.show-all \.plot\.selected\[data-status="sold"\][\s\S]*fill:rgba\(var\(--plot-sold-rgb\),\.62\)/);
 });
 
 test("3D engine remains independent from project 2D status theme", () => {

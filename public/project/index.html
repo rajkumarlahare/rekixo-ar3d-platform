@@ -63,7 +63,7 @@ html.rekixo-project-error .rekixo-boot-error{display:grid}
 .map.gesture-active .world{will-change:transform}
 .plot{fill:rgba(32,225,125,.001);stroke:transparent;stroke-width:1.1;vector-effect:non-scaling-stroke;cursor:pointer;transition:fill .12s,stroke .12s,filter .12s}
 .plot.selected{fill:rgba(var(--plot-available-rgb),.22);stroke:#fff;stroke-width:1.45;filter:drop-shadow(0 0 3px rgba(var(--plot-available-rgb),.75))}
-/* REKIXO_PUBLIC_2D_SELECTED_STATUS_CONTRAST_V2
+/* REKIXO_PUBLIC_2D_SELECTED_STATUS_CONTRAST_V3
    REKIXO_PROJECT_STATUS_THEME_V1
    Presentation only. Project-scoped CSS variables never rewrite canonical polygons. */
 .plot.selected[data-status="available"]{fill:rgba(var(--plot-available-rgb),.36);filter:drop-shadow(0 0 4px rgba(var(--plot-available-rgb),.82))}
@@ -83,10 +83,14 @@ html.rekixo-project-error .rekixo-boot-error{display:grid}
 .status-line b{color:#697794;font-size:12px}.status-line.total{padding-top:10px;border-top:1px solid #263149;color:#697794}.status-line.total b{color:#ffd900;font-size:18px}.sdot{width:11px;height:11px;border:2px solid currentColor;border-radius:50%;display:inline-block;margin-right:7px;vertical-align:-1px}.available{color:rgb(var(--plot-available-rgb))}.booked{color:rgb(var(--plot-booked-rgb))}.sold{color:rgb(var(--plot-sold-rgb))}
 .status-option.available b{color:rgb(var(--plot-available-rgb))}.status-option.booked b{color:rgb(var(--plot-booked-rgb))}.status-option.sold b{color:rgb(var(--plot-sold-rgb))}
 .show-all.status-filter-available .plot[data-status="available"]{fill:rgba(var(--plot-available-rgb),.34);stroke:rgba(var(--plot-available-rgb),.88);stroke-width:1}.show-all.status-filter-booked .plot[data-status="booked"]{fill:rgba(var(--plot-booked-rgb),.36);stroke:rgba(var(--plot-booked-rgb),.90);stroke-width:1}.show-all.status-filter-sold .plot[data-status="sold"]{fill:rgba(var(--plot-sold-rgb),.37);stroke:rgba(var(--plot-sold-rgb),.92);stroke-width:1}.show-all.status-filter-available .plot:not([data-status="available"]),.show-all.status-filter-booked .plot:not([data-status="booked"]),.show-all.status-filter-sold .plot:not([data-status="sold"]){fill:rgba(0,0,0,0)!important;stroke:transparent!important;filter:none!important}.show-all.status-filter-available .plot.selected:not([data-status="available"]),.show-all.status-filter-booked .plot.selected:not([data-status="booked"]),.show-all.status-filter-sold .plot.selected:not([data-status="sold"]){fill:rgba(0,0,0,0)!important;stroke:transparent!important;filter:none!important}.plot.selected{stroke:#fff;stroke-width:1.45}
-/* Final cascade contract: STATUS ON can never wash out the selected plot. */
-.show-all .plot.selected[data-status="available"]{fill:rgba(var(--plot-available-rgb),.36);filter:drop-shadow(0 0 4px rgba(var(--plot-available-rgb),.82))}
-.show-all .plot.selected[data-status="booked"]{fill:rgba(var(--plot-booked-rgb),.38);filter:drop-shadow(0 0 4px rgba(var(--plot-booked-rgb),.82))}
-.show-all .plot.selected[data-status="sold"]{fill:rgba(var(--plot-sold-rgb),.38);filter:drop-shadow(0 0 4px rgba(var(--plot-sold-rgb),.84))}
+/* REKIXO_PUBLIC_2D_SELECTED_STATUS_PRIORITY_V1
+   STATUS ON paints every plot, so selected must keep a real perceptual gap.
+   Project-scoped RGB remains the source of truth; only presentation strength is boosted.
+   Regression contract: selected alpha stays >= .25 above both all-status and filtered tints. */
+.show-all .plot.selected[data-status]{stroke:#fff;stroke-width:2.05}
+.show-all .plot.selected[data-status="available"]{fill:rgba(var(--plot-available-rgb),.60);filter:drop-shadow(0 0 5px rgba(var(--plot-available-rgb),.92))}
+.show-all .plot.selected[data-status="booked"]{fill:rgba(var(--plot-booked-rgb),.62);filter:drop-shadow(0 0 5px rgba(var(--plot-booked-rgb),.94))}
+.show-all .plot.selected[data-status="sold"]{fill:rgba(var(--plot-sold-rgb),.62);filter:drop-shadow(0 0 5px rgba(var(--plot-sold-rgb),.96))}
 /* REKIXO_SELECTED_PLOT_FOCUS_FX_V1
    Visual-only selected plot focus: moving edge + soft breathing glow.
    No canonical polygon, hit-area or status data mutation. */
