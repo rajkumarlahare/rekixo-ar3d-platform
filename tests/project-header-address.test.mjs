@@ -33,12 +33,12 @@ test("Super Mapper allows only a validated short address setting", () => {
   assert.match(route, /value\.length > 180/);
 });
 
-test("public API exposes address and customer site renders it below title", () => {
+test("public API exposes address and customer site renders it below title through width-safe subtitle lane", () => {
   assert.match(publicData, /"address"/);
   assert.match(site, /const resolvedAddress=String\(s\.address\|\|resolvedLocation\)\.trim\(\)/);
   assert.match(
     site,
-    /location\.textContent=\(resolvedAddress\|\|PROJECT_LOCATION\)\.toUpperCase\(\)/,
+    /setBrandSubtitle\(\(resolvedAddress\|\|PROJECT_LOCATION\)\.toUpperCase\(\)\)/,
   );
 });
 

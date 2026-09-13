@@ -434,6 +434,18 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
   .pill{font-size:8px;padding-left:8px}
 }
 
+/* REKIXO_RESPONSIVE_BRAND_SUBTITLE_TICKER_V1_1
+   Project address never owns header width. Only real overflow moves. */
+.brandrow{width:100%;max-width:100%;min-width:0;overflow:hidden}
+.brand{flex:1 1 0;min-width:0;max-width:100%;overflow:hidden}
+.brand b{max-width:100%}
+.head-actions{flex:0 0 auto;flex-shrink:0}
+.brand-subtitle{display:block;width:100%;max-width:100%;min-width:0;overflow:hidden;white-space:nowrap;contain:paint}
+.brand-subtitle-track{display:inline-block;width:max-content;max-width:none;white-space:nowrap;will-change:transform}
+.brand-subtitle.is-overflowing .brand-subtitle-track{animation:rekixo-subtitle-pan var(--rekixo-subtitle-duration,8s) ease-in-out infinite}
+@keyframes rekixo-subtitle-pan{0%,14%,100%{transform:translate3d(0,0,0)}42%,64%{transform:translate3d(var(--rekixo-subtitle-shift,0px),0,0)}}
+@media(prefers-reduced-motion:reduce){.brand-subtitle-track{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto}}
+
 </style>
 
 </head>
@@ -449,7 +461,7 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
 <header class="header">
   <div class="brandrow">
     <div class="brandmark"><img class="project-logo" id="projectLogo" alt="" hidden><div class="monogram">TPS<small>TIYANSH</small></div></div>
-    <div class="brand"><b>TIYANSH — THE PRIME SQUARE</b><small>RAIGARH, CHHATTISGARH</small></div>
+    <div class="brand"><b>TIYANSH — THE PRIME SQUARE</b><small class="brand-subtitle" id="brandSubtitle"><span class="brand-subtitle-track" id="brandSubtitleTrack">RAIGARH, CHHATTISGARH</span></small></div>
     <div class="head-actions">
       <button class="icon" id="callTop" aria-label="Call">
         <svg viewBox="0 0 24 24"><path d="M7.2 3.5 4.6 5.3c-.8.6-.9 1.8-.4 3 2.2 5.4 6.1 9.3 11.5 11.5 1.2.5 2.4.4 3-.4l1.8-2.6-4-3-1.8 1.8c-2.6-1.1-5.2-3.7-6.3-6.3l1.8-1.8-3-4Z"/></svg>
@@ -695,6 +707,45 @@ rekixoStartPublicBoot();
   const plots = GENERIC_BOOT ? [] : (Array.isArray(window.TIYANSH_PLOTS) ? window.TIYANSH_PLOTS : []);
   let ACTIVE_PROJECT_ID=GENERIC_BOOT?'':REKIXO_DEFAULT_PROJECT;
   const q = s => document.querySelector(s);
+
+  // REKIXO_RESPONSIVE_BRAND_SUBTITLE_TICKER_V1_1
+  const subtitleLane=q('#brandSubtitle'),subtitleTrack=q('#brandSubtitleTrack');
+  const subtitleMotionMQ=window.matchMedia('(prefers-reduced-motion: reduce)');
+  let subtitleMeasureRaf=0;
+  function syncBrandSubtitleMotion(){
+    if(!subtitleLane||!subtitleTrack)return;
+    subtitleLane.classList.remove('is-overflowing');
+    subtitleTrack.style.removeProperty('--rekixo-subtitle-shift');
+    subtitleTrack.style.removeProperty('--rekixo-subtitle-duration');
+    if(subtitleMotionMQ.matches)return;
+    const overflow=Math.ceil(subtitleTrack.scrollWidth-subtitleLane.clientWidth);
+    if(overflow<=3)return;
+    subtitleTrack.style.setProperty('--rekixo-subtitle-shift',`-${overflow}px`);
+    const duration=Math.max(7,Math.min(12,7+overflow/45));
+    subtitleTrack.style.setProperty('--rekixo-subtitle-duration',duration.toFixed(2)+'s');
+    subtitleLane.classList.add('is-overflowing');
+  }
+  function scheduleBrandSubtitleMotion(){
+    if(subtitleMeasureRaf)return;
+    subtitleMeasureRaf=requestAnimationFrame(()=>{subtitleMeasureRaf=0;syncBrandSubtitleMotion()});
+  }
+  function setBrandSubtitle(value){
+    if(!subtitleLane||!subtitleTrack)return;
+    const text=String(value||'').trim();
+    subtitleTrack.textContent=text;
+    subtitleLane.title=text;
+    scheduleBrandSubtitleMotion();
+  }
+  if(subtitleLane&&subtitleTrack){
+    if(typeof ResizeObserver==='function')new ResizeObserver(scheduleBrandSubtitleMotion).observe(subtitleLane);
+    window.addEventListener('resize',scheduleBrandSubtitleMotion,{passive:true});
+    window.visualViewport?.addEventListener('resize',scheduleBrandSubtitleMotion);
+    document.fonts?.ready?.then(scheduleBrandSubtitleMotion);
+    if(typeof subtitleMotionMQ.addEventListener==='function')subtitleMotionMQ.addEventListener('change',scheduleBrandSubtitleMotion);
+    else subtitleMotionMQ.addListener?.(scheduleBrandSubtitleMotion);
+    scheduleBrandSubtitleMotion();
+  }
+
   const contactDigits = value => String(value||'').replace(/\D/g,'');
   function applyContactChannels(settings,isDefaultProject){
     const primary=contactDigits(settings?.phone1);
@@ -1172,7 +1223,7 @@ rekixoStartPublicBoot();
         if(miniProjectLogo instanceof Element)miniProjectLogo.remove();
       }
     }
-    const location=document.querySelector('.brand small');if(location)location.textContent=(resolvedAddress||PROJECT_LOCATION).toUpperCase();
+    setBrandSubtitle((resolvedAddress||PROJECT_LOCATION).toUpperCase());
     const sub=document.querySelector('.dhead .sub');if(sub)sub.textContent=(resolvedAddress||PROJECT_LOCATION).toUpperCase();
     const gallerySub=document.querySelector('.gallery-head p');if(gallerySub)gallerySub.textContent=[resolvedBrand||PROJECT_NAME,PROJECT_LOCATION].filter(Boolean).join(' · ').toUpperCase();
     const master=document.querySelector('.master');

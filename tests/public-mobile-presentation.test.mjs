@@ -30,13 +30,13 @@ test("mobile controls use safe shared HUD gutters", () => {
   assert.match(source, /aria-label="Toggle plot boundaries" aria-pressed="false"/);
 });
 
-test("project header prefers address under title", () => {
+test("project header prefers address under title through width-safe subtitle lane", () => {
   assert.match(
     source,
     /const resolvedAddress=String\(s\.address\|\|resolvedLocation\)\.trim\(\)/,
   );
   assert.match(
     source,
-    /location\.textContent=\(resolvedAddress\|\|PROJECT_LOCATION\)\.toUpperCase\(\)/,
+    /setBrandSubtitle\(\(resolvedAddress\|\|PROJECT_LOCATION\)\.toUpperCase\(\)\)/,
   );
 });
