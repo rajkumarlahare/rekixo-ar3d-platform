@@ -38,6 +38,7 @@ import {
   type MapperPoint,
 } from "./mapper-geometry";
 import ProjectPricingSource from "./project-pricing-source";
+import ProjectStartView from "./project-start-view";
 
 type Plot = {
   id: string;
@@ -2229,6 +2230,14 @@ export default function PlotMapper({
         <ProjectPricingSource
           key={`pricing:${projectId}`}
           projectId={projectId}
+          notify={notify}
+        />
+
+        <ProjectStartView
+          key={`start-view:${projectId}`}
+          projectId={projectId}
+          plots={plots}
+          masterplanUrl={imageUrl}
           notify={notify}
         />
 

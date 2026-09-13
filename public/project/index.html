@@ -801,6 +801,7 @@ rekixoStartPublicBoot();
   let toastTimer = null, mode3D = false, engine3D = null, mapRaf = 0, resizeRaf = 0;
   let PUBLIC_READY = false, HAS_MASTERPLAN = false;
   let publicRotation = 0;
+  let publicInitialViewMode='legacy', publicInitialFocusX=.5, publicInitialFocusY=.5;
   world.style.visibility = 'hidden';
   let gesture = null;
   const pointers = new Map();
@@ -874,7 +875,42 @@ rekixoStartPublicBoot();
     if(percent!==lastPercent){lastPercent=percent;percentEl.textContent=percent+'%'}
   }
   function scheduleRender(){if(!mapRaf)mapRaf=requestAnimationFrame(()=>{mapRaf=0;render()})}
+  // REKIXO_PROJECT_START_VIEW_V1
+  function normalizeInitialViewMode(value){
+    const mode=String(value||'').trim().toLowerCase();
+    return mode==='plots'||mode==='custom'?mode:'legacy'
+  }
+  function normalizeUnitFocus(value,fallback=.5){
+    const n=Number(value);
+    return Number.isFinite(n)&&n>=0&&n<=1?n:fallback
+  }
+  function panForStartFocus(x,y){
+    const dx=normalizeUnitFocus(x)*W-W/2,dy=normalizeUnitFocus(y)*H-H/2;
+    const r=rotateOffset(dx,dy,publicRotation);
+    return{x:-r.x*scale,y:-r.y*scale}
+  }
+  function mappedPlotsCenterFocus(){
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,count=0;
+    for(const p of plots){
+      if(!Array.isArray(p?.points)||p.points.length<3)continue;
+      for(const point of p.points){
+        const x=Number(point?.[0]),y=Number(point?.[1]);
+        if(!Number.isFinite(x)||!Number.isFinite(y))continue;
+        minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);count++
+      }
+    }
+    return count?{x:((minX+maxX)/2)/Math.max(1,W),y:((minY+maxY)/2)/Math.max(1,H)}:null
+  }
   function initialPanForPresentation(){
+    if(publicInitialViewMode==='custom'){
+      return panForStartFocus(publicInitialFocusX,publicInitialFocusY)
+    }
+    if(publicInitialViewMode==='plots'){
+      const focus=mappedPlotsCenterFocus();
+      if(focus)return panForStartFocus(focus.x,focus.y)
+    }
+    // Legacy branch intentionally stays byte-equivalent in behavior for every
+    // existing project that has no start-view setting.
     if(!isMobilePanorama())return{x:0,y:0};
     // Positive X moves the centered world right, aligning its displayed left
     // edge with the viewport. User then drags left to reveal the right side.
@@ -1212,6 +1248,9 @@ rekixoStartPublicBoot();
     const s=data&&data.settings||{};
     applyPlotStatusTheme(s);
     publicRotation=normalizeQuarterTurn(s.publicRotation);
+    publicInitialViewMode=normalizeInitialViewMode(s.publicInitialViewMode);
+    publicInitialFocusX=normalizeUnitFocus(s.publicInitialFocusX,.5);
+    publicInitialFocusY=normalizeUnitFocus(s.publicInitialFocusY,.5);
     // Saved polygons stay canonical. Only the shared presentation world rotates.
     setMapDimensions(isTiyansh?1200:(s.mapWidth||1200),isTiyansh?2133:(s.mapHeight||2133));
     if(!isTiyansh){

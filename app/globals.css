@@ -2696,3 +2696,30 @@ body {
 .mapper-pricing-actions button svg{width:15px;height:15px}
 .mapper-pricing-actions small{color:#8295b2;line-height:1.45;flex:1 1 320px}
 @media(max-width:620px){.mapper-pricing-toggle{grid-template-columns:auto auto minmax(0,1fr)}.mapper-pricing-toggle em{grid-column:2/4}.mapper-pricing-actions button{width:100%;justify-content:center}}
+
+/* REKIXO_PROJECT_START_VIEW_V1
+   Presentation settings only; polygon geometry is never rewritten here. */
+.mapper-start-view-card{margin-top:12px;border:1px solid #243553;border-radius:16px;background:#0b172a;padding:14px 16px;display:grid;gap:13px}
+.mapper-start-view-head{display:flex;align-items:center;gap:10px}
+.mapper-start-view-head>div{display:grid;gap:3px}
+.mapper-start-view-head b{font-size:14px}
+.mapper-start-view-head small{color:#8da0bd;font-size:11px;line-height:1.45}
+.mapper-start-view-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#142d4d;color:#8ebdff;flex:none}
+.mapper-start-view-icon svg{width:18px;height:18px}
+.mapper-start-view-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.mapper-start-view-modes label{display:flex;gap:9px;align-items:flex-start;border:1px solid #273955;background:#091425;border-radius:13px;padding:11px;cursor:pointer;min-width:0}
+.mapper-start-view-modes input{margin-top:2px;accent-color:#20c982}
+.mapper-start-view-modes span{display:grid;gap:4px;min-width:0}
+.mapper-start-view-modes b{font-size:12px}
+.mapper-start-view-modes small{font-size:10px;line-height:1.4;color:#8194b1}
+.mapper-start-view-preview{position:relative;width:min(720px,100%);justify-self:center;border:1px solid #2a3e5e;border-radius:14px;overflow:hidden;background:#050b15;cursor:crosshair;touch-action:manipulation}
+.mapper-start-view-preview img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+.mapper-start-view-marker{position:absolute;transform:translate(-50%,-50%);width:34px;height:34px;border:2px solid #fff;border-radius:50%;display:grid;place-items:center;background:#0a182bd9;color:#5ff0b0;box-shadow:0 0 0 4px #20c98255,0 5px 18px #0009;pointer-events:none}
+.mapper-start-view-marker svg{width:18px;height:18px}
+.mapper-start-view-meta{display:flex;gap:8px;flex-wrap:wrap}
+.mapper-start-view-meta span{border:1px solid #263955;background:#0a1424;border-radius:999px;padding:7px 10px;font-size:11px;color:#8da0bd}
+.mapper-start-view-meta b{color:#f3f7ff}
+.mapper-start-view-center,.mapper-start-view-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.mapper-start-view-center svg,.mapper-start-view-actions svg{width:15px;height:15px}
+.mapper-start-view-actions{display:flex;gap:9px;flex-wrap:wrap}
+@media(max-width:760px){.mapper-start-view-modes{grid-template-columns:1fr}.mapper-start-view-actions button,.mapper-start-view-center{width:100%}}
