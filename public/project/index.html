@@ -1341,7 +1341,22 @@ rekixoStartPublicBoot();
   updateStatusCounts();
 
   q('#searchForm').onsubmit=e=>{e.preventDefault();const id=norm(q('#searchInput').value),p=plots.find(x=>x.id===id);if(!p)return toast('Plot not found');if(mode3D){selected=p;setSelected(p.id);engine3D?.select(p.id,true,false);toast('Plot '+p.id+' selected')}else openPlot(p,true)};
-  q('#closeBtn').onclick=close; scrim.onclick=close;
+  /* REKIXO_PLOT_DRAWER_GHOST_CLICK_FIX_V3
+     A plot is opened from pointerup. Some mobile browsers can dispatch the
+     trailing click after the drawer/scrim have appeared; while the drawer is
+     still sliding in, that click can land on the scrim and instantly close it.
+     Keep normal scrim-close behavior, but ignore only that tiny post-open
+     click window. lastPlotOpenAt already uses performance.now() above. */
+  const PLOT_DRAWER_OPEN_CLICK_GUARD_MS=420;
+  function closeFromScrim(event){
+    if(performance.now()-lastPlotOpenAt<PLOT_DRAWER_OPEN_CLICK_GUARD_MS){
+      event.preventDefault();
+      event.stopPropagation();
+      return
+    }
+    close()
+  }
+  q('#closeBtn').onclick=close; scrim.onclick=closeFromScrim;
   function call(){if(!CALL_PHONE)return toast('Contact number not configured');location.href='tel:+'+CALL_PHONE}
   q('#callTop').onclick=call;q('#callBtn').onclick=call;
   q('#waBtn').onclick=()=>{if(!WHATSAPP_PHONE)return toast('WhatsApp number not configured');const place=PROJECT_LOCATION?`, ${PROJECT_LOCATION}`:'';const msg=selected?`Hello, I am interested in Plot ${selected.id} at ${PROJECT_NAME}${place}. Please share current availability, price and booking details.`:`Hello, I would like details about ${PROJECT_NAME}${place}.`;window.open('https://wa.me/'+WHATSAPP_PHONE+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer')};
