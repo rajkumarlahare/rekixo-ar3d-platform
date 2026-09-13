@@ -20,6 +20,7 @@ import ProjectPublishPanel from "./project-publish-panel";
 import ProjectProfileManager from "./project-profile-manager";
 import ProjectShareManager from "./project-share-manager";
 import ProjectStatusThemeManager from "./project-status-theme-manager";
+import MotionSwap, { MotionToast } from "./motion-swap";
 
 type Project = {
   id: string;
@@ -183,6 +184,7 @@ export default function SuperAdminDashboard({
           </button>
         </nav>
 
+        <MotionSwap motionKey={`${tab}:${tab === "clients" ? "clients" : projectId || "none"}`}><div className="super-motion-panel">
         {tab === "clients" ? (
           <>
             <ClientAdminManager notify={notify} />
@@ -236,9 +238,10 @@ export default function SuperAdminDashboard({
             )}
           </>
         )}
+        </div></MotionSwap>
       </main>
 
-      {toast ? <div className="toast-admin">{toast}</div> : null}
+      <MotionToast message={toast} />
     </div>
   );
 }

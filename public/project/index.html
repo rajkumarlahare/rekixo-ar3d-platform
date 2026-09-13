@@ -452,6 +452,169 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
 @keyframes rekixo-subtitle-pan{0%,14%,100%{transform:translate3d(0,0,0)}42%,64%{transform:translate3d(var(--rekixo-subtitle-shift,0px),0,0)}}
 @media(prefers-reduced-motion:reduce){.brand-subtitle-track{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto}}
 
+
+/* REKIXO_UI_MOTION_SYSTEM_V1
+   Presentation-only motion layer. Map world, hotspots, plot polygons and 3D
+   canvas are intentionally excluded from generic transforms. */
+:root{
+  --rekixo-motion-fast:120ms;
+  --rekixo-motion-base:210ms;
+  --rekixo-motion-panel:280ms;
+  --rekixo-ease-standard:cubic-bezier(.2,.8,.2,1);
+  --rekixo-ease-enter:cubic-bezier(.22,1,.36,1);
+  --rekixo-ease-exit:cubic-bezier(.4,0,1,1)
+}
+@keyframes rekixo-public-shell-in{
+  from{opacity:0;transform:translate3d(0,7px,0)}
+  to{opacity:1;transform:translate3d(0,0,0)}
+}
+@keyframes rekixo-public-item-in{
+  from{opacity:0;transform:translate3d(0,6px,0) scale(.992)}
+  to{opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .header{
+  animation:rekixo-public-shell-in var(--rekixo-motion-panel) var(--rekixo-ease-enter) both
+}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .compass,
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .view-mode,
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .mini-logo,
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .status,
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .bottom-links,
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{
+  animation:rekixo-public-shell-in var(--rekixo-motion-panel) var(--rekixo-ease-enter) both
+}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .compass{animation-delay:35ms}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .view-mode{animation-delay:65ms}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .mini-logo{animation-delay:85ms}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .status{animation-delay:105ms}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .bottom-links{animation-delay:125ms}
+html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation-delay:145ms}
+
+.icon,.go,.toggle,.view-mode,.pill,.ctrl,.close,.action,.gallery-close,.lightbox-close,.rekixo-boot-retry{
+  transition:
+    transform var(--rekixo-motion-fast) var(--rekixo-ease-standard),
+    border-color var(--rekixo-motion-fast) ease,
+    background-color var(--rekixo-motion-fast) ease,
+    color var(--rekixo-motion-fast) ease,
+    box-shadow var(--rekixo-motion-fast) ease,
+    opacity var(--rekixo-motion-fast) ease
+}
+@media(hover:hover) and (pointer:fine){
+  .icon:hover,.go:hover,.toggle:hover,.view-mode:hover,.pill:hover,.ctrl:hover,.close:hover,.action:hover,.gallery-close:hover,.lightbox-close:hover,.rekixo-boot-retry:hover{
+    transform:translate3d(0,-1px,0)
+  }
+}
+.icon:active,.go:active,.toggle:active,.view-mode:active,.pill:active,.ctrl:active,.close:active,.action:active,.gallery-close:active,.lightbox-close:active,.rekixo-boot-retry:active{
+  transform:scale(.965)
+}
+.search,.diagram,.fact,.gallery-panel,.client-gallery article,.lightbox-image{
+  transition:
+    border-color var(--rekixo-motion-base) ease,
+    box-shadow var(--rekixo-motion-base) ease,
+    background-color var(--rekixo-motion-base) ease,
+    opacity var(--rekixo-motion-base) ease
+}
+.client-gallery article{animation:rekixo-public-item-in var(--rekixo-motion-base) var(--rekixo-ease-enter) both}
+
+/* Proper close transitions without display:none cutting the animation. */
+.scrim{
+  transition:
+    opacity 180ms ease,
+    visibility 0s linear 180ms
+}
+.scrim.open{transition-delay:0s}
+.drawer{
+  opacity:0;
+  transition:
+    transform var(--rekixo-motion-panel) var(--rekixo-ease-enter),
+    opacity 180ms ease,
+    visibility 0s linear var(--rekixo-motion-panel)
+}
+.drawer.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition-delay:0s
+}
+.gallery-modal{
+  display:flex;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:
+    opacity var(--rekixo-motion-base) ease,
+    visibility 0s linear var(--rekixo-motion-base)
+}
+.gallery-modal.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition-delay:0s
+}
+.gallery-panel{
+  opacity:0;
+  transform:translate3d(0,10px,0) scale(.985);
+  transition:
+    transform var(--rekixo-motion-panel) var(--rekixo-ease-enter),
+    opacity var(--rekixo-motion-base) ease,
+    border-color var(--rekixo-motion-base) ease,
+    box-shadow var(--rekixo-motion-base) ease
+}
+.gallery-modal.open .gallery-panel{
+  opacity:1;
+  transform:translate3d(0,0,0) scale(1)
+}
+.image-lightbox{
+  display:flex;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:
+    opacity var(--rekixo-motion-base) ease,
+    visibility 0s linear var(--rekixo-motion-base)
+}
+.image-lightbox.open{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transition-delay:0s
+}
+.lightbox-figure{
+  opacity:0;
+  transform:scale(.975);
+  transition:
+    transform var(--rekixo-motion-panel) var(--rekixo-ease-enter),
+    opacity var(--rekixo-motion-base) ease
+}
+.image-lightbox.open .lightbox-figure{
+  opacity:1;
+  transform:scale(1)
+}
+
+@media(max-width:700px){
+  @keyframes rekixo-public-shell-in{
+    from{opacity:0;transform:translate3d(0,5px,0)}
+    to{opacity:1;transform:translate3d(0,0,0)}
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  html:not(.rekixo-project-loading):not(.rekixo-project-error) .header,
+  html:not(.rekixo-project-loading):not(.rekixo-project-error) .compass,
+  html:not(.rekixo-project-loading):not(.rekixo-project-error) .view-mode,
+  html:not(.rekixo-project-loading):not(.rekixo-project-error) .mini-logo,
+  html:not(.rekixo-project-loading):not(.rekixo-project-error) .status,
+  html:not(.rekixo-project-loading):not(.rekixo-project-error) .bottom-links,
+  html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls,
+  .client-gallery article{
+    animation:none!important
+  }
+  .icon,.go,.toggle,.view-mode,.pill,.ctrl,.close,.action,.gallery-close,.lightbox-close,.rekixo-boot-retry,
+  .scrim,.drawer,.gallery-modal,.gallery-panel,.image-lightbox,.lightbox-figure,.search,.diagram,.fact{
+    transition-duration:.01ms!important;
+    transition-delay:0s!important
+  }
+}
+
 </style>
 
 </head>

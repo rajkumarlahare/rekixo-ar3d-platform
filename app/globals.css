@@ -2775,3 +2775,131 @@ body {
 
 @media(max-width:900px){.client-pricing-toolbar{grid-template-columns:1fr 1fr}.client-pricing-search{grid-column:1/-1}.client-pricing-form{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.mapper-pricing-client-permission{grid-template-columns:auto auto minmax(0,1fr)}.mapper-pricing-client-permission em{grid-column:2/4}.client-pricing-editor{padding:15px}.client-pricing-head{display:grid}.client-pricing-toolbar,.client-pricing-form{grid-template-columns:1fr}.client-pricing-search{grid-column:auto}.client-pricing-toolbar button{min-height:40px}.client-pricing-plot-list label{grid-template-columns:auto 50px 1fr}.client-pricing-plot-list em{grid-column:2/4;text-align:left;padding-bottom:3px}.client-pricing-actions button{width:100%}}
+
+/* REKIXO_UI_MOTION_SYSTEM_V1
+   Shared Client Admin + Super Admin motion tokens. Mapper geometry/canvas
+   transforms are intentionally not targeted. */
+:root{
+  --rekixo-motion-fast:120ms;
+  --rekixo-motion-base:210ms;
+  --rekixo-motion-panel:280ms;
+  --rekixo-ease-standard:cubic-bezier(.2,.8,.2,1);
+  --rekixo-ease-enter:cubic-bezier(.22,1,.36,1);
+  --rekixo-ease-exit:cubic-bezier(.4,0,1,1)
+}
+@keyframes rekixo-admin-panel-in{
+  from{opacity:0;transform:translate3d(0,8px,0) scale(.997)}
+  to{opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes rekixo-admin-panel-out{
+  from{opacity:1;transform:translate3d(0,0,0) scale(1)}
+  to{opacity:0;transform:translate3d(0,-5px,0) scale(.998)}
+}
+@keyframes rekixo-admin-item-in{
+  from{opacity:0;transform:translate3d(0,6px,0)}
+  to{opacity:1;transform:translate3d(0,0,0)}
+}
+@keyframes rekixo-admin-toast-in{
+  from{opacity:0;transform:translate3d(0,8px,0) scale(.985)}
+  to{opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes rekixo-admin-toast-out{
+  from{opacity:1;transform:translate3d(0,0,0) scale(1)}
+  to{opacity:0;transform:translate3d(0,6px,0) scale(.99)}
+}
+.rekixo-motion-swap{min-width:0}
+.admin-motion-panel,.super-motion-panel{min-width:0}
+.rekixo-motion-swap[data-motion-phase="enter"]{
+  animation:rekixo-admin-panel-in 230ms var(--rekixo-ease-enter) both
+}
+.rekixo-motion-swap[data-motion-phase="exit"]{
+  animation:rekixo-admin-panel-out 140ms var(--rekixo-ease-exit) both;
+  pointer-events:none
+}
+.toast-admin[data-motion-state="open"]{
+  animation:rekixo-admin-toast-in var(--rekixo-motion-base) var(--rekixo-ease-enter) both
+}
+.toast-admin[data-motion-state="closing"]{
+  animation:rekixo-admin-toast-out 180ms var(--rekixo-ease-exit) both;
+  pointer-events:none
+}
+
+.admin-shell button:not(:disabled),
+.super-shell button:not(:disabled),
+.admin-shell a,
+.super-shell a{
+  transition:
+    transform var(--rekixo-motion-fast) var(--rekixo-ease-standard),
+    background-color var(--rekixo-motion-fast) ease,
+    border-color var(--rekixo-motion-fast) ease,
+    color var(--rekixo-motion-fast) ease,
+    box-shadow var(--rekixo-motion-fast) ease,
+    opacity var(--rekixo-motion-fast) ease
+}
+.admin-shell input,.admin-shell select,.admin-shell textarea,
+.super-shell input,.super-shell select,.super-shell textarea{
+  transition:
+    border-color var(--rekixo-motion-fast) ease,
+    box-shadow var(--rekixo-motion-fast) ease,
+    background-color var(--rekixo-motion-fast) ease
+}
+@media(hover:hover) and (pointer:fine){
+  .admin-shell button:not(:disabled):hover,
+  .super-shell button:not(:disabled):hover,
+  .admin-shell a:hover,
+  .super-shell a:hover{
+    transform:translate3d(0,-1px,0)
+  }
+}
+.admin-shell button:not(:disabled):active,
+.super-shell button:not(:disabled):active,
+.admin-shell a:active,
+.super-shell a:active{
+  transform:scale(.975)
+}
+.admin-shell input:focus,.admin-shell select:focus,.admin-shell textarea:focus,
+.super-shell input:focus,.super-shell select:focus,.super-shell textarea:focus{
+  box-shadow:0 0 0 3px rgba(39,199,127,.08)
+}
+
+.admin-gallery-list article,
+.selected-images article,
+.client-admin-list article,
+.client-pricing-plot-list label{
+  animation:rekixo-admin-item-in var(--rekixo-motion-base) var(--rekixo-ease-enter) both
+}
+.card,.mapper-upload-card,.client-pricing-editor,.client-create-card,.client-list-card{
+  transition:
+    border-color var(--rekixo-motion-base) ease,
+    box-shadow var(--rekixo-motion-base) ease,
+    background-color var(--rekixo-motion-base) ease
+}
+
+@media(max-width:700px){
+  @keyframes rekixo-admin-panel-in{
+    from{opacity:0;transform:translate3d(0,5px,0)}
+    to{opacity:1;transform:translate3d(0,0,0)}
+  }
+  @keyframes rekixo-admin-panel-out{
+    from{opacity:1;transform:translate3d(0,0,0)}
+    to{opacity:0;transform:translate3d(0,-3px,0)}
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .rekixo-motion-swap[data-motion-phase="enter"],
+  .rekixo-motion-swap[data-motion-phase="exit"],
+  .toast-admin[data-motion-state],
+  .admin-gallery-list article,
+  .selected-images article,
+  .client-admin-list article,
+  .client-pricing-plot-list label{
+    animation:none!important
+  }
+  .admin-shell button,.super-shell button,.admin-shell a,.super-shell a,
+  .admin-shell input,.admin-shell select,.admin-shell textarea,
+  .super-shell input,.super-shell select,.super-shell textarea,
+  .card,.mapper-upload-card,.client-pricing-editor,.client-create-card,.client-list-card{
+    transition-duration:.01ms!important;
+    transition-delay:0s!important
+  }
+}
