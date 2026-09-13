@@ -13,8 +13,27 @@ test("brand subtitle is structurally isolated from title and header actions", ()
 });
 
 test("subtitle is clipped and cannot widen the page", () => {
-  assert.match(page, /\.brand-subtitle\{display:block;width:100%;max-width:100%;min-width:0;overflow:hidden;white-space:nowrap;contain:paint\}/);
+  assert.match(page, /REKIXO_RESPONSIVE_BRAND_SUBTITLE_LEFT_HALF_V2/);
+  assert.match(page, /\.brand-subtitle\{display:block;width:var\(--rekixo-subtitle-lane-width,100%\);max-width:100%;min-width:0;margin-left:0;margin-right:auto;overflow:hidden;white-space:nowrap;contain:paint\}/);
   assert.match(page, /\.brand-subtitle-track\{display:inline-block;width:max-content;max-width:none;white-space:nowrap;will-change:transform\}/);
+});
+
+test("mobile subtitle right edge is capped at the visual viewport midpoint", () => {
+  assert.match(page, /function syncBrandSubtitleLaneWidth\(\)/);
+  assert.match(page, /const viewportWidth=Math\.max\(1,Number\(vv\?\.width\|\|document\.documentElement\.clientWidth\|\|window\.innerWidth\|\|1\)\)/);
+  assert.match(page, /if\(viewportWidth>700\)\{/);
+  assert.match(page, /const viewportLeft=Number\(vv\?\.offsetLeft\|\|0\)/);
+  assert.match(page, /const laneLeft=subtitleLane\.getBoundingClientRect\(\)\.left/);
+  assert.match(page, /const halfScreenRight=viewportLeft\+\(viewportWidth\*\.5\)/);
+  assert.match(page, /const leftHalfSpace=Math\.max\(0,Math\.floor\(halfScreenRight-laneLeft\)\)/);
+  assert.match(page, /const laneWidth=Math\.max\(0,Math\.min\(parentWidth,leftHalfSpace\)\)/);
+  assert.match(page, /subtitleLane\.style\.setProperty\('--rekixo-subtitle-lane-width',laneWidth\+'px'\)/);
+});
+
+test("left-half sizing happens before ticker overflow is measured", () => {
+  const sizeCall=page.indexOf("syncBrandSubtitleLaneWidth();");
+  const overflowRead=page.indexOf("const overflow=Math.ceil(subtitleTrack.scrollWidth-subtitleLane.clientWidth)");
+  assert.ok(sizeCall >= 0 && overflowRead > sizeCall);
 });
 
 test("only actual overflow activates measured ping-pong motion", () => {

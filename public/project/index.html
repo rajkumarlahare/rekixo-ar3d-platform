@@ -440,7 +440,10 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
 .brand{flex:1 1 0;min-width:0;max-width:100%;overflow:hidden}
 .brand b{max-width:100%}
 .head-actions{flex:0 0 auto;flex-shrink:0}
-.brand-subtitle{display:block;width:100%;max-width:100%;min-width:0;overflow:hidden;white-space:nowrap;contain:paint}
+/* REKIXO_RESPONSIVE_BRAND_SUBTITLE_LEFT_HALF_V2
+   Mobile subtitle owns only the left half of the visual viewport.
+   Its right edge is measured against the viewport midpoint, not guessed from a device width. */
+.brand-subtitle{display:block;width:var(--rekixo-subtitle-lane-width,100%);max-width:100%;min-width:0;margin-left:0;margin-right:auto;overflow:hidden;white-space:nowrap;contain:paint}
 .brand-subtitle-track{display:inline-block;width:max-content;max-width:none;white-space:nowrap;will-change:transform}
 .brand-subtitle.is-overflowing .brand-subtitle-track{animation:rekixo-subtitle-pan var(--rekixo-subtitle-duration,8s) ease-in-out infinite}
 @keyframes rekixo-subtitle-pan{0%,14%,100%{transform:translate3d(0,0,0)}42%,64%{transform:translate3d(var(--rekixo-subtitle-shift,0px),0,0)}}
@@ -712,8 +715,25 @@ rekixoStartPublicBoot();
   const subtitleLane=q('#brandSubtitle'),subtitleTrack=q('#brandSubtitleTrack');
   const subtitleMotionMQ=window.matchMedia('(prefers-reduced-motion: reduce)');
   let subtitleMeasureRaf=0;
+  function syncBrandSubtitleLaneWidth(){
+    if(!subtitleLane)return;
+    const vv=window.visualViewport;
+    const viewportWidth=Math.max(1,Number(vv?.width||document.documentElement.clientWidth||window.innerWidth||1));
+    if(viewportWidth>700){
+      subtitleLane.style.removeProperty('--rekixo-subtitle-lane-width');
+      return;
+    }
+    const viewportLeft=Number(vv?.offsetLeft||0);
+    const laneLeft=subtitleLane.getBoundingClientRect().left;
+    const parentWidth=Math.max(0,Number(subtitleLane.parentElement?.clientWidth||0));
+    const halfScreenRight=viewportLeft+(viewportWidth*.5);
+    const leftHalfSpace=Math.max(0,Math.floor(halfScreenRight-laneLeft));
+    const laneWidth=Math.max(0,Math.min(parentWidth,leftHalfSpace));
+    subtitleLane.style.setProperty('--rekixo-subtitle-lane-width',laneWidth+'px');
+  }
   function syncBrandSubtitleMotion(){
     if(!subtitleLane||!subtitleTrack)return;
+    syncBrandSubtitleLaneWidth();
     subtitleLane.classList.remove('is-overflowing');
     subtitleTrack.style.removeProperty('--rekixo-subtitle-shift');
     subtitleTrack.style.removeProperty('--rekixo-subtitle-duration');
