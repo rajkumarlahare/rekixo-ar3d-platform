@@ -64,10 +64,15 @@ test("admin micro-interactions avoid transition-all and do not target mapper geo
   assert.match(block, /prefers-reduced-motion:reduce/);
 });
 
-test("public customer UI gets entry, drawer exit, modal exit and button micro-interactions", () => {
+test("public customer UI gets entry, modal exit and button micro-interactions while drawer keeps its proven transform flow", () => {
   assert.match(publicPage, /REKIXO_UI_MOTION_SYSTEM_V1/);
   assert.match(publicPage, /@keyframes rekixo-public-shell-in/);
-  assert.match(publicPage, /\.drawer\{\s*opacity:0;/);
+  assert.match(publicPage, /REKIXO_PLOT_DRAWER_LEGACY_RESTORE_V2/);
+  assert.match(publicPage, /\.drawer\{position:fixed;[^}]*transform:translateX\(-103%\);transition:\.22s ease;/);
+  const publicMotionMarker = publicPage.indexOf("REKIXO_UI_MOTION_SYSTEM_V1");
+  const publicMotionBlock = publicPage.slice(publicMotionMarker, publicPage.indexOf("</style>", publicMotionMarker));
+  assert.doesNotMatch(publicMotionBlock, /\.drawer\s*\{/);
+  assert.doesNotMatch(publicMotionBlock, /\.drawer\.open\s*\{/);
   assert.match(publicPage, /\.gallery-modal\{\s*display:flex;\s*opacity:0;/);
   assert.match(publicPage, /\.image-lightbox\{\s*display:flex;\s*opacity:0;/);
   assert.match(publicPage, /\.gallery-modal\.open\{/);

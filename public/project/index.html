@@ -523,19 +523,9 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
     visibility 0s linear 180ms
 }
 .scrim.open{transition-delay:0s}
-.drawer{
-  opacity:0;
-  transition:
-    transform var(--rekixo-motion-panel) var(--rekixo-ease-enter),
-    opacity 180ms ease,
-    visibility 0s linear var(--rekixo-motion-panel)
-}
-.drawer.open{
-  opacity:1;
-  visibility:visible;
-  pointer-events:auto;
-  transition-delay:0s
-}
+/* REKIXO_PLOT_DRAWER_LEGACY_RESTORE_V2
+   Plot-details drawer deliberately keeps its proven pre-motion transform +
+   visibility contract. Generic UI motion must not override drawer presence. */
 .gallery-modal{
   display:flex;
   opacity:0;
@@ -609,7 +599,7 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
     animation:none!important
   }
   .icon,.go,.toggle,.view-mode,.pill,.ctrl,.close,.action,.gallery-close,.lightbox-close,.rekixo-boot-retry,
-  .scrim,.drawer,.gallery-modal,.gallery-panel,.image-lightbox,.lightbox-figure,.search,.diagram,.fact{
+  .scrim,.gallery-modal,.gallery-panel,.image-lightbox,.lightbox-figure,.search,.diagram,.fact{
     transition-duration:.01ms!important;
     transition-delay:0s!important
   }
