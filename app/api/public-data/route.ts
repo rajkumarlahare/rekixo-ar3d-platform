@@ -1,5 +1,5 @@
 import { getDb } from "../../../db";
-import { gallery, plots, settings } from "../../../db/schema";
+import { gallery, plotPricing, plots, settings } from "../../../db/schema";
 import { desc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getAdminSession } from "../../admin-auth";
@@ -17,6 +17,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   "plotStatusAvailableColor",
   "plotStatusBookedColor",
   "plotStatusSoldColor",
+  "pricingEnabled",
   "location",
   "address",
   "phone1",
@@ -102,6 +103,14 @@ export async function GET(request: Request) {
         .map((item) => [item.key, item.value]),
     );
     const effectivePublicSettings = withProjectContactFallbacks(publicSettings);
+    const pricingEnabled = publicSettings.pricingEnabled === "1";
+    const pricingRows = pricingEnabled
+      ? await db
+          .select()
+          .from(plotPricing)
+          .where(eq(plotPricing.projectId, projectId))
+      : [];
+    const pricingByPlot = new Map(pricingRows.map((item) => [item.plotId, item]));
 
     return Response.json(
       {
@@ -116,7 +125,18 @@ export async function GET(request: Request) {
         plots: plotRows.map((plot) => {
           const { notes, ...publicPlot } = plot;
           void notes;
-          return publicPlot;
+          const price = pricingEnabled ? pricingByPlot.get(plot.id) : null;
+          if (!price) return publicPlot;
+          return {
+            ...publicPlot,
+            pricing: {
+              type: price.pricingType,
+              unit: price.unit,
+              rate: price.rate,
+              fixedPrice: price.fixedPrice,
+              currency: price.currency,
+            },
+          };
         }),
         settings: effectivePublicSettings,
         gallery: galleryRows,

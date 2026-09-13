@@ -2675,3 +2675,24 @@ body {
     font-size:9px;
   }
 }
+
+/* REKIXO_PROJECT_PRICING_UPLOAD_V1 */
+.mapper-pricing-feature{margin-top:12px;border:1px solid #243553;border-radius:16px;background:#0b172a;overflow:hidden}
+.mapper-pricing-toggle{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:14px 16px;cursor:pointer}
+.mapper-pricing-toggle>input{width:18px;height:18px;accent-color:#20c982}
+.mapper-pricing-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#0d3f33;color:#55e6a7}
+.mapper-pricing-icon svg{width:18px;height:18px}
+.mapper-pricing-toggle span:nth-of-type(2){display:grid;gap:3px;min-width:0}
+.mapper-pricing-toggle b{font-size:14px}
+.mapper-pricing-toggle small{font-size:11px;color:#8da0bd;line-height:1.4}
+.mapper-pricing-toggle em{font-style:normal;font-size:11px;font-weight:800;color:#7f93b3}
+.mapper-pricing-body{border-top:1px solid #21314c;padding:14px 16px;display:grid;gap:12px}
+.mapper-pricing-upload{margin:0}
+.mapper-pricing-summary{display:flex;gap:8px;flex-wrap:wrap}
+.mapper-pricing-summary span{border:1px solid #263955;background:#0a1424;border-radius:999px;padding:7px 10px;font-size:11px;color:#8da0bd}
+.mapper-pricing-summary b{color:#f3f7ff}
+.mapper-pricing-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mapper-pricing-actions button{display:inline-flex;align-items:center;gap:7px}
+.mapper-pricing-actions button svg{width:15px;height:15px}
+.mapper-pricing-actions small{color:#8295b2;line-height:1.45;flex:1 1 320px}
+@media(max-width:620px){.mapper-pricing-toggle{grid-template-columns:auto auto minmax(0,1fr)}.mapper-pricing-toggle em{grid-column:2/4}.mapper-pricing-actions button{width:100%;justify-content:center}}

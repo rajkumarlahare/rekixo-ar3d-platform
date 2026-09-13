@@ -21,6 +21,19 @@ export const projectDomains = sqliteTable("project_domains", {
 
 export const plots = sqliteTable("plots", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), id:text("id").notNull(), sqft:real("sqft").notNull(), sqm:real("sqm").notNull(), sqyd:real("sqyd").notNull(), dimensions:text("dimensions").notNull(), road:text("road").notNull(), polygon:text("polygon").notNull().default(""), status:text("status").notNull().default("available"), notes:text("notes").notNull().default(""), featured:integer("featured",{mode:"boolean"}).notNull().default(false), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
 export const settings = sqliteTable("settings", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), key:text("key").notNull(), value:text("value").notNull(), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.key]})}));
+export const plotPricing = sqliteTable("plot_pricing", {
+  projectId:text("project_id").notNull().references(()=>projects.id),
+  plotId:text("plot_id").notNull(),
+  pricingType:text("pricing_type").notNull().default("rate"),
+  unit:text("unit").notNull().default("sqyd"),
+  rate:real("rate"),
+  fixedPrice:real("fixed_price"),
+  currency:text("currency").notNull().default("INR"),
+  updatedAt:text("updated_at").notNull()
+},table=>({
+  pk:primaryKey({columns:[table.projectId,table.plotId]}),
+  projectIndex:index("idx_plot_pricing_project").on(table.projectId)
+}));
 export const gallery = sqliteTable("gallery", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), id:text("id").notNull(), objectKey:text("object_key").notNull().unique(), filename:text("filename").notNull(), contentType:text("content_type").notNull(), caption:text("caption").notNull().default(""), sortOrder:integer("sort_order").notNull().default(0), createdAt:text("created_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
 export const loginAttempts = sqliteTable("login_attempts", { key:text("key").primaryKey(), attempts:integer("attempts").notNull().default(0), windowStart:integer("window_start").notNull() });
 export const adminUsers = sqliteTable("admin_users", {

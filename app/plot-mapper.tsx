@@ -37,6 +37,7 @@ import {
   type HomographyPair,
   type MapperPoint,
 } from "./mapper-geometry";
+import ProjectPricingSource from "./project-pricing-source";
 
 type Plot = {
   id: string;
@@ -2224,6 +2225,12 @@ export default function PlotMapper({
             <input type="file" accept="application/pdf,.pdf" disabled={busy} onChange={(event) => event.target.files?.[0] && upload(event.target.files[0], "sourcePdf")} />
           </label>
         </div>
+
+        <ProjectPricingSource
+          key={`pricing:${projectId}`}
+          projectId={projectId}
+          notify={notify}
+        />
 
         <div className="mapper-header-address-card">
           <div className="mapper-header-address-copy">

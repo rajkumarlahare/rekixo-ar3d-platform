@@ -555,6 +555,8 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
     <div class="fact"><span>SQ. METERS</span><b id="sqm">—</b></div>
     <div class="fact"><span>SQ. FEET</span><b id="sqft">—</b></div>
     <div class="fact"><span>SQ. YARDS</span><b id="sqyd">—</b></div>
+    <div class="fact pricing-fact" id="pricingRateRow" style="display:none"><span id="pricingRateLabel">RATE</span><b id="pricingRate">—</b></div>
+    <div class="fact pricing-fact" id="pricingBaseRow" style="display:none"><span>BASE PRICE</span><b id="pricingBase">—</b></div>
     <div class="fact"><span>DIMENSIONS</span><b id="dims">—</b></div>
     <div class="fact"><span id="roadLabel">ROAD ACCESS</span><b id="road">—</b></div>
     <div class="fact"><span>STATUS</span><b id="plotStatusValue" class="available">Available</b></div>
@@ -933,6 +935,40 @@ rekixoStartPublicBoot();
     const wt=q('#widthText');wt.setAttribute('x',cx);wt.setAttribute('y',widthY+20);
     const label=q('#diagramLabel');label.textContent=p.id;label.setAttribute('x',cx);label.setAttribute('y',cy+9)
   }
+  // REKIXO_PROJECT_PRICING_UPLOAD_V1
+  function formatPricingMoney(value,currency='INR'){
+    const amount=Number(value);
+    if(!Number.isFinite(amount)||amount<=0)return '—';
+    try{return new Intl.NumberFormat('en-IN',{style:'currency',currency:String(currency||'INR').toUpperCase(),maximumFractionDigits:0}).format(Math.round(amount))}
+    catch(_){return '₹'+Math.round(amount).toLocaleString('en-IN')}
+  }
+  function pricingUnitLabel(unit){return unit==='sqft'?'SQ.FT':(unit==='sqm'?'SQ.M':'SQ.YD')}
+  function syncPlotPricing(p){
+    const rateRow=q('#pricingRateRow'),baseRow=q('#pricingBaseRow'),rateEl=q('#pricingRate'),baseEl=q('#pricingBase'),rateLabel=q('#pricingRateLabel');
+    if(!rateRow||!baseRow||!rateEl||!baseEl||!rateLabel)return;
+    rateRow.style.display='none';baseRow.style.display='none';rateEl.textContent='—';baseEl.textContent='—';
+    const pricing=p&&p.pricing;
+    if(!pricing||typeof pricing!=='object')return;
+    const currency=String(pricing.currency||'INR').toUpperCase();
+    if(pricing.type==='fixed'){
+      const fixed=Number(pricing.fixedPrice);
+      if(!(fixed>0))return;
+      baseEl.textContent=formatPricingMoney(fixed,currency);
+      baseRow.style.display='flex';
+      return;
+    }
+    if(pricing.type!=='rate')return;
+    const unit=['sqyd','sqft','sqm'].includes(pricing.unit)?pricing.unit:'sqyd';
+    const rate=Number(pricing.rate);const area=Number(p[unit]);
+    if(!(rate>0)&&rate!==0)return;
+    if(!(rate>0)||!(area>0))return;
+    const base=area*rate;
+    rateLabel.textContent='RATE / '+pricingUnitLabel(unit);
+    rateEl.textContent=formatPricingMoney(rate,currency);
+    baseEl.textContent=formatPricingMoney(base,currency);
+    rateRow.style.display='flex';baseRow.style.display='flex'
+  }
+
   function openPlot(p,focus=false){
     if(!p) return;
     selected=p; setSelected(p.id); if(focus) focusPlot(p);
@@ -943,6 +979,7 @@ rekixoStartPublicBoot();
     q('#sqm').textContent=Number(p.sqm).toLocaleString('en-IN')+' Sq.M';
     q('#sqft').textContent=Number(p.sqft).toLocaleString('en-IN')+' Sq.Ft';
     q('#sqyd').textContent=Number(p.sqyd).toLocaleString('en-IN')+' Sq.Yd';
+    syncPlotPricing(p);
     q('#dims').textContent=p.dimensions||'—';
     const facing=String(p.facing||'').trim(),roadLabel=q('#roadLabel');if(roadLabel)roadLabel.textContent=facing?'FACING':'ROAD ACCESS';
     q('#road').textContent=facing||p.road||'—';
@@ -1271,7 +1308,7 @@ rekixoStartPublicBoot();
     if(/^#[0-9a-f]{6}$/i.test(s.accentColor||''))document.documentElement.style.setProperty('--gold',s.accentColor);
     document.body.dataset.template=s.template||'plots';
     updateStatusCounts();
-    if(selected){const fresh=plots.find(p=>p.id===selected.id);if(fresh){selected=fresh;if(drawer.classList.contains('open')){q('#sqm').textContent=Number(fresh.sqm).toLocaleString('en-IN')+' Sq.M';q('#sqft').textContent=Number(fresh.sqft).toLocaleString('en-IN')+' Sq.Ft';q('#sqyd').textContent=Number(fresh.sqyd).toLocaleString('en-IN')+' Sq.Yd';q('#dims').textContent=fresh.dimensions||'—';q('#road').textContent=fresh.road||'—';const st=plotStatus(fresh),statusEl=q('#plotStatusValue');statusEl.textContent=st.charAt(0).toUpperCase()+st.slice(1);statusEl.className=st}}}
+    if(selected){const fresh=plots.find(p=>p.id===selected.id);if(fresh){selected=fresh;if(drawer.classList.contains('open')){q('#sqm').textContent=Number(fresh.sqm).toLocaleString('en-IN')+' Sq.M';q('#sqft').textContent=Number(fresh.sqft).toLocaleString('en-IN')+' Sq.Ft';q('#sqyd').textContent=Number(fresh.sqyd).toLocaleString('en-IN')+' Sq.Yd';q('#dims').textContent=fresh.dimensions||'—';q('#road').textContent=fresh.road||'—';syncPlotPricing(fresh);const st=plotStatus(fresh),statusEl=q('#plotStatusValue');statusEl.textContent=st.charAt(0).toUpperCase()+st.slice(1);statusEl.className=st}}}
     let revealed=false,shellRevealed=false,masterFailures=0,usingCanonical=false;
     const revealShell=()=>{
       if(shellRevealed)return;
