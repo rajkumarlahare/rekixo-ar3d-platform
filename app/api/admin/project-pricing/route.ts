@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
-import { writeAudit } from "../../audit";
-import { expandPricingRules, parsePricingSheetText } from "../../plot-pricing-sheet";
+import { requireSuperAdmin, sameOrigin } from "../../../admin-auth";
+import { writeAudit } from "../../../audit";
+import { expandPricingRules, parsePricingSheetText } from "../../../plot-pricing-sheet";
 
 const PRICING_ENABLED_KEY = "pricingEnabled";
 const PRICING_SHEET_NAME_KEY = "pricingSheetName";
