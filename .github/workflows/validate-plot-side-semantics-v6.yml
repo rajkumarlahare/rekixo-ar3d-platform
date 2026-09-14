@@ -1,0 +1,37 @@
+name: Validate Plot Side Semantics v6
+
+on:
+  push:
+    branches:
+      - feature/plot-side-semantics-v6
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Full regression suite
+        run: node --test tests/*.test.mjs
+      - name: Semantic safety contract
+        run: |
+          grep -q "ADD COLUMN edge_semantics TEXT" drizzle/0018_rekixo_plot_side_semantics.sql
+          grep -q "edge_semantics=COALESCE(excluded.edge_semantics,edge_semantics)" app/api/super-mapper/route.ts
+          grep -q "Legacy fallback contract" public/project/index.html
+          grep -q "runtime v56" tests/public-runtime-cache-policy.test.mjs

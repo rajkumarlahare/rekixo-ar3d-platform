@@ -17,15 +17,16 @@ test("customer drawer contract stays Front-left and Depth-bottom", () => {
   assert.doesNotMatch(html, /depthEdgeIndex.*diagram/i);
 });
 
-test("Super Admin has direct and bulk front-depth edge assignment", () => {
+test("Super Admin has direct and bulk four-side edge assignment", () => {
   const mapper = read("app/plot-mapper.tsx");
   assert.match(mapper, /edgeAssignMode/);
   assert.match(mapper, /bulkSemanticMode/);
   assert.match(mapper, /applyBulkEdgeDirection/);
-  assert.match(mapper, />Front side</);
-  assert.match(mapper, />Depth side</);
-  assert.match(mapper, /F ↑/);
-  assert.match(mapper, /D ←/);
+  assert.match(mapper, /\["front", "Front side"\]/);
+  assert.match(mapper, /\["back", "Back side"\]/);
+  assert.match(mapper, /\["depthA", "Depth A"\]/);
+  assert.match(mapper, /\["depthB", "Depth B"\]/);
+  assert.match(mapper, /semantic-badge-/);
 });
 
 test("plot sheet supports Depth Edge and approved-plan feet-inch input", () => {
@@ -37,7 +38,10 @@ test("plot sheet supports Depth Edge and approved-plan feet-inch input", () => {
   assert.match(sheet, /inches < 12/);
   assert.match(sheet, /edgeIndex\(input\.depthEdge, "Depth Edge"\)/);
   assert.match(sheet, /replace\(\/\[′’\]\/g, "'"/);
-  assert.match(mapper, /Front Edge,Depth Edge,Front Label,Depth Label,Side Dimensions,Notes/);
+  assert.match(
+    mapper,
+    /Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes/,
+  );
 });
 
 test("plot-sheet conflict preserves manual semantic edges when import is blank", () => {

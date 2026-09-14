@@ -43,6 +43,12 @@ import {
   edgeIndexForDisplayDirection,
   type EdgeDirection,
 } from "./plot-edge-semantics";
+import {
+  parsePlotSideSemantics,
+  serializePlotSideSemantics,
+  setPlotSideEdge,
+  type PlotSideRole,
+} from "./plot-side-semantics";
 
 
 type Plot = {
@@ -54,12 +60,19 @@ type Plot = {
   road: string;
   front?: number | null;
   depth?: number | null;
+  back?: number | null;
+  depth2?: number | null;
   dimensionUnit?: "ft" | "m" | null;
   frontEdgeIndex?: number | null;
   depthEdgeIndex?: number | null;
+  backEdgeIndex?: number | null;
+  depth2EdgeIndex?: number | null;
   frontLabel?: string | null;
   depthLabel?: string | null;
+  backLabel?: string | null;
+  depth2Label?: string | null;
   sideDimensions?: string | null;
+  edgeSemantics?: string | null;
   status: string;
   notes?: string;
   featured?: boolean;
@@ -511,7 +524,9 @@ export default function PlotMapper({
   const [dimensionUnit, setDimensionUnit] = useState<"ft" | "m">("ft");
   const [frontEdgeIndex, setFrontEdgeIndex] = useState("");
   const [depthEdgeIndex, setDepthEdgeIndex] = useState("");
-  const [edgeAssignMode, setEdgeAssignMode] = useState<"front" | "depth" | null>(null);
+  const [backEdgeIndex, setBackEdgeIndex] = useState("");
+  const [depth2EdgeIndex, setDepth2EdgeIndex] = useState("");
+  const [edgeAssignMode, setEdgeAssignMode] = useState<PlotSideRole | null>(null);
   const [bulkSemanticMode, setBulkSemanticMode] = useState(false);
   const [bulkSemanticIds, setBulkSemanticIds] = useState<Set<string>>(() => new Set());
   const [points, setPoints] = useState<MapperPoint[]>([]);
@@ -962,11 +977,42 @@ export default function PlotMapper({
     setFront(plot.front != null ? String(plot.front) : "");
     setDepth(plot.depth != null ? String(plot.depth) : "");
     setDimensionUnit(plot.dimensionUnit === "m" ? "m" : "ft");
+    const polygon = parsePolygon(plot);
+    const semantics = parsePlotSideSemantics(
+      plot.edgeSemantics,
+      polygon.length >= 3 ? polygon.length : undefined,
+    );
+    const frontSemantic = semantics?.roles.front?.[0];
+    const backSemantic = semantics?.roles.back?.[0];
+    const depthASemantic = semantics?.roles.depthA?.[0];
+    const depthBSemantic = semantics?.roles.depthB?.[0];
     setFrontEdgeIndex(
-      Number.isInteger(plot.frontEdgeIndex) ? String(plot.frontEdgeIndex) : "",
+      Number.isInteger(frontSemantic)
+        ? String(frontSemantic)
+        : Number.isInteger(plot.frontEdgeIndex)
+          ? String(plot.frontEdgeIndex)
+          : "",
     );
     setDepthEdgeIndex(
-      Number.isInteger(plot.depthEdgeIndex) ? String(plot.depthEdgeIndex) : "",
+      Number.isInteger(depthASemantic)
+        ? String(depthASemantic)
+        : Number.isInteger(plot.depthEdgeIndex)
+          ? String(plot.depthEdgeIndex)
+          : "",
+    );
+    setBackEdgeIndex(
+      Number.isInteger(backSemantic)
+        ? String(backSemantic)
+        : Number.isInteger(plot.backEdgeIndex)
+          ? String(plot.backEdgeIndex)
+          : "",
+    );
+    setDepth2EdgeIndex(
+      Number.isInteger(depthBSemantic)
+        ? String(depthBSemantic)
+        : Number.isInteger(plot.depth2EdgeIndex)
+          ? String(plot.depth2EdgeIndex)
+          : "",
     );
     setEdgeAssignMode(null);
     if (editBoundary && plot.polygon) {
@@ -1005,6 +1051,8 @@ export default function PlotMapper({
       setDimensionUnit("ft");
       setFrontEdgeIndex("");
       setDepthEdgeIndex("");
+      setBackEdgeIndex("");
+      setDepth2EdgeIndex("");
       setEdgeAssignMode(null);
     }
   }
@@ -1018,19 +1066,29 @@ export default function PlotMapper({
   }
 
 
+  function semanticEdgeValue(role: PlotSideRole | null) {
+    if (role === "front") return frontEdgeIndex;
+    if (role === "back") return backEdgeIndex;
+    if (role === "depthA") return depthEdgeIndex;
+    return depth2EdgeIndex;
+  }
+
   function chooseSemanticEdge(index: number) {
-    if (index < 0 || index >= points.length) return;
-    if (edgeAssignMode === "front") {
-      setFrontEdgeIndex(String(index));
-      setEdgeAssignMode(null);
-      notify(`Plot ${plotId}: Front edge ${index + 1} selected`);
-      return;
-    }
-    if (edgeAssignMode === "depth") {
-      setDepthEdgeIndex(String(index));
-      setEdgeAssignMode(null);
-      notify(`Plot ${plotId}: Depth edge ${index + 1} selected`);
-    }
+    if (index < 0 || index >= points.length || !edgeAssignMode) return;
+    if (edgeAssignMode === "front") setFrontEdgeIndex(String(index));
+    else if (edgeAssignMode === "back") setBackEdgeIndex(String(index));
+    else if (edgeAssignMode === "depthA") setDepthEdgeIndex(String(index));
+    else setDepth2EdgeIndex(String(index));
+    const label =
+      edgeAssignMode === "front"
+        ? "Front"
+        : edgeAssignMode === "back"
+          ? "Back"
+          : edgeAssignMode === "depthA"
+            ? "Depth A"
+            : "Depth B";
+    setEdgeAssignMode(null);
+    notify(`Plot ${plotId}: ${label} edge ${index + 1} selected`);
   }
 
   function toggleBulkSemanticPlot(id: string) {
@@ -1043,7 +1101,7 @@ export default function PlotMapper({
   }
 
   async function applyBulkEdgeDirection(
-    kind: "front" | "depth",
+    kind: PlotSideRole,
     direction: EdgeDirection,
   ) {
     const selected = mappedPlots.filter((plot) => bulkSemanticIds.has(plot.id));
@@ -1052,9 +1110,20 @@ export default function PlotMapper({
     const payload = selected.map((plot) => {
       const polygon = parsePolygon(plot);
       const edge = edgeIndexForDisplayDirection(polygon, direction, rotation);
-      return kind === "front"
-        ? { ...plot, frontEdgeIndex: edge }
-        : { ...plot, depthEdgeIndex: edge };
+      const edgeSemantics = setPlotSideEdge(
+        plot.edgeSemantics,
+        kind,
+        edge,
+        polygon.length,
+      );
+      return {
+        ...plot,
+        edgeSemantics,
+        ...(kind === "front" ? { frontEdgeIndex: edge } : {}),
+        ...(kind === "back" ? { backEdgeIndex: edge } : {}),
+        ...(kind === "depthA" ? { depthEdgeIndex: edge } : {}),
+        ...(kind === "depthB" ? { depth2EdgeIndex: edge } : {}),
+      };
     });
 
     setBusy(true);
@@ -1067,8 +1136,12 @@ export default function PlotMapper({
       await apiResult(response);
       await reload();
       setBulkSemanticIds(new Set());
+      const roleLabel =
+        kind === "front" ? "Front" :
+        kind === "back" ? "Back" :
+        kind === "depthA" ? "Depth A" : "Depth B";
       notify(
-        `${payload.length} plots: ${kind === "front" ? "Front" : "Depth"} ${direction.toUpperCase()} SERVER SAVED ✓`,
+        `${payload.length} plots: ${roleLabel} ${direction.toUpperCase()} SERVER SAVED ✓`,
       );
     } catch (error) {
       notify(error instanceof Error ? error.message : "Bulk side save nahi hua");
@@ -1108,6 +1181,11 @@ export default function PlotMapper({
     setPoints([]);
     setManualPhase("select");
     setEditingId("");
+    setFrontEdgeIndex("");
+    setDepthEdgeIndex("");
+    setBackEdgeIndex("");
+    setDepth2EdgeIndex("");
+    setEdgeAssignMode(null);
     setToolMode("select");
     try {
       window.localStorage.removeItem(mappingDraftKey(projectId, plotId));
@@ -1153,8 +1231,8 @@ export default function PlotMapper({
 
   function downloadPlotSheetTemplate() {
     const text = [
-      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Depth,Dimension Unit,Front Edge,Depth Edge,Front Label,Depth Label,Side Dimensions,Notes",
-      "1,1162.08,108,12 x 9 m,East face,12,9,m,1,2,12 m,9 m,Front 12 m · Depth 9 m,",
+      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Back,Depth,Depth 2,Dimension Unit,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
+      "1,1162.08,108,Irregular,East face,12,10,9,9.5,m,1,3,2,4,12 m,10 m,9 m,9.5 m,Front/Back/Depth A/Depth B,",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -1959,6 +2037,8 @@ export default function PlotMapper({
         const sameMetadata =
           sameOptionalNumber(saved.front, persisted.front) &&
           sameOptionalNumber(saved.depth, persisted.depth) &&
+          sameOptionalNumber(saved.back, persisted.back) &&
+          sameOptionalNumber(saved.depth2, persisted.depth2) &&
           String(saved.dimensionUnit || "") === String(persisted.dimensionUnit || "") &&
           (saved.frontEdgeIndex == null && persisted.frontEdgeIndex == null
             ? true
@@ -1966,9 +2046,18 @@ export default function PlotMapper({
           (saved.depthEdgeIndex == null && persisted.depthEdgeIndex == null
             ? true
             : Number(saved.depthEdgeIndex) === Number(persisted.depthEdgeIndex)) &&
+          (saved.backEdgeIndex == null && persisted.backEdgeIndex == null
+            ? true
+            : Number(saved.backEdgeIndex) === Number(persisted.backEdgeIndex)) &&
+          (saved.depth2EdgeIndex == null && persisted.depth2EdgeIndex == null
+            ? true
+            : Number(saved.depth2EdgeIndex) === Number(persisted.depth2EdgeIndex)) &&
           String(saved.frontLabel || "") === String(persisted.frontLabel || "") &&
           String(saved.depthLabel || "") === String(persisted.depthLabel || "") &&
-          String(saved.sideDimensions || "") === String(persisted.sideDimensions || "");
+          String(saved.backLabel || "") === String(persisted.backLabel || "") &&
+          String(saved.depth2Label || "") === String(persisted.depth2Label || "") &&
+          String(saved.sideDimensions || "") === String(persisted.sideDimensions || "") &&
+          String(saved.edgeSemantics || "") === String(persisted.edgeSemantics || "");
         if (sameGeometry && sameMetadata) return { plot: persisted, plots: verifiedPlots };
       }
       if (attempt < 3) {
@@ -2023,12 +2112,14 @@ export default function PlotMapper({
     const depthValue = depth.trim() ? Number(depth) : null;
     const edgeValue = frontEdgeIndex.trim() ? Number(frontEdgeIndex) : null;
     const depthEdgeValue = depthEdgeIndex.trim() ? Number(depthEdgeIndex) : null;
+    const backEdgeValue = backEdgeIndex.trim() ? Number(backEdgeIndex) : null;
+    const depth2EdgeValue = depth2EdgeIndex.trim() ? Number(depth2EdgeIndex) : null;
     if (frontValue !== null && (!Number.isFinite(frontValue) || frontValue <= 0))
       return notify("Front positive number hona chahiye");
     if (depthValue !== null && (!Number.isFinite(depthValue) || depthValue <= 0))
       return notify("Depth positive number hona chahiye");
-    if ((frontValue === null) !== (depthValue === null))
-      return notify("Front aur Depth dono size bharein, ya dono blank rakhein");
+    // Individual measurements may be missing on sanctioned plans.
+    // Edge identity is independent from whether a numeric dimension is printed.
     if (
       edgeValue !== null &&
       (!Number.isInteger(edgeValue) || edgeValue < 0 || edgeValue >= points.length)
@@ -2040,7 +2131,40 @@ export default function PlotMapper({
       depthEdgeValue !== null &&
       (!Number.isInteger(depthEdgeValue) || depthEdgeValue < 0 || depthEdgeValue >= points.length)
     )
-      return notify("Depth edge valid polygon edge select karein");
+      return notify("Depth A edge valid polygon edge select karein");
+    if (
+      backEdgeValue !== null &&
+      (!Number.isInteger(backEdgeValue) || backEdgeValue < 0 || backEdgeValue >= points.length)
+    )
+      return notify("Back edge valid polygon edge select karein");
+    if (
+      depth2EdgeValue !== null &&
+      (!Number.isInteger(depth2EdgeValue) || depth2EdgeValue < 0 || depth2EdgeValue >= points.length)
+    )
+      return notify("Depth B edge valid polygon edge select karein");
+
+    const chosenEdges = [edgeValue, backEdgeValue, depthEdgeValue, depth2EdgeValue]
+      .filter((value): value is number => value !== null);
+    if (new Set(chosenEdges).size !== chosenEdges.length)
+      return notify("Front / Back / Depth A / Depth B ke liye same edge do baar select nahi ho sakti");
+
+    const originalPointCount = existing ? parsePolygon(existing).length : points.length;
+    if (
+      existing &&
+      originalPointCount >= 3 &&
+      originalPointCount !== points.length &&
+      chosenEdges.length
+    )
+      return notify(
+        "Plot corner count badla hai — Front / Back / Depth A / Depth B sides dobara select karein",
+      );
+
+    const edgeSemantics = serializePlotSideSemantics(points.length, {
+      ...(edgeValue !== null ? { front: [edgeValue] } : {}),
+      ...(backEdgeValue !== null ? { back: [backEdgeValue] } : {}),
+      ...(depthEdgeValue !== null ? { depthA: [depthEdgeValue] } : {}),
+      ...(depth2EdgeValue !== null ? { depthB: [depth2EdgeValue] } : {}),
+    });
 
     const unchangedInventoryArea =
       Boolean(existing) && area > 0 && Math.abs(Number(existing?.sqft || 0) - area) < 0.0001;
@@ -2057,12 +2181,25 @@ export default function PlotMapper({
       road: road.trim() || existing?.road || "",
       front: frontValue,
       depth: depthValue,
-      dimensionUnit: frontValue !== null ? dimensionUnit : null,
+      back: existing?.back ?? null,
+      depth2: existing?.depth2 ?? null,
+      dimensionUnit:
+        frontValue !== null ||
+        depthValue !== null ||
+        existing?.back != null ||
+        existing?.depth2 != null
+          ? dimensionUnit
+          : null,
       frontEdgeIndex: edgeValue,
       depthEdgeIndex: depthEdgeValue,
+      backEdgeIndex: backEdgeValue,
+      depth2EdgeIndex: depth2EdgeValue,
       frontLabel: existing?.frontLabel || null,
       depthLabel: existing?.depthLabel || null,
+      backLabel: existing?.backLabel || null,
+      depth2Label: existing?.depth2Label || null,
       sideDimensions: existing?.sideDimensions || null,
+      edgeSemantics,
       status: existing?.status || "available",
       notes: existing?.notes || "",
       featured: existing?.featured || false,
@@ -2667,10 +2804,7 @@ export default function PlotMapper({
                   })}
                   {!calibrationMode && edgeAssignMode && points.length >= 3 && points.map((point, index) => {
                     const next = points[(index + 1) % points.length];
-                    const selected =
-                      edgeAssignMode === "front"
-                        ? Number(frontEdgeIndex) === index
-                        : Number(depthEdgeIndex) === index;
+                    const selected = Number(semanticEdgeValue(edgeAssignMode)) === index;
                     return (
                       <line
                         key={`semantic-edge-${index}`}
@@ -2678,7 +2812,17 @@ export default function PlotMapper({
                         y1={point[1] * 1000}
                         x2={next[0] * 1000}
                         y2={next[1] * 1000}
-                        stroke={selected ? (edgeAssignMode === "front" ? "#22c55e" : "#f59e0b") : "#ffffff"}
+                        stroke={
+                          selected
+                            ? edgeAssignMode === "front"
+                              ? "#22c55e"
+                              : edgeAssignMode === "back"
+                                ? "#60a5fa"
+                                : edgeAssignMode === "depthA"
+                                  ? "#f59e0b"
+                                  : "#a78bfa"
+                            : "#ffffff"
+                        }
                         strokeOpacity={selected ? 1 : .72}
                         strokeWidth={selected ? 16 : 12}
                         vectorEffect="non-scaling-stroke"
@@ -2693,6 +2837,33 @@ export default function PlotMapper({
                           chooseSemanticEdge(index);
                         }}
                       />
+                    );
+                  })}
+                  {!calibrationMode && points.length >= 3 && ([
+                    ["front", frontEdgeIndex, "F", "#22c55e"],
+                    ["back", backEdgeIndex, "B", "#60a5fa"],
+                    ["depthA", depthEdgeIndex, "D1", "#f59e0b"],
+                    ["depthB", depth2EdgeIndex, "D2", "#a78bfa"],
+                  ] as const).map(([role, rawEdge, badge, color]) => {
+                    const edge = Number(rawEdge);
+                    if (!Number.isInteger(edge) || edge < 0 || edge >= points.length) return null;
+                    const a = points[edge];
+                    const b = points[(edge + 1) % points.length];
+                    return (
+                      <text
+                        key={`semantic-badge-${role}`}
+                        x={((a[0] + b[0]) / 2) * 1000}
+                        y={((a[1] + b[1]) / 2) * 1000}
+                        fill={color}
+                        stroke="#08111f"
+                        strokeWidth={5}
+                        paintOrder="stroke"
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize={24 / Math.max(1, zoom)}
+                        fontWeight={900}
+                        style={{ pointerEvents: "none" }}
+                      >{badge}</text>
                     );
                   })}
                   {showCadOverlay && liveMatrix && cadTransformed.map(({ candidate, points: polygon }) => (
@@ -2746,26 +2917,24 @@ export default function PlotMapper({
                 onClick={clearCurrentSelection}
               >{currentHasSavedBoundary ? "Remove saved" : "Clear"}</button>
               <button type="button" onClick={clonePreviousShape}><Copy />Clone prev</button>
-              <button
-                type="button"
-                className={edgeAssignMode === "front" ? "primary" : ""}
-                disabled={points.length < 3}
-                onClick={() => {
-                  setBulkSemanticMode(false);
-                  setBulkSemanticIds(new Set());
-                  setEdgeAssignMode((mode) => mode === "front" ? null : "front");
-                }}
-              >Front side</button>
-              <button
-                type="button"
-                className={edgeAssignMode === "depth" ? "primary" : ""}
-                disabled={points.length < 3}
-                onClick={() => {
-                  setBulkSemanticMode(false);
-                  setBulkSemanticIds(new Set());
-                  setEdgeAssignMode((mode) => mode === "depth" ? null : "depth");
-                }}
-              >Depth side</button>
+              {([
+                ["front", "Front side"],
+                ["back", "Back side"],
+                ["depthA", "Depth A"],
+                ["depthB", "Depth B"],
+              ] as const).map(([role, label]) => (
+                <button
+                  key={role}
+                  type="button"
+                  className={edgeAssignMode === role ? "primary" : ""}
+                  disabled={points.length < 3}
+                  onClick={() => {
+                    setBulkSemanticMode(false);
+                    setBulkSemanticIds(new Set());
+                    setEdgeAssignMode((mode) => mode === role ? null : role);
+                  }}
+                >{label}</button>
+              ))}
               <button
                 type="button"
                 className={bulkSemanticMode ? "primary" : ""}
@@ -2786,14 +2955,25 @@ export default function PlotMapper({
           {!completedProject && bulkSemanticMode && (
             <div className="mapper-actions compact">
               <span>{bulkSemanticIds.size} plots selected · visible mapper direction</span>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("front", "top")}>F ↑</button>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("front", "right")}>F →</button>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("front", "bottom")}>F ↓</button>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("front", "left")}>F ←</button>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("depth", "top")}>D ↑</button>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("depth", "right")}>D →</button>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("depth", "bottom")}>D ↓</button>
-              <button disabled={!bulkSemanticIds.size || busy} onClick={() => applyBulkEdgeDirection("depth", "left")}>D ←</button>
+              {([
+                ["front", "F"],
+                ["back", "B"],
+                ["depthA", "D1"],
+                ["depthB", "D2"],
+              ] as const).flatMap(([role, short]) =>
+                ([
+                  ["top", "↑"],
+                  ["right", "→"],
+                  ["bottom", "↓"],
+                  ["left", "←"],
+                ] as const).map(([direction, arrow]) => (
+                  <button
+                    key={`${role}-${direction}`}
+                    disabled={!bulkSemanticIds.size || busy}
+                    onClick={() => applyBulkEdgeDirection(role, direction)}
+                  >{short} {arrow}</button>
+                )),
+              )}
             </div>
           )}
           {shapeInvalid && <div className="mapper-shape-error">Shape cross ho rahi hai. Handles ko clockwise order me adjust karein.</div>}

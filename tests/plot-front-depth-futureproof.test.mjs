@@ -45,17 +45,20 @@ test("Super Mapper persists semantic metadata while conflict update still does n
   }
 });
 
-test("Super Admin mapper requires real front/depth pair plus road-facing edge", () => {
+test("Super Admin mapper keeps measurements independent from actual four-side edge identity", () => {
   const mapper = read("app/plot-mapper.tsx");
-  assert.match(mapper, /Front \(road side\)/);
-  assert.match(mapper, /Depth<\/span>/);
-  assert.match(mapper, /Front edge \(road side\)/);
-  assert.match(mapper, /Select road-facing edge/);
-  assert.match(mapper, /Front aur Depth dono size bharein/);
-  assert.match(mapper, /road-facing Front edge select karein/);
-  assert.match(mapper, /Dimensions → Front\/Depth/);
-  assert.match(mapper, /Swap Front ↔ Depth/);
-  assert.match(mapper, /Front Edge,Depth Edge,Front Label,Depth Label,Side Dimensions,Notes/);
+  assert.match(mapper, /\["front", "Front side"\]/);
+  assert.match(mapper, /\["back", "Back side"\]/);
+  assert.match(mapper, /\["depthA", "Depth A"\]/);
+  assert.match(mapper, /\["depthB", "Depth B"\]/);
+  assert.match(mapper, /same edge do baar select nahi ho sakti/);
+  assert.match(mapper, /Plot corner count badla hai/);
+  assert.match(mapper, /serializePlotSideSemantics/);
+  assert.doesNotMatch(mapper, /Front aur Depth dono size bharein/);
+  assert.match(
+    mapper,
+    /Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes/,
+  );
 });
 
 test("server read-back verifies front/depth metadata together with canonical polygon", () => {

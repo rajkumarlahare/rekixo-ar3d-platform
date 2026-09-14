@@ -4,6 +4,10 @@ import { writeAudit } from "../../audit";
 import { parseCadGeometry } from "../../cad-import";
 import { cleanPlotId, type HomographyPair } from "../../mapper-geometry";
 import { parsePlotSheetText } from "../../plot-sheet";
+import {
+  parsePlotSideSemantics,
+  serializePlotSideSemantics,
+} from "../../plot-side-semantics";
 
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
@@ -87,8 +91,12 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     numbers = [Number(p.sqft), Number(p.sqm), Number(p.sqyd)],
     front = optionalPositiveMeasure(p.front),
     depth = optionalPositiveMeasure(p.depth),
+    back = optionalPositiveMeasure(p.back),
+    depth2 = optionalPositiveMeasure(p.depth2),
     edgeRaw = p.frontEdgeIndex ?? p.front_edge_index,
     depthEdgeRaw = p.depthEdgeIndex ?? p.depth_edge_index,
+    backEdgeRaw = p.backEdgeIndex ?? p.back_edge_index,
+    depth2EdgeRaw = p.depth2EdgeIndex ?? p.depth2_edge_index,
     frontEdgeIndex =
       edgeRaw === null || edgeRaw === undefined || String(edgeRaw).trim() === ""
         ? null
@@ -96,10 +104,18 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     depthEdgeIndex =
       depthEdgeRaw === null || depthEdgeRaw === undefined || String(depthEdgeRaw).trim() === ""
         ? null
-        : Number(depthEdgeRaw);
+        : Number(depthEdgeRaw),
+    backEdgeIndex =
+      backEdgeRaw === null || backEdgeRaw === undefined || String(backEdgeRaw).trim() === ""
+        ? null
+        : Number(backEdgeRaw),
+    depth2EdgeIndex =
+      depth2EdgeRaw === null || depth2EdgeRaw === undefined || String(depth2EdgeRaw).trim() === ""
+        ? null
+        : Number(depth2EdgeRaw);
   const rawUnit = String(p.dimensionUnit ?? p.dimension_unit ?? "").trim().toLowerCase();
   const dimensionUnit =
-    front !== null || depth !== null
+    front !== null || depth !== null || back !== null || depth2 !== null
       ? rawUnit === "m"
         ? "m"
         : rawUnit === "ft" || rawUnit === ""
@@ -110,10 +126,45 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
         : null;
   const frontLabel = cleanDimensionText(p.frontLabel ?? p.front_label, 160);
   const depthLabel = cleanDimensionText(p.depthLabel ?? p.depth_label, 160);
+  const backLabel = cleanDimensionText(p.backLabel ?? p.back_label, 160);
+  const depth2Label = cleanDimensionText(p.depth2Label ?? p.depth2_label, 160);
   const sideDimensions = cleanDimensionText(
     p.sideDimensions ?? p.side_dimensions,
     500,
   );
+  const polygonPointCount = polygon
+    ? (() => {
+        try {
+          const parsed = JSON.parse(polygon);
+          return Array.isArray(parsed) ? parsed.length : 0;
+        } catch {
+          return 0;
+        }
+      })()
+    : 0;
+  let edgeSemantics: string | null = null;
+  const suppliedSemantics = p.edgeSemantics ?? p.edge_semantics;
+  if (suppliedSemantics != null && String(suppliedSemantics).trim()) {
+    const parsed = parsePlotSideSemantics(
+      suppliedSemantics,
+      polygonPointCount >= 3 ? polygonPointCount : undefined,
+    );
+    if (!parsed) return null;
+    edgeSemantics = JSON.stringify(parsed);
+  } else if (
+    polygonPointCount >= 3 &&
+    (frontEdgeIndex !== null ||
+      backEdgeIndex !== null ||
+      depthEdgeIndex !== null ||
+      depth2EdgeIndex !== null)
+  ) {
+    edgeSemantics = serializePlotSideSemantics(polygonPointCount, {
+      ...(frontEdgeIndex !== null ? { front: [frontEdgeIndex] } : {}),
+      ...(backEdgeIndex !== null ? { back: [backEdgeIndex] } : {}),
+      ...(depthEdgeIndex !== null ? { depthA: [depthEdgeIndex] } : {}),
+      ...(depth2EdgeIndex !== null ? { depthB: [depth2EdgeIndex] } : {}),
+    });
+  }
   if (
     !id ||
     (polygon && !validPolygon(polygon)) ||
@@ -121,11 +172,17 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     numbers.some((value) => !Number.isFinite(value) || value < 0) ||
     Number.isNaN(front) ||
     Number.isNaN(depth) ||
+    Number.isNaN(back) ||
+    Number.isNaN(depth2) ||
     dimensionUnit === "" ||
     (frontEdgeIndex !== null &&
       (!Number.isInteger(frontEdgeIndex) || frontEdgeIndex < 0 || frontEdgeIndex > 79)) ||
     (depthEdgeIndex !== null &&
-      (!Number.isInteger(depthEdgeIndex) || depthEdgeIndex < 0 || depthEdgeIndex > 79))
+      (!Number.isInteger(depthEdgeIndex) || depthEdgeIndex < 0 || depthEdgeIndex > 79)) ||
+    (backEdgeIndex !== null &&
+      (!Number.isInteger(backEdgeIndex) || backEdgeIndex < 0 || backEdgeIndex > 79)) ||
+    (depth2EdgeIndex !== null &&
+      (!Number.isInteger(depth2EdgeIndex) || depth2EdgeIndex < 0 || depth2EdgeIndex > 79))
   )
     return null;
 
@@ -134,6 +191,8 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
       const polygonPoints = JSON.parse(polygon) as unknown[];
       if (frontEdgeIndex !== null && frontEdgeIndex >= polygonPoints.length) return null;
       if (depthEdgeIndex !== null && depthEdgeIndex >= polygonPoints.length) return null;
+      if (backEdgeIndex !== null && backEdgeIndex >= polygonPoints.length) return null;
+      if (depth2EdgeIndex !== null && depth2EdgeIndex >= polygonPoints.length) return null;
     } catch {
       return null;
     }
@@ -149,12 +208,19 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     road: String(p.road || "").slice(0, 160),
     front,
     depth,
+    back,
+    depth2,
     dimensionUnit,
     frontEdgeIndex,
     depthEdgeIndex,
+    backEdgeIndex,
+    depth2EdgeIndex,
     frontLabel,
     depthLabel,
+    backLabel,
+    depth2Label,
     sideDimensions,
+    edgeSemantics,
     polygon,
     status,
     notes: String(p.notes || "").slice(0, 2000),
@@ -257,8 +323,8 @@ async function savePlots(
   // Plot-sheet re-import preserves hand-curated geometry/status and only replaces
   // semantic Front/Depth metadata when the incoming sheet explicitly supplies it.
   const statement = preserveGeometry
-    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,front_label,depth_label,side_dimensions,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),front_label=COALESCE(excluded.front_label,front_label),depth_label=COALESCE(excluded.depth_label,depth_label),side_dimensions=COALESCE(excluded.side_dimensions,side_dimensions),notes=excluded.notes,updated_at=excluded.updated_at"
-    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,front_label,depth_label,side_dimensions,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,front_label=excluded.front_label,depth_label=excluded.depth_label,side_dimensions=excluded.side_dimensions,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
+    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),back=COALESCE(excluded.back,back),depth2=COALESCE(excluded.depth2,depth2),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),back_edge_index=COALESCE(excluded.back_edge_index,back_edge_index),depth2_edge_index=COALESCE(excluded.depth2_edge_index,depth2_edge_index),front_label=COALESCE(excluded.front_label,front_label),depth_label=COALESCE(excluded.depth_label,depth_label),back_label=COALESCE(excluded.back_label,back_label),depth2_label=COALESCE(excluded.depth2_label,depth2_label),side_dimensions=COALESCE(excluded.side_dimensions,side_dimensions),edge_semantics=COALESCE(excluded.edge_semantics,edge_semantics),notes=excluded.notes,updated_at=excluded.updated_at"
+    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,front_label,depth_label,side_dimensions,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,back=excluded.back,depth2=excluded.depth2,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,back_edge_index=excluded.back_edge_index,depth2_edge_index=excluded.depth2_edge_index,front_label=excluded.front_label,depth_label=excluded.depth_label,back_label=excluded.back_label,depth2_label=excluded.depth2_label,side_dimensions=excluded.side_dimensions,edge_semantics=excluded.edge_semantics,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
 
   for (let index = 0; index < saved.length; index += 80) {
     const chunk = saved.slice(index, index + 80);
@@ -274,12 +340,19 @@ async function savePlots(
           plot.road,
           plot.front,
           plot.depth,
+          plot.back,
+          plot.depth2,
           plot.dimensionUnit,
           plot.frontEdgeIndex,
           plot.depthEdgeIndex,
+          plot.backEdgeIndex,
+          plot.depth2EdgeIndex,
           plot.frontLabel,
           plot.depthLabel,
+          plot.backLabel,
+          plot.depth2Label,
           plot.sideDimensions,
+          plot.edgeSemantics,
           plot.polygon,
           plot.status,
           plot.notes,
@@ -310,7 +383,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   const [plots, settings, cadGeometry] = await Promise.all([
     env.DB.prepare(
-      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,side_dimensions AS sideDimensions,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
+      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,back AS back,depth2 AS depth2,back_label AS backLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
     )
       .bind(projectId)
       .all(),

@@ -9,11 +9,17 @@ export type PlotSheetRow = {
   road: string;
   front: number | null;
   depth: number | null;
+  back: number | null;
+  depth2: number | null;
   dimensionUnit: "ft" | "m" | "";
   frontEdgeIndex: number | null;
   depthEdgeIndex: number | null;
+  backEdgeIndex: number | null;
+  depth2EdgeIndex: number | null;
   frontLabel: string;
   depthLabel: string;
+  backLabel: string;
+  depth2Label: string;
   sideDimensions: string;
   notes: string;
 };
@@ -53,12 +59,18 @@ const aliases: Record<string, string[]> = {
   dimensions: ["dimensions", "dimension", "size", "plotsize", "measurement"],
   road: ["road", "roadaccess", "facing", "face", "roadfacing"],
   front: ["front", "frontage", "frontlength", "frontft", "frontfeet"],
-  depth: ["depth", "plotdepth", "depthlength", "depthft", "depthfeet"],
+  depth: ["depth", "plotdepth", "depthlength", "depthft", "depthfeet", "deptha"],
+  back: ["back", "rear", "backlength", "rearwidth", "backft", "backfeet"],
+  depth2: ["depth2", "depthb", "depthright", "otherdepth", "seconddepth"],
   dimensionUnit: ["dimensionunit", "lengthunit", "measurementunit", "unit"],
   frontEdge: ["frontedge", "frontedge1based", "roadedge", "roadsideedge"],
-  depthEdge: ["depthedge", "depthedge1based", "depthsideedge"],
+  depthEdge: ["depthedge", "depthedge1based", "depthsideedge", "depthaedge"],
+  backEdge: ["backedge", "rearedge", "backedge1based"],
+  depth2Edge: ["depth2edge", "depthbedge", "seconddepthedge"],
   frontLabel: ["frontlabel", "frontdisplay", "fronttext", "frontdisplaylabel"],
-  depthLabel: ["depthlabel", "depthdisplay", "depthtext", "depthdisplaylabel"],
+  depthLabel: ["depthlabel", "depthdisplay", "depthtext", "depthdisplaylabel", "depthalabel"],
+  backLabel: ["backlabel", "rearlabell", "reardisplay", "backdisplay"],
+  depth2Label: ["depth2label", "depthblabel", "seconddepthlabel"],
   sideDimensions: ["sidedimensions", "sidemeasurements", "sidelabels", "pdfsides"],
   notes: ["notes", "note", "remarks", "remark"],
 };
@@ -179,15 +191,19 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
   const dimensions = String(input.dimensions || "").trim().slice(0, 120);
   const front = optionalPositive(input.front, "Front");
   const depth = optionalPositive(input.depth, "Depth");
+  const back = optionalPositive(input.back, "Back");
+  const depth2 = optionalPositive(input.depth2, "Depth 2");
   const measurementHint = [
     dimensions,
     String(input.front ?? ""),
     String(input.depth ?? ""),
+    String(input.back ?? ""),
+    String(input.depth2 ?? ""),
   ].join(" ");
   const unit = dimensionUnit(
     input.dimensionUnit,
     measurementHint,
-    front !== null || depth !== null,
+    front !== null || depth !== null || back !== null || depth2 !== null,
   );
   return {
     id,
@@ -198,11 +214,17 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
     road: String(input.road || "").trim().slice(0, 160),
     front,
     depth,
+    back,
+    depth2,
     dimensionUnit: unit,
     frontEdgeIndex: edgeIndex(input.frontEdge, "Front Edge"),
     depthEdgeIndex: edgeIndex(input.depthEdge, "Depth Edge"),
+    backEdgeIndex: edgeIndex(input.backEdge, "Back Edge"),
+    depth2EdgeIndex: edgeIndex(input.depth2Edge, "Depth 2 Edge"),
     frontLabel: cleanDimensionText(input.frontLabel, 160),
     depthLabel: cleanDimensionText(input.depthLabel, 160),
+    backLabel: cleanDimensionText(input.backLabel, 160),
+    depth2Label: cleanDimensionText(input.depth2Label, 160),
     sideDimensions: cleanDimensionText(input.sideDimensions, 500),
     notes: String(input.notes || "").trim().slice(0, 2000),
   };
@@ -239,11 +261,17 @@ export function parsePlotSheetText(text: string, filename: string) {
     road: columnFor(headers, "road"),
     front: columnFor(headers, "front"),
     depth: columnFor(headers, "depth"),
+    back: columnFor(headers, "back"),
+    depth2: columnFor(headers, "depth2"),
     dimensionUnit: columnFor(headers, "dimensionUnit"),
     frontEdge: columnFor(headers, "frontEdge"),
     depthEdge: columnFor(headers, "depthEdge"),
+    backEdge: columnFor(headers, "backEdge"),
+    depth2Edge: columnFor(headers, "depth2Edge"),
     frontLabel: columnFor(headers, "frontLabel"),
     depthLabel: columnFor(headers, "depthLabel"),
+    backLabel: columnFor(headers, "backLabel"),
+    depth2Label: columnFor(headers, "depth2Label"),
     sideDimensions: columnFor(headers, "sideDimensions"),
     notes: columnFor(headers, "notes"),
   };
@@ -265,11 +293,17 @@ export function parsePlotSheetText(text: string, filename: string) {
           road: value(row, indexes.road),
           front: value(row, indexes.front),
           depth: value(row, indexes.depth),
+          back: value(row, indexes.back),
+          depth2: value(row, indexes.depth2),
           dimensionUnit: value(row, indexes.dimensionUnit),
           frontEdge: value(row, indexes.frontEdge),
           depthEdge: value(row, indexes.depthEdge),
+          backEdge: value(row, indexes.backEdge),
+          depth2Edge: value(row, indexes.depth2Edge),
           frontLabel: value(row, indexes.frontLabel),
           depthLabel: value(row, indexes.depthLabel),
+          backLabel: value(row, indexes.backLabel),
+          depth2Label: value(row, indexes.depth2Label),
           sideDimensions: value(row, indexes.sideDimensions),
           notes: value(row, indexes.notes),
         }),

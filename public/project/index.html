@@ -703,6 +703,7 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
       <line id="widthLeftGuide" class="dimline"/><line id="widthRightGuide" class="dimline"/>
       <text id="widthText" class="dimtext" text-anchor="middle">Front</text>
       <polygon id="diagramPoly" points=""></polygon>
+      <g id="semanticEdgeLabels"></g>
       <text id="diagramLabel" class="plotnum" x="166" y="105" text-anchor="middle">A-01</text>
     </svg>
   </div>
@@ -715,7 +716,9 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
     <div class="fact pricing-fact" id="pricingBaseRow" style="display:none"><span>BASE PRICE</span><b id="pricingBase">—</b></div>
     <div class="fact"><span>DIMENSIONS</span><b id="dims">—</b></div>
     <div class="fact" id="frontFactRow" style="display:none"><span>FRONT</span><b id="frontValue">—</b></div>
-    <div class="fact" id="depthFactRow" style="display:none"><span>DEPTH</span><b id="depthValue">—</b></div>
+    <div class="fact" id="backFactRow" style="display:none"><span>BACK</span><b id="backValue">—</b></div>
+    <div class="fact" id="depthFactRow" style="display:none"><span>DEPTH A</span><b id="depthValue">—</b></div>
+    <div class="fact" id="depth2FactRow" style="display:none"><span>DEPTH B</span><b id="depth2Value">—</b></div>
     <div class="fact" id="sideDimensionsRow" style="display:none"><span>SIDE MEASUREMENTS</span><b id="sideDimensionsValue">—</b></div>
     <div class="fact"><span id="roadLabel">ROAD ACCESS</span><b id="road">—</b></div>
     <div class="fact"><span>STATUS</span><b id="plotStatusValue" class="available">Available</b></div>
@@ -1126,30 +1129,126 @@ rekixoStartPublicBoot();
   function plotSemanticDimensions(p){
     const front=cleanDimensionLabel(p.frontLabel)||plotLengthText(p.front,p.dimensionUnit);
     const depth=cleanDimensionLabel(p.depthLabel)||plotLengthText(p.depth,p.dimensionUnit);
+    const back=cleanDimensionLabel(p.backLabel)||plotLengthText(p.back,p.dimensionUnit);
+    const depth2=cleanDimensionLabel(p.depth2Label)||plotLengthText(p.depth2,p.dimensionUnit);
     const sides=cleanDimensionLabel(p.sideDimensions);
     const rawEdge=Number(p.frontEdgeIndex);
     const edge=Number.isInteger(rawEdge)&&rawEdge>=0&&rawEdge<p.points.length?rawEdge:null;
-    return{front,depth,sides,edge}
+    return{front,depth,back,depth2,sides,edge}
+  }
+
+  function plotSideSemantics(p){
+    const validEdge=value=>{
+      const edge=Number(value);
+      return Number.isInteger(edge)&&edge>=0&&edge<p.points.length?edge:null
+    };
+    const raw=cleanDimensionLabel(p.edgeSemantics);
+    if(raw){
+      try{
+        const value=JSON.parse(raw);
+        if(value&&Number(value.version)===1&&Number(value.pointCount)===p.points.length){
+          const roles=value.roles&&typeof value.roles==='object'?value.roles:{};
+          const cleanRole=name=>{
+            const list=Array.isArray(roles[name])?roles[name]:[];
+            return [...new Set(list.map(Number).filter(edge=>Number.isInteger(edge)&&edge>=0&&edge<p.points.length))]
+          };
+          const parsed={front:cleanRole('front'),back:cleanRole('back'),depthA:cleanRole('depthA'),depthB:cleanRole('depthB')};
+          if(parsed.front.length&&parsed.back.length)return parsed
+        }
+      }catch(_){}
+    }
+    const front=validEdge(p.frontEdgeIndex),back=validEdge(p.backEdgeIndex),
+      depthA=validEdge(p.depthEdgeIndex),depthB=validEdge(p.depth2EdgeIndex);
+    // Scalar fallback makes ordinary CSV edge import useful after polygon mapping.
+    // Activation still requires BOTH Front and Back, so every older project
+    // without new semantic data remains on the proven legacy renderer.
+    return front!==null&&back!==null
+      ? {
+          front:[front],
+          back:[back],
+          depthA:depthA===null?[]:[depthA],
+          depthB:depthB===null?[]:[depthB],
+        }
+      : null
   }
   function syncFrontDepthFacts(p){
-    const semantic=plotSemanticDimensions(p),frontRow=q('#frontFactRow'),depthRow=q('#depthFactRow'),sideRow=q('#sideDimensionsRow');
-    const frontValue=q('#frontValue'),depthValue=q('#depthValue'),sideValue=q('#sideDimensionsValue');
+    const semantic=plotSemanticDimensions(p),
+      frontRow=q('#frontFactRow'),backRow=q('#backFactRow'),
+      depthRow=q('#depthFactRow'),depth2Row=q('#depth2FactRow'),
+      sideRow=q('#sideDimensionsRow');
+    const frontValue=q('#frontValue'),backValue=q('#backValue'),
+      depthValue=q('#depthValue'),depth2Value=q('#depth2Value'),
+      sideValue=q('#sideDimensionsValue');
     if(frontRow)frontRow.style.display=semantic.front?'flex':'none';
+    if(backRow)backRow.style.display=semantic.back?'flex':'none';
     if(depthRow)depthRow.style.display=semantic.depth?'flex':'none';
+    if(depth2Row)depth2Row.style.display=semantic.depth2?'flex':'none';
     if(sideRow)sideRow.style.display=semantic.sides?'flex':'none';
     if(frontValue)frontValue.textContent=semantic.front||'—';
+    if(backValue)backValue.textContent=semantic.back||'—';
     if(depthValue)depthValue.textContent=semantic.depth||'—';
+    if(depth2Value)depth2Value.textContent=semantic.depth2||'—';
     if(sideValue)sideValue.textContent=semantic.sides||'—'
   }
+  function setLegacyDiagramDimensionsVisible(visible){
+    ['depthLine','depthTopTick','depthBottomTick','depthTopGuide','depthBottomGuide','depthText',
+     'widthLine','widthLeftTick','widthRightTick','widthLeftGuide','widthRightGuide','widthText']
+      .forEach(id=>{const el=q('#'+id);if(el)el.style.display=visible?'':'none'})
+  }
+  function renderSemanticDiagramEdges(p,scaledPoints,cx,cy){
+    const semantics=plotSideSemantics(p),group=q('#semanticEdgeLabels');
+    if(!group)return false;
+    group.replaceChildren();
+    if(!semantics){group.style.display='none';return false}
+    const values=plotSemanticDimensions(p);
+    const specs=[
+      ['front','Front',values.front,'#22c55e'],
+      ['back','Back',values.back,'#60a5fa'],
+      ['depthA','Depth A',values.depth,'#f59e0b'],
+      ['depthB','Depth B',values.depth2,'#a78bfa'],
+    ];
+    for(const [role,title,value,color] of specs){
+      const edges=semantics[role]||[];
+      if(!edges.length)continue;
+      let total=0,mx=0,my=0,longest=null,longestLength=-1;
+      for(const edge of edges){
+        const a=scaledPoints[edge],b=scaledPoints[(edge+1)%scaledPoints.length];
+        if(!a||!b)continue;
+        const length=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
+        total+=length;mx+=(a[0]+b[0])/2*length;my+=(a[1]+b[1])/2*length;
+        if(length>longestLength){longestLength=length;longest=[a,b]}
+      }
+      if(!total||!longest)continue;
+      mx/=total;my/=total;
+      let nx=mx-cx,ny=my-cy,n=Math.hypot(nx,ny)||1;nx/=n;ny/=n;
+      const tx=mx+nx*17,ty=my+ny*17;
+      const leader=document.createElementNS('http://www.w3.org/2000/svg','line');
+      leader.setAttribute('x1',mx);leader.setAttribute('y1',my);leader.setAttribute('x2',tx);leader.setAttribute('y2',ty);
+      leader.setAttribute('stroke',color);leader.setAttribute('stroke-width','1.5');
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+      text.setAttribute('x',tx);text.setAttribute('y',ty);
+      text.setAttribute('fill',color);text.setAttribute('font-size','10');text.setAttribute('font-weight','800');
+      text.setAttribute('text-anchor','middle');text.setAttribute('paint-order','stroke');
+      text.setAttribute('stroke','#081225');text.setAttribute('stroke-width','3');
+      text.textContent=title+(value?' · '+value:'');
+      group.appendChild(leader);group.appendChild(text)
+    }
+    group.style.display='';
+    return true
+  }
+
   function diagram(p){
     const xs=p.points.map(a=>a[0]),ys=p.points.map(a=>a[1]),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),bw=maxx-minx||1,bh=maxy-miny||1;
     const s=Math.min(165/bw,82/bh),ox=170-(minx+maxx)/2*s,oy=71-(miny+maxy)/2*s;
     const left=minx*s+ox,right=maxx*s+ox,top=miny*s+oy,bottom=maxy*s+oy,cx=(left+right)/2,cy=(top+bottom)/2;
-    q('#diagramPoly').setAttribute('points',p.points.map(([x,y])=>`${x*s+ox},${y*s+oy}`).join(' '));
+    const scaledPoints=p.points.map(([x,y])=>[x*s+ox,y*s+oy]);
+    q('#diagramPoly').setAttribute('points',scaledPoints.map(([x,y])=>`${x},${y}`).join(' '));
     const semantic=plotSemanticDimensions(p);
-    // Fixed customer-facing rule:
+    const canonicalRendered=renderSemanticDiagramEdges(p,scaledPoints,cx,cy);
+    setLegacyDiagramDimensionsVisible(!canonicalRendered);
+    // Legacy fallback contract for projects without complete canonical semantics:
     // LEFT side = Front, BOTTOM side = Depth.
-    // frontEdgeIndex stays mapper metadata only; it must not swap UI labels.
+    // frontEdgeIndex stays mapper metadata only; it must not swap legacy UI labels.
     const verticalText='Front'+(semantic.front?' · '+semantic.front:'');
     const horizontalText='Depth'+(semantic.depth?' · '+semantic.depth:'');
     const depthX=left-20,widthY=bottom+21;
