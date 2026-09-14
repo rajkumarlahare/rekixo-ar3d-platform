@@ -186,7 +186,13 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
   )
     return null;
 
-  if (polygon && (frontEdgeIndex !== null || depthEdgeIndex !== null)) {
+  if (
+    polygon &&
+    (frontEdgeIndex !== null ||
+      backEdgeIndex !== null ||
+      depthEdgeIndex !== null ||
+      depth2EdgeIndex !== null)
+  ) {
     try {
       const polygonPoints = JSON.parse(polygon) as unknown[];
       if (frontEdgeIndex !== null && frontEdgeIndex >= polygonPoints.length) return null;
@@ -324,7 +330,7 @@ async function savePlots(
   // semantic Front/Depth metadata when the incoming sheet explicitly supplies it.
   const statement = preserveGeometry
     ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),back=COALESCE(excluded.back,back),depth2=COALESCE(excluded.depth2,depth2),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),back_edge_index=COALESCE(excluded.back_edge_index,back_edge_index),depth2_edge_index=COALESCE(excluded.depth2_edge_index,depth2_edge_index),front_label=COALESCE(excluded.front_label,front_label),depth_label=COALESCE(excluded.depth_label,depth_label),back_label=COALESCE(excluded.back_label,back_label),depth2_label=COALESCE(excluded.depth2_label,depth2_label),side_dimensions=COALESCE(excluded.side_dimensions,side_dimensions),edge_semantics=COALESCE(excluded.edge_semantics,edge_semantics),notes=excluded.notes,updated_at=excluded.updated_at"
-    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,front_label,depth_label,side_dimensions,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,back=excluded.back,depth2=excluded.depth2,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,back_edge_index=excluded.back_edge_index,depth2_edge_index=excluded.depth2_edge_index,front_label=excluded.front_label,depth_label=excluded.depth_label,back_label=excluded.back_label,depth2_label=excluded.depth2_label,side_dimensions=excluded.side_dimensions,edge_semantics=excluded.edge_semantics,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
+    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,back=excluded.back,depth2=excluded.depth2,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,back_edge_index=excluded.back_edge_index,depth2_edge_index=excluded.depth2_edge_index,front_label=excluded.front_label,depth_label=excluded.depth_label,back_label=excluded.back_label,depth2_label=excluded.depth2_label,side_dimensions=excluded.side_dimensions,edge_semantics=excluded.edge_semantics,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
 
   for (let index = 0; index < saved.length; index += 80) {
     const chunk = saved.slice(index, index + 80);

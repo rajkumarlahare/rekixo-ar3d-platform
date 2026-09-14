@@ -520,7 +520,13 @@ export default function PlotMapper({
   const [sqft, setSqft] = useState("");
   const [road, setRoad] = useState("");
   const [front, setFront] = useState("");
+  const [back, setBack] = useState("");
   const [depth, setDepth] = useState("");
+  const [depth2, setDepth2] = useState("");
+  const [frontLabel, setFrontLabel] = useState("");
+  const [backLabel, setBackLabel] = useState("");
+  const [depthLabel, setDepthLabel] = useState("");
+  const [depth2Label, setDepth2Label] = useState("");
   const [dimensionUnit, setDimensionUnit] = useState<"ft" | "m">("ft");
   const [frontEdgeIndex, setFrontEdgeIndex] = useState("");
   const [depthEdgeIndex, setDepthEdgeIndex] = useState("");
@@ -646,9 +652,10 @@ export default function PlotMapper({
     setImageUrl(assetUrl("masterplan"));
     setImageReady(false);
     setNaturalImageSize(null);
-    const firstUnmapped = [...nextPlots].sort(plotSort).find((plot) => !plot.polygon);
+    const orderedPlots = [...nextPlots].sort(plotSort);
+    const firstUnmapped = orderedPlots.find((plot) => !plot.polygon);
     if (firstUnmapped) loadPlotDetails(firstUnmapped, false);
-    else if (nextPlots.length) setPlotId(nextPlotId([...nextPlots].sort(plotSort).at(-1)?.id || "1"));
+    else if (orderedPlots.length) loadPlotDetails(orderedPlots[0], Boolean(orderedPlots[0].polygon));
     else setPlotId("1");
     setExcludedAutoIds(new Set());
     const savedPairs = String(nextSettings.calibrationPairs || "");
@@ -975,7 +982,13 @@ export default function PlotMapper({
     setSqft(plot.sqft ? String(plot.sqft) : "");
     setRoad(plot.road || "");
     setFront(plot.front != null ? String(plot.front) : "");
+    setBack(plot.back != null ? String(plot.back) : "");
     setDepth(plot.depth != null ? String(plot.depth) : "");
+    setDepth2(plot.depth2 != null ? String(plot.depth2) : "");
+    setFrontLabel(plot.frontLabel || "");
+    setBackLabel(plot.backLabel || "");
+    setDepthLabel(plot.depthLabel || "");
+    setDepth2Label(plot.depth2Label || "");
     setDimensionUnit(plot.dimensionUnit === "m" ? "m" : "ft");
     const polygon = parsePolygon(plot);
     const semantics = parsePlotSideSemantics(
@@ -1047,7 +1060,13 @@ export default function PlotMapper({
       setSqft("");
       setRoad("");
       setFront("");
+      setBack("");
       setDepth("");
+      setDepth2("");
+      setFrontLabel("");
+      setBackLabel("");
+      setDepthLabel("");
+      setDepth2Label("");
       setDimensionUnit("ft");
       setFrontEdgeIndex("");
       setDepthEdgeIndex("");
@@ -2109,15 +2128,25 @@ export default function PlotMapper({
       return notify(`Plot ${id} inventory में पहले से मौजूद है`);
     }
     const frontValue = front.trim() ? Number(front) : null;
+    const backValue = back.trim() ? Number(back) : null;
     const depthValue = depth.trim() ? Number(depth) : null;
+    const depth2Value = depth2.trim() ? Number(depth2) : null;
+    const frontLabelValue = frontLabel.trim() || null;
+    const backLabelValue = backLabel.trim() || null;
+    const depthLabelValue = depthLabel.trim() || null;
+    const depth2LabelValue = depth2Label.trim() || null;
     const edgeValue = frontEdgeIndex.trim() ? Number(frontEdgeIndex) : null;
     const depthEdgeValue = depthEdgeIndex.trim() ? Number(depthEdgeIndex) : null;
     const backEdgeValue = backEdgeIndex.trim() ? Number(backEdgeIndex) : null;
     const depth2EdgeValue = depth2EdgeIndex.trim() ? Number(depth2EdgeIndex) : null;
     if (frontValue !== null && (!Number.isFinite(frontValue) || frontValue <= 0))
       return notify("Front positive number hona chahiye");
+    if (backValue !== null && (!Number.isFinite(backValue) || backValue <= 0))
+      return notify("Back positive number hona chahiye");
     if (depthValue !== null && (!Number.isFinite(depthValue) || depthValue <= 0))
-      return notify("Depth positive number hona chahiye");
+      return notify("Depth A positive number hona chahiye");
+    if (depth2Value !== null && (!Number.isFinite(depth2Value) || depth2Value <= 0))
+      return notify("Depth B positive number hona chahiye");
     // Individual measurements may be missing on sanctioned plans.
     // Edge identity is independent from whether a numeric dimension is printed.
     if (
@@ -2125,8 +2154,8 @@ export default function PlotMapper({
       (!Number.isInteger(edgeValue) || edgeValue < 0 || edgeValue >= points.length)
     )
       return notify("Front edge road ke saamne wali valid polygon edge select karein");
-    if (frontValue !== null && edgeValue === null)
-      return notify("Front/Depth save karne se pehle road-facing Front edge select karein");
+    if ((frontValue !== null || frontLabelValue) && edgeValue === null)
+      return notify("Front value/label save karne se pehle actual Front edge select karein");
     if (
       depthEdgeValue !== null &&
       (!Number.isInteger(depthEdgeValue) || depthEdgeValue < 0 || depthEdgeValue >= points.length)
@@ -2142,6 +2171,12 @@ export default function PlotMapper({
       (!Number.isInteger(depth2EdgeValue) || depth2EdgeValue < 0 || depth2EdgeValue >= points.length)
     )
       return notify("Depth B edge valid polygon edge select karein");
+    if ((backValue !== null || backLabelValue) && backEdgeValue === null)
+      return notify("Back value/label save karne se pehle actual Back edge select karein");
+    if ((depthValue !== null || depthLabelValue) && depthEdgeValue === null)
+      return notify("Depth A value/label save karne se pehle actual Depth A edge select karein");
+    if ((depth2Value !== null || depth2LabelValue) && depth2EdgeValue === null)
+      return notify("Depth B value/label save karne se pehle actual Depth B edge select karein");
 
     const chosenEdges = [edgeValue, backEdgeValue, depthEdgeValue, depth2EdgeValue]
       .filter((value): value is number => value !== null);
@@ -2181,23 +2216,23 @@ export default function PlotMapper({
       road: road.trim() || existing?.road || "",
       front: frontValue,
       depth: depthValue,
-      back: existing?.back ?? null,
-      depth2: existing?.depth2 ?? null,
+      back: backValue,
+      depth2: depth2Value,
       dimensionUnit:
         frontValue !== null ||
+        backValue !== null ||
         depthValue !== null ||
-        existing?.back != null ||
-        existing?.depth2 != null
+        depth2Value !== null
           ? dimensionUnit
           : null,
       frontEdgeIndex: edgeValue,
       depthEdgeIndex: depthEdgeValue,
       backEdgeIndex: backEdgeValue,
       depth2EdgeIndex: depth2EdgeValue,
-      frontLabel: existing?.frontLabel || null,
-      depthLabel: existing?.depthLabel || null,
-      backLabel: existing?.backLabel || null,
-      depth2Label: existing?.depth2Label || null,
+      frontLabel: frontLabelValue,
+      depthLabel: depthLabelValue,
+      backLabel: backLabelValue,
+      depth2Label: depth2LabelValue,
       sideDimensions: existing?.sideDimensions || null,
       edgeSemantics,
       status: existing?.status || "available",
@@ -2226,9 +2261,15 @@ export default function PlotMapper({
         // Ignore local draft cleanup failures.
       }
       setToolMode("pan");
-      selectNextPlot(verified.plot.id);
+      const hasUnmappedAfterSave = verified.plots.some(
+        (item) => parsePolygon(item).length < 3,
+      );
+      if (hasUnmappedAfterSave) selectNextPlot(verified.plot.id);
+      else loadPlotDetails(verified.plot, true);
       notify(
-        `Plot ${verified.plot.id} SERVER VERIFIED ✓ — live project data ready; next plot open`,
+        hasUnmappedAfterSave
+          ? `Plot ${verified.plot.id} SERVER VERIFIED ✓ — live project data ready; next plot open`
+          : `Plot ${verified.plot.id} SERVER VERIFIED ✓ — side mapping saved; current plot verification ke liye open hai`,
       );
     } catch (error) {
       notify(error instanceof Error ? error.message : "Plot save नहीं हुआ");
@@ -3061,11 +3102,19 @@ export default function PlotMapper({
               <label><span>Dimensions (legacy/reference)</span><input value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="18 x 40 ft" /></label>
               <label><span>Area (sq.ft)</span><input type="number" min="0" value={sqft} onChange={(event) => setSqft(event.target.value)} /></label>
               <label><span>Facing / road</span><input value={road} onChange={(event) => setRoad(event.target.value)} placeholder="East face / 40 ft road" /></label>
-              <label><span>Front (road side)</span><input type="number" min="0" step="0.01" value={front} onChange={(event) => setFront(event.target.value)} placeholder="18" /></label>
-              <label><span>Depth</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
+              <label><span>Front value (road side)</span><input type="number" min="0" step="0.000001" value={front} onChange={(event) => setFront(event.target.value)} placeholder="18.916667" /></label>
+              <label><span>Front exact label</span><input value={frontLabel} onChange={(event) => setFrontLabel(event.target.value)} placeholder="18 ft 11 in" /></label>
+              <label><span>Back value</span><input type="number" min="0" step="0.000001" value={back} onChange={(event) => setBack(event.target.value)} placeholder="23.916667" /></label>
+              <label><span>Back exact label</span><input value={backLabel} onChange={(event) => setBackLabel(event.target.value)} placeholder="23 ft 11 in" /></label>
+              <label><span>Depth A value</span><input type="number" min="0" step="0.000001" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="45" /></label>
+              <label><span>Depth A exact label</span><input value={depthLabel} onChange={(event) => setDepthLabel(event.target.value)} placeholder="45 ft" /></label>
+              <label><span>Depth B value</span><input type="number" min="0" step="0.000001" value={depth2} onChange={(event) => setDepth2(event.target.value)} placeholder="44" /></label>
+              <label><span>Depth B exact label</span><input value={depth2Label} onChange={(event) => setDepth2Label(event.target.value)} placeholder="44 ft" /></label>
               <label><span>Size unit</span><select value={dimensionUnit} onChange={(event) => setDimensionUnit(event.target.value === "m" ? "m" : "ft")}><option value="ft">ft (feet)</option><option value="m">m (metre)</option></select></label>
-              <label><span>Front edge (road side)</span><select value={frontEdgeIndex} onChange={(event) => setFrontEdgeIndex(event.target.value)}><option value="">Select road-facing edge</option>{points.map((_, index) => <option key={`front-edge-${index}`} value={index}>Edge {index + 1}: corner {index + 1} → {(index + 1) % points.length + 1}</option>)}</select></label>
-              <label><span>Depth edge</span><select value={depthEdgeIndex} onChange={(event) => setDepthEdgeIndex(event.target.value)}><option value="">Select depth edge</option>{points.map((_, index) => <option key={`depth-edge-${index}`} value={index}>Edge {index + 1}: corner {index + 1} → {(index + 1) % points.length + 1}</option>)}</select></label>
+              <label><span>Front edge (road side)</span><select value={frontEdgeIndex} onChange={(event) => setFrontEdgeIndex(event.target.value)}><option value="">Select actual Front edge</option>{points.map((_, index) => <option key={`front-edge-${index}`} value={index}>Edge {index + 1}: corner {index + 1} → {(index + 1) % points.length + 1}</option>)}</select></label>
+              <label><span>Back edge</span><select value={backEdgeIndex} onChange={(event) => setBackEdgeIndex(event.target.value)}><option value="">Select actual Back edge</option>{points.map((_, index) => <option key={`back-edge-${index}`} value={index}>Edge {index + 1}: corner {index + 1} → {(index + 1) % points.length + 1}</option>)}</select></label>
+              <label><span>Depth A edge</span><select value={depthEdgeIndex} onChange={(event) => setDepthEdgeIndex(event.target.value)}><option value="">Select actual Depth A edge</option>{points.map((_, index) => <option key={`depth-edge-${index}`} value={index}>Edge {index + 1}: corner {index + 1} → {(index + 1) % points.length + 1}</option>)}</select></label>
+              <label><span>Depth B edge</span><select value={depth2EdgeIndex} onChange={(event) => setDepth2EdgeIndex(event.target.value)}><option value="">Select actual Depth B edge</option>{points.map((_, index) => <option key={`depth2-edge-${index}`} value={index}>Edge {index + 1}: corner {index + 1} → {(index + 1) % points.length + 1}</option>)}</select></label>
             </div>
             <div className="mapper-actions compact">
               <button type="button" onClick={() => {
@@ -3078,12 +3127,12 @@ export default function PlotMapper({
               }}>Dimensions → Front/Depth</button>
               <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
             </div>
-            <small className="mapper-help">Front = road ke saamne wali side. Front side / Depth side दबाकर masterplan पर actual polygon edge tap करें. Bulk sides में कई plots चुनकर visible ↑ → ↓ ← direction से Front या Depth assign करें. Customer drawer का existing fixed Front-left / Depth-bottom presentation unchanged रहेगा.</small>
+            <small className="mapper-help">Front = road-facing boundary, Back = rear/opposite boundary, Depth A/B = remaining side boundaries. Front side / Back side / Depth A / Depth B दबाकर masterplan पर actual polygon line tap करें. Exact label में sanctioned PDF का human text रखें; numeric field calculation/search के लिए है.</small>
             <div className="mapper-actions">
               <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
               <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
             </div>
-            <small className="mapper-help">Legacy Dimensions / area / facing optional metadata hain. Front/Depth semantic metadata alag save hota hai. Shape independent save hoti hai; plot-sheet re-import geometry aur live Booked/Sold status preserve karta hai.</small>
+            <small className="mapper-help">Legacy Dimensions / area / facing optional metadata hain. Front/Back/Depth A/Depth B measurement aur actual edge identity independently save hote hain. Plot-sheet re-import geometry aur live Booked/Sold status preserve karta hai.</small>
             {currentCenter && <small className="mapper-help">Boundary center {currentCenter[0].toFixed(4)}, {currentCenter[1].toFixed(4)} · normalized geometry यही SVG hit-area, 2D और 3D use करेंगे.</small>}
           </>}
         </div>
