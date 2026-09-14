@@ -11,6 +11,10 @@ test("mapper geometry upsert preserves live Booked/Sold and featured state on ex
 });
 
 test("new mapper rows can still insert an initial status while conflict updates remain geometry-only", () => {
-  assert.match(source, /INSERT INTO plots \(project_id,id,sqft,sqm,sqyd,dimensions,road,polygon,status,notes,featured,updated_at\)/);
+  assert.match(
+    source,
+    /INSERT INTO plots \(project_id,id,sqft,sqm,sqyd,dimensions,road,[^)]*polygon,status,notes,featured,updated_at\)/,
+  );
+  assert.doesNotMatch(source, /DO UPDATE SET [^"]*status=excluded\.status/);
   assert.match(source, /const statement = preserveGeometry/);
 });

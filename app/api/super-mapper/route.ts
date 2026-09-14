@@ -65,18 +65,57 @@ function validPolygon(value: string) {
   }
 }
 
+function optionalPositiveMeasure(value: unknown) {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
+}
+
 function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
   const id = cleanPlotId(String(p.id || "")),
     polygon = String(p.polygon || ""),
     status = String(p.status || "available"),
-    numbers = [Number(p.sqft), Number(p.sqm), Number(p.sqyd)];
+    numbers = [Number(p.sqft), Number(p.sqm), Number(p.sqyd)],
+    front = optionalPositiveMeasure(p.front),
+    depth = optionalPositiveMeasure(p.depth),
+    edgeRaw = p.frontEdgeIndex ?? p.front_edge_index,
+    frontEdgeIndex =
+      edgeRaw === null || edgeRaw === undefined || String(edgeRaw).trim() === ""
+        ? null
+        : Number(edgeRaw);
+  const rawUnit = String(p.dimensionUnit ?? p.dimension_unit ?? "").trim().toLowerCase();
+  const dimensionUnit =
+    front !== null || depth !== null
+      ? rawUnit === "m"
+        ? "m"
+        : rawUnit === "ft" || rawUnit === ""
+          ? "ft"
+          : ""
+      : rawUnit === "m" || rawUnit === "ft"
+        ? rawUnit
+        : null;
   if (
     !id ||
     (polygon && !validPolygon(polygon)) ||
     !["available", "booked", "sold"].includes(status) ||
-    numbers.some((value) => !Number.isFinite(value) || value < 0)
+    numbers.some((value) => !Number.isFinite(value) || value < 0) ||
+    Number.isNaN(front) ||
+    Number.isNaN(depth) ||
+    dimensionUnit === "" ||
+    (frontEdgeIndex !== null &&
+      (!Number.isInteger(frontEdgeIndex) || frontEdgeIndex < 0 || frontEdgeIndex > 79))
   )
     return null;
+
+  if (polygon && frontEdgeIndex !== null) {
+    try {
+      const polygonPoints = JSON.parse(polygon) as unknown[];
+      if (frontEdgeIndex >= polygonPoints.length) return null;
+    } catch {
+      return null;
+    }
+  }
+
   return {
     projectId,
     id,
@@ -85,6 +124,10 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     sqyd: numbers[2],
     dimensions: String(p.dimensions || "").slice(0, 120),
     road: String(p.road || "").slice(0, 160),
+    front,
+    depth,
+    dimensionUnit,
+    frontEdgeIndex,
     polygon,
     status,
     notes: String(p.notes || "").slice(0, 2000),
@@ -185,8 +228,8 @@ async function savePlots(
   if (cleaned.some((plot) => !plot)) throw new Error("Plot data सही नहीं है");
   const saved = cleaned.filter((plot): plot is NonNullable<typeof plot> => Boolean(plot));
   const statement = preserveGeometry
-    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,notes=excluded.notes,updated_at=excluded.updated_at"
-    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
+    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,notes=excluded.notes,updated_at=excluded.updated_at"
+    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
 
   for (let index = 0; index < saved.length; index += 80) {
     const chunk = saved.slice(index, index + 80);
@@ -200,6 +243,10 @@ async function savePlots(
           plot.sqyd,
           plot.dimensions,
           plot.road,
+          plot.front,
+          plot.depth,
+          plot.dimensionUnit,
+          plot.frontEdgeIndex,
           plot.polygon,
           plot.status,
           plot.notes,
@@ -230,7 +277,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   const [plots, settings, cadGeometry] = await Promise.all([
     env.DB.prepare(
-      "SELECT id,sqft,sqm,sqyd,dimensions,road,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
+      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
     )
       .bind(projectId)
       .all(),

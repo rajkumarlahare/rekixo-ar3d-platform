@@ -698,10 +698,10 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
     <svg viewBox="0 0 300 190">
       <line id="depthLine" class="dimline"/><line id="depthTopTick" class="dimline"/><line id="depthBottomTick" class="dimline"/>
       <line id="depthTopGuide" class="dimline"/><line id="depthBottomGuide" class="dimline"/>
-      <text id="depthText" class="dimtext" text-anchor="middle">Plot depth</text>
+      <text id="depthText" class="dimtext" text-anchor="middle">Depth</text>
       <line id="widthLine" class="dimline"/><line id="widthLeftTick" class="dimline"/><line id="widthRightTick" class="dimline"/>
       <line id="widthLeftGuide" class="dimline"/><line id="widthRightGuide" class="dimline"/>
-      <text id="widthText" class="dimtext" text-anchor="middle">Plot width</text>
+      <text id="widthText" class="dimtext" text-anchor="middle">Front</text>
       <polygon id="diagramPoly" points=""></polygon>
       <text id="diagramLabel" class="plotnum" x="166" y="105" text-anchor="middle">A-01</text>
     </svg>
@@ -714,6 +714,8 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
     <div class="fact pricing-fact" id="pricingRateRow" style="display:none"><span id="pricingRateLabel">RATE</span><b id="pricingRate">—</b></div>
     <div class="fact pricing-fact" id="pricingBaseRow" style="display:none"><span>BASE PRICE</span><b id="pricingBase">—</b></div>
     <div class="fact"><span>DIMENSIONS</span><b id="dims">—</b></div>
+    <div class="fact" id="frontFactRow" style="display:none"><span>FRONT</span><b id="frontValue">—</b></div>
+    <div class="fact" id="depthFactRow" style="display:none"><span>DEPTH</span><b id="depthValue">—</b></div>
     <div class="fact"><span id="roadLabel">ROAD ACCESS</span><b id="road">—</b></div>
     <div class="fact"><span>STATUS</span><b id="plotStatusValue" class="available">Available</b></div>
   </div>
@@ -1113,18 +1115,52 @@ rekixoStartPublicBoot();
   });
   function setSelected(id){svg.querySelectorAll('.plot').forEach(el=>el.classList.toggle('selected',el.dataset.plotId===id))}
   function setLine(id,x1,y1,x2,y2){const el=q(id);el.setAttribute('x1',x1);el.setAttribute('y1',y1);el.setAttribute('x2',x2);el.setAttribute('y2',y2)}
+  function plotLengthText(value,unit){
+    const number=Number(value);
+    if(!(number>0))return '';
+    const rounded=Math.abs(number-Math.round(number))<.001?String(Math.round(number)):Number(number.toFixed(2)).toString();
+    return rounded+' '+(unit==='m'?'m':'ft')
+  }
+  function plotSemanticDimensions(p){
+    const front=plotLengthText(p.front,p.dimensionUnit);
+    const depth=plotLengthText(p.depth,p.dimensionUnit);
+    const rawEdge=Number(p.frontEdgeIndex);
+    const edge=Number.isInteger(rawEdge)&&rawEdge>=0&&rawEdge<p.points.length?rawEdge:null;
+    return{front,depth,edge}
+  }
+  function syncFrontDepthFacts(p){
+    const semantic=plotSemanticDimensions(p),frontRow=q('#frontFactRow'),depthRow=q('#depthFactRow');
+    const frontValue=q('#frontValue'),depthValue=q('#depthValue');
+    if(frontRow)frontRow.style.display=semantic.front?'flex':'none';
+    if(depthRow)depthRow.style.display=semantic.depth?'flex':'none';
+    if(frontValue)frontValue.textContent=semantic.front||'—';
+    if(depthValue)depthValue.textContent=semantic.depth||'—'
+  }
   function diagram(p){
     const xs=p.points.map(a=>a[0]),ys=p.points.map(a=>a[1]),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),bw=maxx-minx||1,bh=maxy-miny||1;
     const s=Math.min(165/bw,82/bh),ox=170-(minx+maxx)/2*s,oy=71-(miny+maxy)/2*s;
     const left=minx*s+ox,right=maxx*s+ox,top=miny*s+oy,bottom=maxy*s+oy,cx=(left+right)/2,cy=(top+bottom)/2;
     q('#diagramPoly').setAttribute('points',p.points.map(([x,y])=>`${x*s+ox},${y*s+oy}`).join(' '));
+    const semantic=plotSemanticDimensions(p);
+    let verticalText='Plot depth',horizontalText='Plot width';
+    if(semantic.front||semantic.depth){
+      if(semantic.edge!==null){
+        const a=p.points[semantic.edge],b=p.points[(semantic.edge+1)%p.points.length];
+        const frontIsVertical=Math.abs(Number(b[1])-Number(a[1]))>Math.abs(Number(b[0])-Number(a[0]));
+        verticalText=frontIsVertical?'Front'+(semantic.front?' · '+semantic.front:''):'Depth'+(semantic.depth?' · '+semantic.depth:'');
+        horizontalText=frontIsVertical?'Depth'+(semantic.depth?' · '+semantic.depth:''):'Front'+(semantic.front?' · '+semantic.front:'')
+      }else{
+        verticalText='Depth'+(semantic.depth?' · '+semantic.depth:'');
+        horizontalText='Front'+(semantic.front?' · '+semantic.front:'')
+      }
+    }
     const depthX=left-20,widthY=bottom+21;
     setLine('#depthLine',depthX,top,depthX,bottom);setLine('#depthTopTick',depthX-2.5,top,depthX+2.5,top);setLine('#depthBottomTick',depthX-2.5,bottom,depthX+2.5,bottom);
     setLine('#depthTopGuide',0,0,0,0);setLine('#depthBottomGuide',0,0,0,0);
-    const dt=q('#depthText');dt.setAttribute('x',depthX-15);dt.setAttribute('y',cy);dt.setAttribute('transform',`rotate(-90 ${depthX-15} ${cy})`);
+    const dt=q('#depthText');dt.textContent=verticalText;dt.setAttribute('x',depthX-15);dt.setAttribute('y',cy);dt.setAttribute('transform',`rotate(-90 ${depthX-15} ${cy})`);
     setLine('#widthLine',left,widthY,right,widthY);setLine('#widthLeftTick',left,widthY-2.5,left,widthY+2.5);setLine('#widthRightTick',right,widthY-2.5,right,widthY+2.5);
     setLine('#widthLeftGuide',0,0,0,0);setLine('#widthRightGuide',0,0,0,0);
-    const wt=q('#widthText');wt.setAttribute('x',cx);wt.setAttribute('y',widthY+20);
+    const wt=q('#widthText');wt.textContent=horizontalText;wt.setAttribute('x',cx);wt.setAttribute('y',widthY+20);
     const label=q('#diagramLabel');label.textContent=p.id;label.setAttribute('x',cx);label.setAttribute('y',cy+9)
   }
   // REKIXO_PROJECT_PRICING_UPLOAD_V1
@@ -1173,6 +1209,7 @@ rekixoStartPublicBoot();
     q('#sqyd').textContent=Number(p.sqyd).toLocaleString('en-IN')+' Sq.Yd';
     syncPlotPricing(p);
     q('#dims').textContent=p.dimensions||'—';
+    syncFrontDepthFacts(p);
     const facing=String(p.facing||'').trim(),roadLabel=q('#roadLabel');if(roadLabel)roadLabel.textContent=facing?'FACING':'ROAD ACCESS';
     q('#road').textContent=facing||p.road||'—';
     const statusEl=q('#plotStatusValue');statusEl.textContent=statusLabel;statusEl.className=st;diagram(p);
@@ -1518,7 +1555,7 @@ rekixoStartPublicBoot();
     if(/^#[0-9a-f]{6}$/i.test(s.accentColor||''))document.documentElement.style.setProperty('--gold',s.accentColor);
     document.body.dataset.template=s.template||'plots';
     updateStatusCounts();
-    if(selected){const fresh=plots.find(p=>p.id===selected.id);if(fresh){selected=fresh;if(drawer.classList.contains('open')){q('#sqm').textContent=Number(fresh.sqm).toLocaleString('en-IN')+' Sq.M';q('#sqft').textContent=Number(fresh.sqft).toLocaleString('en-IN')+' Sq.Ft';q('#sqyd').textContent=Number(fresh.sqyd).toLocaleString('en-IN')+' Sq.Yd';q('#dims').textContent=fresh.dimensions||'—';q('#road').textContent=fresh.road||'—';syncPlotPricing(fresh);const st=plotStatus(fresh),statusEl=q('#plotStatusValue');statusEl.textContent=st.charAt(0).toUpperCase()+st.slice(1);statusEl.className=st}}}
+    if(selected){const fresh=plots.find(p=>p.id===selected.id);if(fresh){selected=fresh;if(drawer.classList.contains('open')){q('#sqm').textContent=Number(fresh.sqm).toLocaleString('en-IN')+' Sq.M';q('#sqft').textContent=Number(fresh.sqft).toLocaleString('en-IN')+' Sq.Ft';q('#sqyd').textContent=Number(fresh.sqyd).toLocaleString('en-IN')+' Sq.Yd';q('#dims').textContent=fresh.dimensions||'—';syncFrontDepthFacts(fresh);q('#road').textContent=fresh.road||'—';syncPlotPricing(fresh);const st=plotStatus(fresh),statusEl=q('#plotStatusValue');statusEl.textContent=st.charAt(0).toUpperCase()+st.slice(1);statusEl.className=st}}}
     let revealed=false,shellRevealed=false,masterFailures=0,usingCanonical=false;
     const revealShell=()=>{
       if(shellRevealed)return;

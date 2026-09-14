@@ -47,6 +47,10 @@ type Plot = {
   sqyd: number;
   dimensions: string;
   road: string;
+  front?: number | null;
+  depth?: number | null;
+  dimensionUnit?: "ft" | "m" | null;
+  frontEdgeIndex?: number | null;
   status: string;
   notes?: string;
   featured?: boolean;
@@ -443,6 +447,20 @@ function mappingDraftKey(projectId: string, plotId: string) {
   return `rekixo:mapper-draft:${projectId}:${cleanPlotId(plotId)}`;
 }
 
+function dimensionPair(value: string) {
+  const match = String(value || "")
+    .trim()
+    .match(/(-?\d+(?:\.\d+)?)\s*(?:x|×|X)\s*(-?\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  if (!(first > 0) || !(second > 0)) return null;
+  const lower = value.toLowerCase();
+  const unit: "ft" | "m" =
+    /\b(m|meter|metre|meters|metres)\b/.test(lower) ? "m" : "ft";
+  return { first, second, unit };
+}
+
 export default function PlotMapper({
   notify,
   projectId,
@@ -479,6 +497,10 @@ export default function PlotMapper({
   const [dimensions, setDimensions] = useState("");
   const [sqft, setSqft] = useState("");
   const [road, setRoad] = useState("");
+  const [front, setFront] = useState("");
+  const [depth, setDepth] = useState("");
+  const [dimensionUnit, setDimensionUnit] = useState<"ft" | "m">("ft");
+  const [frontEdgeIndex, setFrontEdgeIndex] = useState("");
   const [points, setPoints] = useState<MapperPoint[]>([]);
   const [shape, setShape] = useState<"quad" | "polygon">("quad");
   const [manualPhase, setManualPhase] = useState<"select" | "details">("select");
@@ -924,6 +946,12 @@ export default function PlotMapper({
     setDimensions(plot.dimensions || "");
     setSqft(plot.sqft ? String(plot.sqft) : "");
     setRoad(plot.road || "");
+    setFront(plot.front != null ? String(plot.front) : "");
+    setDepth(plot.depth != null ? String(plot.depth) : "");
+    setDimensionUnit(plot.dimensionUnit === "m" ? "m" : "ft");
+    setFrontEdgeIndex(
+      Number.isInteger(plot.frontEdgeIndex) ? String(plot.frontEdgeIndex) : "",
+    );
     if (editBoundary && plot.polygon) {
       const polygon = parsePolygon(plot);
       setPoints(polygon);
@@ -955,6 +983,10 @@ export default function PlotMapper({
       setDimensions("");
       setSqft("");
       setRoad("");
+      setFront("");
+      setDepth("");
+      setDimensionUnit("ft");
+      setFrontEdgeIndex("");
     }
   }
 
@@ -1042,8 +1074,8 @@ export default function PlotMapper({
 
   function downloadPlotSheetTemplate() {
     const text = [
-      "Plot No,Sqft,Sqm,Dimensions,Facing,Notes",
-      "1,1162.08,108,12.00 x 9.00 m,East face,",
+      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Depth,Dimension Unit,Front Edge,Notes",
+      "1,1162.08,108,12 x 9 m,East face,12,9,m,1,",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -1841,7 +1873,18 @@ export default function PlotMapper({
               Math.abs(point[0] - actual[index][0]) <= 1e-9 &&
               Math.abs(point[1] - actual[index][1]) <= 1e-9,
           );
-        if (sameGeometry) return { plot: persisted, plots: verifiedPlots };
+        const sameOptionalNumber = (left: number | null | undefined, right: number | null | undefined) =>
+          left == null && right == null
+            ? true
+            : left != null && right != null && Math.abs(Number(left) - Number(right)) <= 1e-9;
+        const sameMetadata =
+          sameOptionalNumber(saved.front, persisted.front) &&
+          sameOptionalNumber(saved.depth, persisted.depth) &&
+          String(saved.dimensionUnit || "") === String(persisted.dimensionUnit || "") &&
+          (saved.frontEdgeIndex == null && persisted.frontEdgeIndex == null
+            ? true
+            : Number(saved.frontEdgeIndex) === Number(persisted.frontEdgeIndex));
+        if (sameGeometry && sameMetadata) return { plot: persisted, plots: verifiedPlots };
       }
       if (attempt < 3) {
         await new Promise((resolve) => setTimeout(resolve, 180 * (attempt + 1)));
@@ -1891,6 +1934,23 @@ export default function PlotMapper({
     if (editingId && id !== editingId && plots.some((plot) => plot.id === id)) {
       return notify(`Plot ${id} inventory में पहले से मौजूद है`);
     }
+    const frontValue = front.trim() ? Number(front) : null;
+    const depthValue = depth.trim() ? Number(depth) : null;
+    const edgeValue = frontEdgeIndex.trim() ? Number(frontEdgeIndex) : null;
+    if (frontValue !== null && (!Number.isFinite(frontValue) || frontValue <= 0))
+      return notify("Front positive number hona chahiye");
+    if (depthValue !== null && (!Number.isFinite(depthValue) || depthValue <= 0))
+      return notify("Depth positive number hona chahiye");
+    if ((frontValue === null) !== (depthValue === null))
+      return notify("Front aur Depth dono size bharein, ya dono blank rakhein");
+    if (
+      edgeValue !== null &&
+      (!Number.isInteger(edgeValue) || edgeValue < 0 || edgeValue >= points.length)
+    )
+      return notify("Front edge road ke saamne wali valid polygon edge select karein");
+    if (frontValue !== null && edgeValue === null)
+      return notify("Front/Depth save karne se pehle road-facing Front edge select karein");
+
     const unchangedInventoryArea =
       Boolean(existing) && area > 0 && Math.abs(Number(existing?.sqft || 0) - area) < 0.0001;
     const plot: Plot = {
@@ -1904,6 +1964,10 @@ export default function PlotMapper({
         : Number(existing?.sqyd || 0),
       dimensions: dimensions.trim() || existing?.dimensions || "",
       road: road.trim() || existing?.road || "",
+      front: frontValue,
+      depth: depthValue,
+      dimensionUnit: frontValue !== null ? dimensionUnit : null,
+      frontEdgeIndex: edgeValue,
       status: existing?.status || "available",
       notes: existing?.notes || "",
       featured: existing?.featured || false,
@@ -2622,15 +2686,31 @@ export default function PlotMapper({
           </> : <>
             <div className="mapper-fields guided-fields">
               <label><span>Plot number</span><input value={plotId} readOnly={Boolean(currentPlot)} onChange={(event) => setPlotId(event.target.value)} /></label>
-              <label><span>Dimensions</span><input value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="12.00 × 9.00 m" /></label>
+              <label><span>Dimensions (legacy/reference)</span><input value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="18 x 40 ft" /></label>
               <label><span>Area (sq.ft)</span><input type="number" min="0" value={sqft} onChange={(event) => setSqft(event.target.value)} /></label>
-              <label><span>Facing / road</span><input value={road} onChange={(event) => setRoad(event.target.value)} placeholder="East face" /></label>
+              <label><span>Facing / road</span><input value={road} onChange={(event) => setRoad(event.target.value)} placeholder="East face / 40 ft road" /></label>
+              <label><span>Front (road side)</span><input type="number" min="0" step="0.01" value={front} onChange={(event) => setFront(event.target.value)} placeholder="18" /></label>
+              <label><span>Depth</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
+              <label><span>Size unit</span><select value={dimensionUnit} onChange={(event) => setDimensionUnit(event.target.value === "m" ? "m" : "ft")}><option value="ft">ft (feet)</option><option value="m">m (metre)</option></select></label>
+              <label><span>Front edge (road side)</span><select value={frontEdgeIndex} onChange={(event) => setFrontEdgeIndex(event.target.value)}><option value="">Select road-facing edge</option>{points.map((_, index) => <option key={`front-edge-${index}`} value={index}>Edge {index + 1}: corner {index + 1} → {(index + 1) % points.length + 1}</option>)}</select></label>
             </div>
+            <div className="mapper-actions compact">
+              <button type="button" onClick={() => {
+                const parsed = dimensionPair(dimensions);
+                if (!parsed) return notify("Dimensions me 18 x 40 ft jaisa pair nahi mila");
+                setFront(String(parsed.first));
+                setDepth(String(parsed.second));
+                setDimensionUnit(parsed.unit);
+                notify("Dimensions se Front/Depth fill hua — road-facing Front edge verify karein; zarurat ho to Swap karein");
+              }}>Dimensions → Front/Depth</button>
+              <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
+            </div>
+            <small className="mapper-help">Front = road ke saamne wali side. Numbered corner handles dekhkar wahi edge select karein. Front/Depth public customer drawer me unit ke saath dikhenge. Existing polygon/status/pricing independent rahenge.</small>
             <div className="mapper-actions">
               <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
               <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
             </div>
-            <small className="mapper-help">Dimensions / area / facing optional metadata हैं; CSV/PDF से बाद में update हो सकते हैं. Shape independent save होती है.</small>
+            <small className="mapper-help">Legacy Dimensions / area / facing optional metadata hain. Front/Depth semantic metadata alag save hota hai. Shape independent save hoti hai; plot-sheet re-import geometry aur live Booked/Sold status preserve karta hai.</small>
             {currentCenter && <small className="mapper-help">Boundary center {currentCenter[0].toFixed(4)}, {currentCenter[1].toFixed(4)} · normalized geometry यही SVG hit-area, 2D और 3D use करेंगे.</small>}
           </>}
         </div>

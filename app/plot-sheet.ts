@@ -7,6 +7,10 @@ export type PlotSheetRow = {
   sqyd: number;
   dimensions: string;
   road: string;
+  front: number | null;
+  depth: number | null;
+  dimensionUnit: "ft" | "m" | "";
+  frontEdgeIndex: number | null;
   notes: string;
 };
 
@@ -44,6 +48,10 @@ const aliases: Record<string, string[]> = {
   sqyd: ["sqyd", "squareyard", "squareyards", "yd2", "areasqyd"],
   dimensions: ["dimensions", "dimension", "size", "plotsize", "measurement"],
   road: ["road", "roadaccess", "facing", "face", "roadfacing"],
+  front: ["front", "frontage", "frontlength", "frontft", "frontfeet"],
+  depth: ["depth", "plotdepth", "depthlength", "depthft", "depthfeet"],
+  dimensionUnit: ["dimensionunit", "lengthunit", "measurementunit", "unit"],
+  frontEdge: ["frontedge", "frontedge1based", "roadedge", "roadsideedge"],
   notes: ["notes", "note", "remarks", "remark"],
 };
 
@@ -84,6 +92,36 @@ function finite(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+function optionalPositive(value: unknown, label: string) {
+  const raw = String(value ?? "").replace(/,/g, "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0)
+    throw new Error(`${label} positive number hona chahiye`);
+  return parsed;
+}
+
+function dimensionUnit(value: unknown, dimensions: string, hasMeasurement: boolean) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (["ft", "feet", "foot", "'"].includes(raw)) return "ft" as const;
+  if (["m", "meter", "metre", "meters", "metres"].includes(raw)) return "m" as const;
+  if (raw) throw new Error("Dimension Unit sirf ft ya m ho sakta hai");
+  if (!hasMeasurement) return "" as const;
+  const hint = dimensions.toLowerCase();
+  if (hint.includes("'") || /\b(ft|feet|foot)\b/.test(hint)) return "ft" as const;
+  if (/\b(m|meter|metre|meters|metres)\b/.test(hint)) return "m" as const;
+  return "ft" as const;
+}
+
+function frontEdgeIndex(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const oneBased = Number(raw);
+  if (!Number.isInteger(oneBased) || oneBased < 1 || oneBased > 80)
+    throw new Error("Front Edge 1 se 80 ke beech integer hona chahiye");
+  return oneBased - 1;
+}
+
 function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
   const id = cleanPlotId(String(input.id || ""));
   if (!id) return null;
@@ -95,13 +133,21 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
   if (!sqm && sqft) sqm = sqft / 10.7639;
   if (!sqyd && sqft) sqyd = sqft / 9;
   if (!sqft) return null;
+  const dimensions = String(input.dimensions || "").trim().slice(0, 120);
+  const front = optionalPositive(input.front, "Front");
+  const depth = optionalPositive(input.depth, "Depth");
+  const unit = dimensionUnit(input.dimensionUnit, dimensions, front !== null || depth !== null);
   return {
     id,
     sqft,
     sqm,
     sqyd,
-    dimensions: String(input.dimensions || "").trim().slice(0, 120),
+    dimensions,
     road: String(input.road || "").trim().slice(0, 160),
+    front,
+    depth,
+    dimensionUnit: unit,
+    frontEdgeIndex: frontEdgeIndex(input.frontEdge),
     notes: String(input.notes || "").trim().slice(0, 2000),
   };
 }
@@ -135,6 +181,10 @@ export function parsePlotSheetText(text: string, filename: string) {
     sqyd: columnFor(headers, "sqyd"),
     dimensions: columnFor(headers, "dimensions"),
     road: columnFor(headers, "road"),
+    front: columnFor(headers, "front"),
+    depth: columnFor(headers, "depth"),
+    dimensionUnit: columnFor(headers, "dimensionUnit"),
+    frontEdge: columnFor(headers, "frontEdge"),
     notes: columnFor(headers, "notes"),
   };
   if (indexes.id < 0 || (indexes.sqft < 0 && indexes.sqm < 0 && indexes.sqyd < 0)) {
@@ -153,6 +203,10 @@ export function parsePlotSheetText(text: string, filename: string) {
           sqyd: value(row, indexes.sqyd),
           dimensions: value(row, indexes.dimensions),
           road: value(row, indexes.road),
+          front: value(row, indexes.front),
+          depth: value(row, indexes.depth),
+          dimensionUnit: value(row, indexes.dimensionUnit),
+          frontEdge: value(row, indexes.frontEdge),
           notes: value(row, indexes.notes),
         }),
       )
