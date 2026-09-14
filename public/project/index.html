@@ -1195,6 +1195,7 @@ rekixoStartPublicBoot();
      'widthLine','widthLeftTick','widthRightTick','widthLeftGuide','widthRightGuide','widthText']
       .forEach(id=>{const el=q('#'+id);if(el)el.style.display=visible?'':'none'})
   }
+  // REKIXO_SEMANTIC_DIAGRAM_LABELS_COMPACT_V1
   function renderSemanticDiagramEdges(p,scaledPoints,cx,cy){
     const semantics=plotSideSemantics(p),group=q('#semanticEdgeLabels');
     if(!group)return false;
@@ -1207,30 +1208,56 @@ rekixoStartPublicBoot();
       ['depthA','Depth A',values.depth,'#f59e0b'],
       ['depthB','Depth B',values.depth2,'#a78bfa'],
     ];
+    const labels=[];
     for(const [role,title,value,color] of specs){
       const edges=semantics[role]||[];
       if(!edges.length)continue;
-      let total=0,mx=0,my=0,longest=null,longestLength=-1;
+      let total=0,mx=0,my=0;
       for(const edge of edges){
         const a=scaledPoints[edge],b=scaledPoints[(edge+1)%scaledPoints.length];
         if(!a||!b)continue;
         const length=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
         total+=length;mx+=(a[0]+b[0])/2*length;my+=(a[1]+b[1])/2*length;
-        if(length>longestLength){longestLength=length;longest=[a,b]}
+        const edgeLine=document.createElementNS('http://www.w3.org/2000/svg','line');
+        edgeLine.setAttribute('x1',a[0]);edgeLine.setAttribute('y1',a[1]);edgeLine.setAttribute('x2',b[0]);edgeLine.setAttribute('y2',b[1]);
+        edgeLine.setAttribute('stroke',color);edgeLine.setAttribute('stroke-width','3');edgeLine.setAttribute('stroke-linecap','round');
+        edgeLine.setAttribute('opacity','.95');
+        group.appendChild(edgeLine)
       }
-      if(!total||!longest)continue;
+      if(!total)continue;
       mx/=total;my/=total;
       let nx=mx-cx,ny=my-cy,n=Math.hypot(nx,ny)||1;nx/=n;ny/=n;
-      const tx=mx+nx*17,ty=my+ny*17;
+      let tx=mx+nx*16,ty=my+ny*16;
+      tx=Math.max(14,Math.min(326,tx));ty=Math.max(12,Math.min(130,ty));
+      labels.push({title,value,color,mx,my,tx,ty,nx,ny})
+    }
+    // Keep role names readable even on tiny/irregular plots. Exact values stay
+    // in the fact rows directly below, while the diagram identifies the edge.
+    for(let i=0;i<labels.length;i++){
+      const label=labels[i];
+      for(let j=0;j<i;j++){
+        const other=labels[j];
+        if(Math.hypot(label.tx-other.tx,label.ty-other.ty)>=24)continue;
+        if(Math.abs(label.nx)>=Math.abs(label.ny)){
+          label.ty=Math.max(12,Math.min(130,label.ty+(i%2?13:-13)));
+        }else{
+          label.tx=Math.max(14,Math.min(326,label.tx+(i%2?28:-28)));
+        }
+      }
       const leader=document.createElementNS('http://www.w3.org/2000/svg','line');
-      leader.setAttribute('x1',mx);leader.setAttribute('y1',my);leader.setAttribute('x2',tx);leader.setAttribute('y2',ty);
-      leader.setAttribute('stroke',color);leader.setAttribute('stroke-width','1.5');
+      leader.setAttribute('x1',label.mx);leader.setAttribute('y1',label.my);leader.setAttribute('x2',label.tx);leader.setAttribute('y2',label.ty);
+      leader.setAttribute('stroke',label.color);leader.setAttribute('stroke-width','1.25');leader.setAttribute('opacity','.9');
       const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      text.setAttribute('x',tx);text.setAttribute('y',ty);
-      text.setAttribute('fill',color);text.setAttribute('font-size','10');text.setAttribute('font-weight','800');
-      text.setAttribute('text-anchor','middle');text.setAttribute('paint-order','stroke');
-      text.setAttribute('stroke','#081225');text.setAttribute('stroke-width','3');
-      text.textContent=title+(value?' · '+value:'');
+      let textX=label.tx,textY=label.ty+3,anchor='middle';
+      if(Math.abs(label.nx)>=Math.abs(label.ny)){
+        const right=label.nx>=0;textX+=right?5:-5;anchor=right?'start':'end'
+      }else{textY+=label.ny>=0?8:-6}
+      text.setAttribute('x',textX);text.setAttribute('y',textY);
+      text.setAttribute('fill',label.color);text.setAttribute('font-size','9');text.setAttribute('font-weight','900');
+      text.setAttribute('text-anchor',anchor);text.setAttribute('paint-order','stroke');
+      text.setAttribute('stroke','#081225');text.setAttribute('stroke-width','2.5');text.setAttribute('stroke-linejoin','round');
+      text.textContent=label.title;
+      if(label.value){const hint=document.createElementNS('http://www.w3.org/2000/svg','title');hint.textContent=label.title+' · '+label.value;text.appendChild(hint)}
       group.appendChild(leader);group.appendChild(text)
     }
     group.style.display='';
