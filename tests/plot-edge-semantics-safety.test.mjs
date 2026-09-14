@@ -37,7 +37,7 @@ test("plot sheet supports Depth Edge and approved-plan feet-inch input", () => {
   assert.match(sheet, /inches < 12/);
   assert.match(sheet, /edgeIndex\(input\.depthEdge, "Depth Edge"\)/);
   assert.match(sheet, /replace\(\/\[′’\]\/g, "'"/);
-  assert.match(mapper, /Front Edge,Depth Edge,Notes/);
+  assert.match(mapper, /Front Edge,Depth Edge,Front Label,Depth Label,Side Dimensions,Notes/);
 });
 
 test("plot-sheet conflict preserves manual semantic edges when import is blank", () => {

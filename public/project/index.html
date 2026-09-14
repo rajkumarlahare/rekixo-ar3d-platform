@@ -716,6 +716,7 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
     <div class="fact"><span>DIMENSIONS</span><b id="dims">—</b></div>
     <div class="fact" id="frontFactRow" style="display:none"><span>FRONT</span><b id="frontValue">—</b></div>
     <div class="fact" id="depthFactRow" style="display:none"><span>DEPTH</span><b id="depthValue">—</b></div>
+    <div class="fact" id="sideDimensionsRow" style="display:none"><span>SIDE MEASUREMENTS</span><b id="sideDimensionsValue">—</b></div>
     <div class="fact"><span id="roadLabel">ROAD ACCESS</span><b id="road">—</b></div>
     <div class="fact"><span>STATUS</span><b id="plotStatusValue" class="available">Available</b></div>
   </div>
@@ -1121,20 +1122,24 @@ rekixoStartPublicBoot();
     const rounded=Math.abs(number-Math.round(number))<.001?String(Math.round(number)):Number(number.toFixed(2)).toString();
     return rounded+' '+(unit==='m'?'m':'ft')
   }
+  function cleanDimensionLabel(value){return String(value||'').replace(/[\u0000-\u001f\u007f]+/g,' ').replace(/\s+/g,' ').trim()}
   function plotSemanticDimensions(p){
-    const front=plotLengthText(p.front,p.dimensionUnit);
-    const depth=plotLengthText(p.depth,p.dimensionUnit);
+    const front=cleanDimensionLabel(p.frontLabel)||plotLengthText(p.front,p.dimensionUnit);
+    const depth=cleanDimensionLabel(p.depthLabel)||plotLengthText(p.depth,p.dimensionUnit);
+    const sides=cleanDimensionLabel(p.sideDimensions);
     const rawEdge=Number(p.frontEdgeIndex);
     const edge=Number.isInteger(rawEdge)&&rawEdge>=0&&rawEdge<p.points.length?rawEdge:null;
-    return{front,depth,edge}
+    return{front,depth,sides,edge}
   }
   function syncFrontDepthFacts(p){
-    const semantic=plotSemanticDimensions(p),frontRow=q('#frontFactRow'),depthRow=q('#depthFactRow');
-    const frontValue=q('#frontValue'),depthValue=q('#depthValue');
+    const semantic=plotSemanticDimensions(p),frontRow=q('#frontFactRow'),depthRow=q('#depthFactRow'),sideRow=q('#sideDimensionsRow');
+    const frontValue=q('#frontValue'),depthValue=q('#depthValue'),sideValue=q('#sideDimensionsValue');
     if(frontRow)frontRow.style.display=semantic.front?'flex':'none';
     if(depthRow)depthRow.style.display=semantic.depth?'flex':'none';
+    if(sideRow)sideRow.style.display=semantic.sides?'flex':'none';
     if(frontValue)frontValue.textContent=semantic.front||'—';
-    if(depthValue)depthValue.textContent=semantic.depth||'—'
+    if(depthValue)depthValue.textContent=semantic.depth||'—';
+    if(sideValue)sideValue.textContent=semantic.sides||'—'
   }
   function diagram(p){
     const xs=p.points.map(a=>a[0]),ys=p.points.map(a=>a[1]),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),bw=maxx-minx||1,bh=maxy-miny||1;

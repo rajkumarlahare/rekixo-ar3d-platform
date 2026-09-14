@@ -1,0 +1,36 @@
+name: Validate Exact Dimensions v4 Isolated
+
+on:
+  push:
+    branches:
+      - feature/exact-plot-dimensions-v4-isolated
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Run full regression suite
+        run: node --test tests/*.test.mjs
+      - name: Verify isolation contract
+        run: |
+          grep -q "ADD COLUMN front_label TEXT" drizzle/0017_rekixo_exact_dimension_labels.sql
+          grep -q "id=\"sideDimensionsRow\" style=\"display:none\"" public/project/index.html
+          grep -q "runtime v55" tests/public-runtime-cache-policy.test.mjs

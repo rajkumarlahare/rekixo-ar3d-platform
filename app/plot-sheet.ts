@@ -12,6 +12,9 @@ export type PlotSheetRow = {
   dimensionUnit: "ft" | "m" | "";
   frontEdgeIndex: number | null;
   depthEdgeIndex: number | null;
+  frontLabel: string;
+  depthLabel: string;
+  sideDimensions: string;
   notes: string;
 };
 
@@ -54,6 +57,9 @@ const aliases: Record<string, string[]> = {
   dimensionUnit: ["dimensionunit", "lengthunit", "measurementunit", "unit"],
   frontEdge: ["frontedge", "frontedge1based", "roadedge", "roadsideedge"],
   depthEdge: ["depthedge", "depthedge1based", "depthsideedge"],
+  frontLabel: ["frontlabel", "frontdisplay", "fronttext", "frontdisplaylabel"],
+  depthLabel: ["depthlabel", "depthdisplay", "depthtext", "depthdisplaylabel"],
+  sideDimensions: ["sidedimensions", "sidemeasurements", "sidelabels", "pdfsides"],
   notes: ["notes", "note", "remarks", "remark"],
 };
 
@@ -151,6 +157,14 @@ function edgeIndex(value: unknown, label: string) {
   return oneBased - 1;
 }
 
+function cleanDimensionText(value: unknown, maxLength: number) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
 function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
   const id = cleanPlotId(String(input.id || ""));
   if (!id) return null;
@@ -187,6 +201,9 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
     dimensionUnit: unit,
     frontEdgeIndex: edgeIndex(input.frontEdge, "Front Edge"),
     depthEdgeIndex: edgeIndex(input.depthEdge, "Depth Edge"),
+    frontLabel: cleanDimensionText(input.frontLabel, 160),
+    depthLabel: cleanDimensionText(input.depthLabel, 160),
+    sideDimensions: cleanDimensionText(input.sideDimensions, 500),
     notes: String(input.notes || "").trim().slice(0, 2000),
   };
 }
@@ -225,6 +242,9 @@ export function parsePlotSheetText(text: string, filename: string) {
     dimensionUnit: columnFor(headers, "dimensionUnit"),
     frontEdge: columnFor(headers, "frontEdge"),
     depthEdge: columnFor(headers, "depthEdge"),
+    frontLabel: columnFor(headers, "frontLabel"),
+    depthLabel: columnFor(headers, "depthLabel"),
+    sideDimensions: columnFor(headers, "sideDimensions"),
     notes: columnFor(headers, "notes"),
   };
   if (indexes.id < 0 || (indexes.sqft < 0 && indexes.sqm < 0 && indexes.sqyd < 0)) {
@@ -248,6 +268,9 @@ export function parsePlotSheetText(text: string, filename: string) {
           dimensionUnit: value(row, indexes.dimensionUnit),
           frontEdge: value(row, indexes.frontEdge),
           depthEdge: value(row, indexes.depthEdge),
+          frontLabel: value(row, indexes.frontLabel),
+          depthLabel: value(row, indexes.depthLabel),
+          sideDimensions: value(row, indexes.sideDimensions),
           notes: value(row, indexes.notes),
         }),
       )

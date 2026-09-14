@@ -71,6 +71,15 @@ function optionalPositiveMeasure(value: unknown) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
+function cleanDimensionText(value: unknown, maxLength: number) {
+  const text = String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+  return text || null;
+}
+
 function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
   const id = cleanPlotId(String(p.id || "")),
     polygon = String(p.polygon || ""),
@@ -99,6 +108,12 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
       : rawUnit === "m" || rawUnit === "ft"
         ? rawUnit
         : null;
+  const frontLabel = cleanDimensionText(p.frontLabel ?? p.front_label, 160);
+  const depthLabel = cleanDimensionText(p.depthLabel ?? p.depth_label, 160);
+  const sideDimensions = cleanDimensionText(
+    p.sideDimensions ?? p.side_dimensions,
+    500,
+  );
   if (
     !id ||
     (polygon && !validPolygon(polygon)) ||
@@ -137,6 +152,9 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     dimensionUnit,
     frontEdgeIndex,
     depthEdgeIndex,
+    frontLabel,
+    depthLabel,
+    sideDimensions,
     polygon,
     status,
     notes: String(p.notes || "").slice(0, 2000),
@@ -239,8 +257,8 @@ async function savePlots(
   // Plot-sheet re-import preserves hand-curated geometry/status and only replaces
   // semantic Front/Depth metadata when the incoming sheet explicitly supplies it.
   const statement = preserveGeometry
-    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),notes=excluded.notes,updated_at=excluded.updated_at"
-    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
+    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,front_label,depth_label,side_dimensions,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),front_label=COALESCE(excluded.front_label,front_label),depth_label=COALESCE(excluded.depth_label,depth_label),side_dimensions=COALESCE(excluded.side_dimensions,side_dimensions),notes=excluded.notes,updated_at=excluded.updated_at"
+    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,front_label,depth_label,side_dimensions,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,front_label=excluded.front_label,depth_label=excluded.depth_label,side_dimensions=excluded.side_dimensions,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
 
   for (let index = 0; index < saved.length; index += 80) {
     const chunk = saved.slice(index, index + 80);
@@ -259,6 +277,9 @@ async function savePlots(
           plot.dimensionUnit,
           plot.frontEdgeIndex,
           plot.depthEdgeIndex,
+          plot.frontLabel,
+          plot.depthLabel,
+          plot.sideDimensions,
           plot.polygon,
           plot.status,
           plot.notes,
@@ -289,7 +310,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   const [plots, settings, cadGeometry] = await Promise.all([
     env.DB.prepare(
-      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
+      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,side_dimensions AS sideDimensions,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
     )
       .bind(projectId)
       .all(),

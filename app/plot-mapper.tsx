@@ -57,6 +57,9 @@ type Plot = {
   dimensionUnit?: "ft" | "m" | null;
   frontEdgeIndex?: number | null;
   depthEdgeIndex?: number | null;
+  frontLabel?: string | null;
+  depthLabel?: string | null;
+  sideDimensions?: string | null;
   status: string;
   notes?: string;
   featured?: boolean;
@@ -1150,8 +1153,8 @@ export default function PlotMapper({
 
   function downloadPlotSheetTemplate() {
     const text = [
-      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Depth,Dimension Unit,Front Edge,Depth Edge,Notes",
-      "1,1162.08,108,12 x 9 m,East face,12,9,m,1,2,",
+      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Depth,Dimension Unit,Front Edge,Depth Edge,Front Label,Depth Label,Side Dimensions,Notes",
+      "1,1162.08,108,12 x 9 m,East face,12,9,m,1,2,12 m,9 m,Front 12 m · Depth 9 m,",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -1962,7 +1965,10 @@ export default function PlotMapper({
             : Number(saved.frontEdgeIndex) === Number(persisted.frontEdgeIndex)) &&
           (saved.depthEdgeIndex == null && persisted.depthEdgeIndex == null
             ? true
-            : Number(saved.depthEdgeIndex) === Number(persisted.depthEdgeIndex));
+            : Number(saved.depthEdgeIndex) === Number(persisted.depthEdgeIndex)) &&
+          String(saved.frontLabel || "") === String(persisted.frontLabel || "") &&
+          String(saved.depthLabel || "") === String(persisted.depthLabel || "") &&
+          String(saved.sideDimensions || "") === String(persisted.sideDimensions || "");
         if (sameGeometry && sameMetadata) return { plot: persisted, plots: verifiedPlots };
       }
       if (attempt < 3) {
@@ -2054,6 +2060,9 @@ export default function PlotMapper({
       dimensionUnit: frontValue !== null ? dimensionUnit : null,
       frontEdgeIndex: edgeValue,
       depthEdgeIndex: depthEdgeValue,
+      frontLabel: existing?.frontLabel || null,
+      depthLabel: existing?.depthLabel || null,
+      sideDimensions: existing?.sideDimensions || null,
       status: existing?.status || "available",
       notes: existing?.notes || "",
       featured: existing?.featured || false,
