@@ -605,6 +605,15 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
   }
 }
 
+
+/* Long measurements belong below the polygon. */
+.diagram.has-semantic-sides > svg{height:auto;aspect-ratio:300/142}
+.diagram-legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
+.diagram-legend[hidden]{display:none}
+.diagram-side{min-width:0;padding:10px;border:1px solid #33435c;border-radius:10px;background:#0b1629}
+.diagram-side-heading{display:flex;align-items:center;gap:7px;min-width:0;color:#dbe7fa;font-size:12px;font-weight:700}
+.diagram-side-swatch{width:24px;height:4px;flex:0 0 24px}
+.diagram-side-value{display:block;margin-top:5px;color:#f1f5fb;font-size:13px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
 </style>
 
 </head>
@@ -706,6 +715,7 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
       <g id="semanticEdgeLabels"></g>
       <text id="diagramLabel" class="plotnum" x="166" y="105" text-anchor="middle">A-01</text>
     </svg>
+    <ul id="diagramLegend" class="diagram-legend" aria-label="Plot side measurements" hidden></ul>
   </div>
 
   <div class="facts">
@@ -1132,44 +1142,42 @@ rekixoStartPublicBoot();
     const back=cleanDimensionLabel(p.backLabel)||plotLengthText(p.back,p.dimensionUnit);
     const depth2=cleanDimensionLabel(p.depth2Label)||plotLengthText(p.depth2,p.dimensionUnit);
     const sides=cleanDimensionLabel(p.sideDimensions);
-    const rawEdge=Number(p.frontEdgeIndex);
-    const edge=Number.isInteger(rawEdge)&&rawEdge>=0&&rawEdge<p.points.length?rawEdge:null;
+    const edge=validPlotSideEdge(p.frontEdgeIndex,p.points.length);
     return{front,depth,back,depth2,sides,edge}
   }
 
+  function validPlotSideEdge(value,pointCount){
+    if((typeof value!=='number'&&typeof value!=='string')||String(value).trim()==='')return null;
+    const edge=Number(value);
+    return Number.isInteger(edge)&&edge>=0&&edge<pointCount?edge:null
+  }
   function plotSideSemantics(p){
-    const validEdge=value=>{
-      const edge=Number(value);
-      return Number.isInteger(edge)&&edge>=0&&edge<p.points.length?edge:null
+    const validEdge=value=>validPlotSideEdge(value,p.points.length);
+    const distinctRoles=roles=>{
+      const edges=Object.values(roles).flat();
+      return new Set(edges).size===edges.length
     };
     const raw=cleanDimensionLabel(p.edgeSemantics);
     if(raw){
       try{
         const value=JSON.parse(raw);
-        if(value&&Number(value.version)===1&&Number(value.pointCount)===p.points.length){
-          const roles=value.roles&&typeof value.roles==='object'?value.roles:{};
-          const cleanRole=name=>{
-            const list=Array.isArray(roles[name])?roles[name]:[];
-            return [...new Set(list.map(Number).filter(edge=>Number.isInteger(edge)&&edge>=0&&edge<p.points.length))]
-          };
-          const parsed={front:cleanRole('front'),back:cleanRole('back'),depthA:cleanRole('depthA'),depthB:cleanRole('depthB')};
-          if(parsed.front.length&&parsed.back.length)return parsed
-        }
-      }catch(_){}
+        if(!value||Number(value.version)!==1||Number(value.pointCount)!==p.points.length)return null;
+        const roles=value.roles&&typeof value.roles==='object'?value.roles:{};
+        const cleanRole=name=>{
+          const list=Array.isArray(roles[name])?roles[name]:[];
+          return [...new Set(list.map(validEdge).filter(edge=>edge!==null))]
+        };
+        const parsed={front:cleanRole('front'),back:cleanRole('back'),depthA:cleanRole('depthA'),depthB:cleanRole('depthB')};
+        if(!distinctRoles(parsed))return null;
+        if(parsed.front.length&&parsed.back.length)return parsed
+      }catch(_){return null}
     }
     const front=validEdge(p.frontEdgeIndex),back=validEdge(p.backEdgeIndex),
       depthA=validEdge(p.depthEdgeIndex),depthB=validEdge(p.depth2EdgeIndex);
-    // Scalar fallback makes ordinary CSV edge import useful after polygon mapping.
-    // Activation still requires BOTH Front and Back, so every older project
-    // without new semantic data remains on the proven legacy renderer.
-    return front!==null&&back!==null
-      ? {
-          front:[front],
-          back:[back],
-          depthA:depthA===null?[]:[depthA],
-          depthB:depthB===null?[]:[depthB],
-        }
-      : null
+    // Missing indices are not edge zero.
+    const roles={front:front===null?[]:[front],back:back===null?[]:[back],
+      depthA:depthA===null?[]:[depthA],depthB:depthB===null?[]:[depthB]};
+    return front!==null&&back!==null&&distinctRoles(roles)?roles:null
   }
   function syncFrontDepthFacts(p){
     const semantic=plotSemanticDimensions(p),
@@ -1195,43 +1203,59 @@ rekixoStartPublicBoot();
      'widthLine','widthLeftTick','widthRightTick','widthLeftGuide','widthRightGuide','widthText']
       .forEach(id=>{const el=q('#'+id);if(el)el.style.display=visible?'':'none'})
   }
+  function diagramSideSpecs(p){
+    const values=plotSemanticDimensions(p);
+    return [
+      ['front','Front',values.front,'#22c55e',''],
+      ['back','Back',values.back,'#60a5fa','9 4'],
+      ['depthA','Depth A',values.depth,'#f59e0b','2 4'],
+      ['depthB','Depth B',values.depth2,'#a78bfa','9 3 2 3'],
+    ]
+  }
+  function renderDiagramLegend(p,semantics){
+    const legend=q('#diagramLegend');
+    if(!legend)return;
+    legend.replaceChildren();
+    for(const [role,title,value,color,dash] of diagramSideSpecs(p)){
+      const mapped=Boolean(semantics&&semantics[role]&&semantics[role].length);
+      if(!mapped&&!value)continue;
+      const item=document.createElement('li');
+      item.className='diagram-side';item.dataset.role=role;
+      const heading=document.createElement('div');heading.className='diagram-side-heading';
+      if(mapped){
+        const swatch=document.createElement('span');
+        swatch.className='diagram-side-swatch';swatch.setAttribute('aria-hidden','true');
+        swatch.style.borderTop='3px '+(dash?(role==='depthA'?'dotted':'dashed'):'solid')+' '+color;
+        heading.appendChild(swatch)
+      }
+      const name=document.createElement('span');name.textContent=title;heading.appendChild(name);
+      const measurement=document.createElement('span');measurement.className='diagram-side-value';
+      measurement.textContent=value||'—';
+      item.appendChild(heading);item.appendChild(measurement);legend.appendChild(item)
+    }
+    legend.hidden=!legend.children.length
+  }
   function renderSemanticDiagramEdges(p,scaledPoints,cx,cy){
     const semantics=plotSideSemantics(p),group=q('#semanticEdgeLabels');
     if(!group)return false;
     group.replaceChildren();
+    renderDiagramLegend(p,semantics);
     if(!semantics){group.style.display='none';return false}
-    const values=plotSemanticDimensions(p);
-    const specs=[
-      ['front','Front',values.front,'#22c55e'],
-      ['back','Back',values.back,'#60a5fa'],
-      ['depthA','Depth A',values.depth,'#f59e0b'],
-      ['depthB','Depth B',values.depth2,'#a78bfa'],
-    ];
-    for(const [role,title,value,color] of specs){
-      const edges=semantics[role]||[];
-      if(!edges.length)continue;
-      let total=0,mx=0,my=0,longest=null,longestLength=-1;
-      for(const edge of edges){
+    for(const [role,title,value,color,dash] of diagramSideSpecs(p)){
+      for(const edge of semantics[role]||[]){
         const a=scaledPoints[edge],b=scaledPoints[(edge+1)%scaledPoints.length];
         if(!a||!b)continue;
-        const length=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
-        total+=length;mx+=(a[0]+b[0])/2*length;my+=(a[1]+b[1])/2*length;
-        if(length>longestLength){longestLength=length;longest=[a,b]}
+        const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1',a[0]);line.setAttribute('y1',a[1]);
+        line.setAttribute('x2',b[0]);line.setAttribute('y2',b[1]);
+        line.setAttribute('stroke',color);line.setAttribute('stroke-width','3');
+        line.setAttribute('vector-effect','non-scaling-stroke');
+        if(dash)line.setAttribute('stroke-dasharray',dash);
+        line.dataset.role=role;
+        const tooltip=document.createElementNS('http://www.w3.org/2000/svg','title');
+        tooltip.textContent=title+(value?' · '+value:'');
+        line.appendChild(tooltip);group.appendChild(line)
       }
-      if(!total||!longest)continue;
-      mx/=total;my/=total;
-      let nx=mx-cx,ny=my-cy,n=Math.hypot(nx,ny)||1;nx/=n;ny/=n;
-      const tx=mx+nx*17,ty=my+ny*17;
-      const leader=document.createElementNS('http://www.w3.org/2000/svg','line');
-      leader.setAttribute('x1',mx);leader.setAttribute('y1',my);leader.setAttribute('x2',tx);leader.setAttribute('y2',ty);
-      leader.setAttribute('stroke',color);leader.setAttribute('stroke-width','1.5');
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      text.setAttribute('x',tx);text.setAttribute('y',ty);
-      text.setAttribute('fill',color);text.setAttribute('font-size','10');text.setAttribute('font-weight','800');
-      text.setAttribute('text-anchor','middle');text.setAttribute('paint-order','stroke');
-      text.setAttribute('stroke','#081225');text.setAttribute('stroke-width','3');
-      text.textContent=title+(value?' · '+value:'');
-      group.appendChild(leader);group.appendChild(text)
     }
     group.style.display='';
     return true
@@ -1246,6 +1270,9 @@ rekixoStartPublicBoot();
     const semantic=plotSemanticDimensions(p);
     const canonicalRendered=renderSemanticDiagramEdges(p,scaledPoints,cx,cy);
     setLegacyDiagramDimensionsVisible(!canonicalRendered);
+    const diagramBox=q('#diagramPoly').closest('.diagram');
+    diagramBox.classList.toggle('has-semantic-sides',canonicalRendered);
+    diagramBox.querySelector('svg').setAttribute('viewBox',canonicalRendered?'0 0 300 142':'0 0 300 190');
     // Legacy fallback contract for projects without complete canonical semantics:
     // LEFT side = Front, BOTTOM side = Depth.
     // frontEdgeIndex stays mapper metadata only; it must not swap legacy UI labels.
@@ -1254,10 +1281,10 @@ rekixoStartPublicBoot();
     const depthX=left-20,widthY=bottom+21;
     setLine('#depthLine',depthX,top,depthX,bottom);setLine('#depthTopTick',depthX-2.5,top,depthX+2.5,top);setLine('#depthBottomTick',depthX-2.5,bottom,depthX+2.5,bottom);
     setLine('#depthTopGuide',0,0,0,0);setLine('#depthBottomGuide',0,0,0,0);
-    const dt=q('#depthText');dt.textContent=verticalText;dt.setAttribute('x',depthX-15);dt.setAttribute('y',cy);dt.setAttribute('transform',`rotate(-90 ${depthX-15} ${cy})`);
+    const dt=q('#depthText');dt.textContent='Front';dt.setAttribute('aria-label',verticalText);dt.setAttribute('x',depthX-15);dt.setAttribute('y',cy);dt.setAttribute('transform',`rotate(-90 ${depthX-15} ${cy})`);
     setLine('#widthLine',left,widthY,right,widthY);setLine('#widthLeftTick',left,widthY-2.5,left,widthY+2.5);setLine('#widthRightTick',right,widthY-2.5,right,widthY+2.5);
     setLine('#widthLeftGuide',0,0,0,0);setLine('#widthRightGuide',0,0,0,0);
-    const wt=q('#widthText');wt.textContent=horizontalText;wt.setAttribute('x',cx);wt.setAttribute('y',widthY+20);
+    const wt=q('#widthText');wt.textContent='Depth';wt.setAttribute('aria-label',horizontalText);wt.setAttribute('x',cx);wt.setAttribute('y',widthY+20);
     const label=q('#diagramLabel');label.textContent=p.id;label.setAttribute('x',cx);label.setAttribute('y',cy+9)
   }
   // REKIXO_PROJECT_PRICING_UPLOAD_V1

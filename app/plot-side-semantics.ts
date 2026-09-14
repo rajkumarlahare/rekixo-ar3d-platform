@@ -12,6 +12,10 @@ function cleanEdges(value: unknown, pointCount: number) {
   if (!Array.isArray(value)) return [];
   const output: number[] = [];
   for (const item of value) {
+    if (
+      (typeof item !== "number" && typeof item !== "string") ||
+      String(item).trim() === ""
+    ) continue;
     const edge = Number(item);
     if (!Number.isInteger(edge) || edge < 0 || edge >= pointCount) continue;
     if (!output.includes(edge)) output.push(edge);

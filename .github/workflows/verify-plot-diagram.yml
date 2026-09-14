@@ -1,0 +1,36 @@
+
+name: Verify plot diagram and saves
+on:
+  push:
+    branches: [fix/plot-diagram-mobile]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Regression and SQLite tests
+        run: node --test tests/*.test.mjs
+      - name: Browser tooling
+        run: npm install --prefix /tmp/plot-browser --no-package-lock playwright@1.55.0
+      - name: Chromium
+        run: /tmp/plot-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Mobile browser checks
+        run: node scripts/verify-plot-diagram-browser.mjs
+        env:
+          PLOT_PLAYWRIGHT_MODULE: /tmp/plot-browser/node_modules/playwright/index.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plot-diagram-screenshots
+          path: artifacts/plot-diagram/
+          if-no-files-found: ignore

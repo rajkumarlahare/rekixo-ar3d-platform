@@ -3078,7 +3078,7 @@ export default function PlotMapper({
               }}>Dimensions → Front/Depth</button>
               <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
             </div>
-            <small className="mapper-help">Front = road ke saamne wali side. Front side / Depth side दबाकर masterplan पर actual polygon edge tap करें. Bulk sides में कई plots चुनकर visible ↑ → ↓ ← direction से Front या Depth assign करें. Customer drawer का existing fixed Front-left / Depth-bottom presentation unchanged रहेगा.</small>
+            <small className="mapper-help">Front = road ke saamne wali side. Front side / Back side / Depth A / Depth B दबाकर actual polygon edge चुनें. Bulk sides में समान orientation वाले plots चुनकर visible ↑ → ↓ ← direction से side assign करें. Measurements अलग fields/plot sheet से आती हैं. Customer diagram में assigned sides रंगों से और पूरी measurements नीचे दिखती हैं.</small>
             <div className="mapper-actions">
               <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
               <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
