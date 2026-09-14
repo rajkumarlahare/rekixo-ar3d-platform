@@ -65,22 +65,47 @@ test("server read-back verifies front/depth metadata together with canonical pol
   assert.match(mapper, /sameGeometry && sameMetadata/);
 });
 
-test("customer drawer shows explicit Front and Depth sizes with ft or m", () => {
+test("customer drawer diagram always shows Front on left and Depth on bottom", () => {
   const html = read("public/project/index.html");
   assert.match(html, /id="frontFactRow"/);
   assert.match(html, /id="depthFactRow"/);
   assert.match(html, /function plotLengthText/);
-  assert.match(html, /Front'\+\(semantic\.front/);
-  assert.match(html, /Depth'\+\(semantic\.depth/);
-  assert.match(html, /frontIsVertical/);
+
+  assert.match(
+    html,
+    /const verticalText='Front'\+\(semantic\.front\?' · '\+semantic\.front:''\)/
+  );
+  assert.match(
+    html,
+    /const horizontalText='Depth'\+\(semantic\.depth\?' · '\+semantic\.depth:''\)/
+  );
+
+  assert.doesNotMatch(html, /frontIsVertical/);
+  assert.doesNotMatch(html, /Plot width/);
+  assert.doesNotMatch(html, /Plot depth/);
   assert.match(html, /syncFrontDepthFacts\(p\)/);
 });
 
-test("legacy projects do not fabricate front/depth when semantic metadata is absent", () => {
+test("plots without semantic values show labels without fabricating sizes", () => {
   const html = read("public/project/index.html");
-  assert.match(html, /let verticalText='Plot depth',horizontalText='Plot width'/);
-  assert.match(html, /frontRow\.style\.display=semantic\.front\?'flex':'none'/);
-  assert.match(html, /depthRow\.style\.display=semantic\.depth\?'flex':'none'/);
+
+  assert.match(
+    html,
+    /const verticalText='Front'\+\(semantic\.front\?' · '\+semantic\.front:''\)/
+  );
+  assert.match(
+    html,
+    /const horizontalText='Depth'\+\(semantic\.depth\?' · '\+semantic\.depth:''\)/
+  );
+
+  assert.match(
+    html,
+    /frontRow\.style\.display=semantic\.front\?'flex':'none'/
+  );
+  assert.match(
+    html,
+    /depthRow\.style\.display=semantic\.depth\?'flex':'none'/
+  );
 });
 
 test("public-data remains schema-driven so new metadata flows without tenant-specific hardcode", () => {

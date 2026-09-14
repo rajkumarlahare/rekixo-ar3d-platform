@@ -1142,18 +1142,11 @@ rekixoStartPublicBoot();
     const left=minx*s+ox,right=maxx*s+ox,top=miny*s+oy,bottom=maxy*s+oy,cx=(left+right)/2,cy=(top+bottom)/2;
     q('#diagramPoly').setAttribute('points',p.points.map(([x,y])=>`${x*s+ox},${y*s+oy}`).join(' '));
     const semantic=plotSemanticDimensions(p);
-    let verticalText='Plot depth',horizontalText='Plot width';
-    if(semantic.front||semantic.depth){
-      if(semantic.edge!==null){
-        const a=p.points[semantic.edge],b=p.points[(semantic.edge+1)%p.points.length];
-        const frontIsVertical=Math.abs(Number(b[1])-Number(a[1]))>Math.abs(Number(b[0])-Number(a[0]));
-        verticalText=frontIsVertical?'Front'+(semantic.front?' · '+semantic.front:''):'Depth'+(semantic.depth?' · '+semantic.depth:'');
-        horizontalText=frontIsVertical?'Depth'+(semantic.depth?' · '+semantic.depth:''):'Front'+(semantic.front?' · '+semantic.front:'')
-      }else{
-        verticalText='Depth'+(semantic.depth?' · '+semantic.depth:'');
-        horizontalText='Front'+(semantic.front?' · '+semantic.front:'')
-      }
-    }
+    // Fixed customer-facing rule:
+    // LEFT side = Front, BOTTOM side = Depth.
+    // frontEdgeIndex stays mapper metadata only; it must not swap UI labels.
+    const verticalText='Front'+(semantic.front?' · '+semantic.front:'');
+    const horizontalText='Depth'+(semantic.depth?' · '+semantic.depth:'');
     const depthX=left-20,widthY=bottom+21;
     setLine('#depthLine',depthX,top,depthX,bottom);setLine('#depthTopTick',depthX-2.5,top,depthX+2.5,top);setLine('#depthBottomTick',depthX-2.5,bottom,depthX+2.5,bottom);
     setLine('#depthTopGuide',0,0,0,0);setLine('#depthBottomGuide',0,0,0,0);
