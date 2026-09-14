@@ -11,6 +11,7 @@ export type PlotSheetRow = {
   depth: number | null;
   dimensionUnit: "ft" | "m" | "";
   frontEdgeIndex: number | null;
+  depthEdgeIndex: number | null;
   notes: string;
 };
 
@@ -52,6 +53,7 @@ const aliases: Record<string, string[]> = {
   depth: ["depth", "plotdepth", "depthlength", "depthft", "depthfeet"],
   dimensionUnit: ["dimensionunit", "lengthunit", "measurementunit", "unit"],
   frontEdge: ["frontedge", "frontedge1based", "roadedge", "roadsideedge"],
+  depthEdge: ["depthedge", "depthedge1based", "depthsideedge"],
   notes: ["notes", "note", "remarks", "remark"],
 };
 
@@ -95,10 +97,37 @@ function finite(value: unknown) {
 function optionalPositive(value: unknown, label: string) {
   const raw = String(value ?? "").replace(/,/g, "").trim();
   if (!raw) return null;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0)
-    throw new Error(`${label} positive number hona chahiye`);
-  return parsed;
+
+  const normalized = raw
+    .replace(/[′’]/g, "'")
+    .replace(/[″“”]/g, '"');
+
+  const parsed = Number(normalized);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+  // Approved-plan human input:
+  // 18'-11", 18' 11", 18 ft 11 in, 44', 44 ft.
+  const feetInches = normalized.match(
+    /^(\d+(?:\.\d+)?)\s*(?:'|ft|feet|foot)\s*[-\s]*(?:(\d+(?:\.\d+)?)\s*(?:"|in|inch|inches))?$/i,
+  );
+  if (feetInches) {
+    const feet = Number(feetInches[1]);
+    const inches = feetInches[2] ? Number(feetInches[2]) : 0;
+    if (
+      Number.isFinite(feet) &&
+      feet >= 0 &&
+      Number.isFinite(inches) &&
+      inches >= 0 &&
+      inches < 12
+    ) {
+      const totalFeet = feet + inches / 12;
+      if (totalFeet > 0) return totalFeet;
+    }
+  }
+
+  throw new Error(
+    `${label} positive number ya feet-inch format (18 ft 11 in) me hona chahiye`,
+  );
 }
 
 function dimensionUnit(value: unknown, dimensions: string, hasMeasurement: boolean) {
@@ -107,18 +136,18 @@ function dimensionUnit(value: unknown, dimensions: string, hasMeasurement: boole
   if (["m", "meter", "metre", "meters", "metres"].includes(raw)) return "m" as const;
   if (raw) throw new Error("Dimension Unit sirf ft ya m ho sakta hai");
   if (!hasMeasurement) return "" as const;
-  const hint = dimensions.toLowerCase();
+  const hint = dimensions.toLowerCase().replace(/[′’]/g, "'");
   if (hint.includes("'") || /\b(ft|feet|foot)\b/.test(hint)) return "ft" as const;
   if (/\b(m|meter|metre|meters|metres)\b/.test(hint)) return "m" as const;
   return "ft" as const;
 }
 
-function frontEdgeIndex(value: unknown) {
+function edgeIndex(value: unknown, label: string) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
   const oneBased = Number(raw);
   if (!Number.isInteger(oneBased) || oneBased < 1 || oneBased > 80)
-    throw new Error("Front Edge 1 se 80 ke beech integer hona chahiye");
+    throw new Error(`${label} 1 se 80 ke beech integer hona chahiye`);
   return oneBased - 1;
 }
 
@@ -136,7 +165,16 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
   const dimensions = String(input.dimensions || "").trim().slice(0, 120);
   const front = optionalPositive(input.front, "Front");
   const depth = optionalPositive(input.depth, "Depth");
-  const unit = dimensionUnit(input.dimensionUnit, dimensions, front !== null || depth !== null);
+  const measurementHint = [
+    dimensions,
+    String(input.front ?? ""),
+    String(input.depth ?? ""),
+  ].join(" ");
+  const unit = dimensionUnit(
+    input.dimensionUnit,
+    measurementHint,
+    front !== null || depth !== null,
+  );
   return {
     id,
     sqft,
@@ -147,7 +185,8 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
     front,
     depth,
     dimensionUnit: unit,
-    frontEdgeIndex: frontEdgeIndex(input.frontEdge),
+    frontEdgeIndex: edgeIndex(input.frontEdge, "Front Edge"),
+    depthEdgeIndex: edgeIndex(input.depthEdge, "Depth Edge"),
     notes: String(input.notes || "").trim().slice(0, 2000),
   };
 }
@@ -185,6 +224,7 @@ export function parsePlotSheetText(text: string, filename: string) {
     depth: columnFor(headers, "depth"),
     dimensionUnit: columnFor(headers, "dimensionUnit"),
     frontEdge: columnFor(headers, "frontEdge"),
+    depthEdge: columnFor(headers, "depthEdge"),
     notes: columnFor(headers, "notes"),
   };
   if (indexes.id < 0 || (indexes.sqft < 0 && indexes.sqm < 0 && indexes.sqyd < 0)) {
@@ -207,6 +247,7 @@ export function parsePlotSheetText(text: string, filename: string) {
           depth: value(row, indexes.depth),
           dimensionUnit: value(row, indexes.dimensionUnit),
           frontEdge: value(row, indexes.frontEdge),
+          depthEdge: value(row, indexes.depthEdge),
           notes: value(row, indexes.notes),
         }),
       )

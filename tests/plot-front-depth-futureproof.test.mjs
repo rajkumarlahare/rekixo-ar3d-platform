@@ -55,7 +55,7 @@ test("Super Admin mapper requires real front/depth pair plus road-facing edge", 
   assert.match(mapper, /road-facing Front edge select karein/);
   assert.match(mapper, /Dimensions → Front\/Depth/);
   assert.match(mapper, /Swap Front ↔ Depth/);
-  assert.match(mapper, /Front Edge,Notes/);
+  assert.match(mapper, /Front Edge,Depth Edge,Notes/);
 });
 
 test("server read-back verifies front/depth metadata together with canonical polygon", () => {

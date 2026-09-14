@@ -28,6 +28,18 @@ test("Super Admin has direct and bulk front-depth edge assignment", () => {
   assert.match(mapper, /D ←/);
 });
 
+test("plot sheet supports Depth Edge and approved-plan feet-inch input", () => {
+  const sheet = read("app/plot-sheet.ts");
+  const mapper = read("app/plot-mapper.tsx");
+  assert.match(sheet, /depthEdgeIndex: number \| null/);
+  assert.match(sheet, /depthEdge: \["depthedge"/);
+  assert.match(sheet, /const feetInches = normalized\.match/);
+  assert.match(sheet, /inches < 12/);
+  assert.match(sheet, /edgeIndex\(input\.depthEdge, "Depth Edge"\)/);
+  assert.match(sheet, /replace\(\/\[′’\]\/g, "'"/);
+  assert.match(mapper, /Front Edge,Depth Edge,Notes/);
+});
+
 test("plot-sheet conflict preserves manual semantic edges when import is blank", () => {
   const route = read("app/api/super-mapper/route.ts");
   assert.match(route, /front_edge_index=COALESCE\(excluded\.front_edge_index,front_edge_index\)/);

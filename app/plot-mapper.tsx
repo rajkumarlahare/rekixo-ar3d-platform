@@ -1150,8 +1150,8 @@ export default function PlotMapper({
 
   function downloadPlotSheetTemplate() {
     const text = [
-      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Depth,Dimension Unit,Front Edge,Notes",
-      "1,1162.08,108,12 x 9 m,East face,12,9,m,1,",
+      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Depth,Dimension Unit,Front Edge,Depth Edge,Notes",
+      "1,1162.08,108,12 x 9 m,East face,12,9,m,1,2,",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
