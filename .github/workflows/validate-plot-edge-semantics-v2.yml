@@ -1,0 +1,35 @@
+name: Validate Plot Edge Semantics v2
+
+on:
+  push:
+    branches:
+      - feature/plot-edge-semantics-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Run full regression suite
+        run: node --test tests/*.test.mjs
+      - name: Confirm customer runtime file was not changed by feature
+        run: |
+          git diff --exit-code origin/main...HEAD -- public/project/index.html || {
+            echo "ERROR: customer runtime changed in admin-only feature";
+            exit 1;
+          }

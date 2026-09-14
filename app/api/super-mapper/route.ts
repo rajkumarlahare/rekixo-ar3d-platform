@@ -79,10 +79,15 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     front = optionalPositiveMeasure(p.front),
     depth = optionalPositiveMeasure(p.depth),
     edgeRaw = p.frontEdgeIndex ?? p.front_edge_index,
+    depthEdgeRaw = p.depthEdgeIndex ?? p.depth_edge_index,
     frontEdgeIndex =
       edgeRaw === null || edgeRaw === undefined || String(edgeRaw).trim() === ""
         ? null
-        : Number(edgeRaw);
+        : Number(edgeRaw),
+    depthEdgeIndex =
+      depthEdgeRaw === null || depthEdgeRaw === undefined || String(depthEdgeRaw).trim() === ""
+        ? null
+        : Number(depthEdgeRaw);
   const rawUnit = String(p.dimensionUnit ?? p.dimension_unit ?? "").trim().toLowerCase();
   const dimensionUnit =
     front !== null || depth !== null
@@ -103,14 +108,17 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     Number.isNaN(depth) ||
     dimensionUnit === "" ||
     (frontEdgeIndex !== null &&
-      (!Number.isInteger(frontEdgeIndex) || frontEdgeIndex < 0 || frontEdgeIndex > 79))
+      (!Number.isInteger(frontEdgeIndex) || frontEdgeIndex < 0 || frontEdgeIndex > 79)) ||
+    (depthEdgeIndex !== null &&
+      (!Number.isInteger(depthEdgeIndex) || depthEdgeIndex < 0 || depthEdgeIndex > 79))
   )
     return null;
 
-  if (polygon && frontEdgeIndex !== null) {
+  if (polygon && (frontEdgeIndex !== null || depthEdgeIndex !== null)) {
     try {
       const polygonPoints = JSON.parse(polygon) as unknown[];
-      if (frontEdgeIndex >= polygonPoints.length) return null;
+      if (frontEdgeIndex !== null && frontEdgeIndex >= polygonPoints.length) return null;
+      if (depthEdgeIndex !== null && depthEdgeIndex >= polygonPoints.length) return null;
     } catch {
       return null;
     }
@@ -128,6 +136,7 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     depth,
     dimensionUnit,
     frontEdgeIndex,
+    depthEdgeIndex,
     polygon,
     status,
     notes: String(p.notes || "").slice(0, 2000),
@@ -227,9 +236,11 @@ async function savePlots(
   const cleaned = incoming.map((plot) => cleanPlot(projectId, plot, now));
   if (cleaned.some((plot) => !plot)) throw new Error("Plot data सही नहीं है");
   const saved = cleaned.filter((plot): plot is NonNullable<typeof plot> => Boolean(plot));
+  // Plot-sheet re-import preserves hand-curated geometry/status and only replaces
+  // semantic Front/Depth metadata when the incoming sheet explicitly supplies it.
   const statement = preserveGeometry
-    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,notes=excluded.notes,updated_at=excluded.updated_at"
-    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
+    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),notes=excluded.notes,updated_at=excluded.updated_at"
+    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit,front_edge_index,depth_edge_index,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
 
   for (let index = 0; index < saved.length; index += 80) {
     const chunk = saved.slice(index, index + 80);
@@ -247,6 +258,7 @@ async function savePlots(
           plot.depth,
           plot.dimensionUnit,
           plot.frontEdgeIndex,
+          plot.depthEdgeIndex,
           plot.polygon,
           plot.status,
           plot.notes,
@@ -277,7 +289,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   const [plots, settings, cadGeometry] = await Promise.all([
     env.DB.prepare(
-      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
+      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
     )
       .bind(projectId)
       .all(),
