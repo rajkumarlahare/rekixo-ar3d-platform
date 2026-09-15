@@ -84,6 +84,8 @@ type MapperSettings = {
   sourcePdfName?: string;
   sourceCadName?: string;
   plotSheetName?: string;
+  roadAccessSheetName?: string;
+  roadAccessSheetCount?: string;
   mapWidth?: string;
   mapHeight?: string;
   masterplanOriginalWidth?: string;
@@ -853,6 +855,7 @@ export default function PlotMapper({
   const hasMasterplan = completedProject || Boolean(settings.masterplanName);
   const hasCad = Boolean(settings.sourceCadName);
   const hasPlotSheet = Boolean(settings.plotSheetName) || plots.length > 0;
+  const hasRoadAccessSheet = Boolean(settings.roadAccessSheetName);
   const hasPdf = Boolean(settings.sourcePdfName);
   const hasLogo = Boolean(settings.logoName);
   const logoUrl = hasLogo
@@ -1293,11 +1296,26 @@ export default function PlotMapper({
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
+  function downloadRoadAccessTemplate() {
+    const text = [
+      "Plot No,Road Access",
+      "1,60 FT ROAD",
+      "110,48.0 MTR ROAD",
+      "122,48.0 MTR ROAD / 30 FT ROAD",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rekixo-road-access-template.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   async function upload(
     file: File,
-    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "logo",
+    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "roadAccessSheet" | "logo",
   ) {
-    if (completedProject && !["sourcePdf", "logo"].includes(kind)) {
+    if (completedProject && !["sourcePdf", "logo", "roadAccessSheet"].includes(kind)) {
       notify("Tiyansh completed project locked है");
       return;
     }
@@ -1381,6 +1399,8 @@ export default function PlotMapper({
         notify(String((result.cadGeometry as CadGeometry | undefined)?.candidates.length || 0) + " CAD boundaries मिलीं");
       } else if (kind === "plotSheet") {
         notify(String(Number(result.count || 0)) + " plot records import हुए");
+      } else if (kind === "roadAccessSheet") {
+        notify(String(Number(result.count || 0)) + " plots ka Road Access update hua — बाकी data untouched");
       } else if (kind === "masterplan") {
         notify("Masterplan replace ho gaya — existing polygons/statuses preserve hain");
       } else if (kind === "logo") {
@@ -2572,6 +2592,23 @@ export default function PlotMapper({
             <input type="file" accept=".csv,.json,text/csv,application/json" disabled={busy || completedProject} onChange={(event) => event.target.files?.[0] && upload(event.target.files[0], "plotSheet")} />
           </label>
 
+          <label className={`mapper-upload-card ${hasRoadAccessSheet ? "ready" : ""}`}>
+            <span><FileText /></span>
+            <div>
+              <b>{hasRoadAccessSheet ? `Road Access · ${settings.roadAccessSheetCount || "saved"}` : "Road Access CSV"}</b>
+              <small>{settings.roadAccessSheetName || "Separate CSV: Plot No, Road Access · only road field updates"}</small>
+            </div>
+            {hasRoadAccessSheet && <CheckCircle2 className="mapper-ready-icon" />}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={busy}
+              onChange={(event) =>
+                event.target.files?.[0] && upload(event.target.files[0], "roadAccessSheet")
+              }
+            />
+          </label>
+
           <label className={`mapper-upload-card ${hasPdf ? "ready" : ""}`}>
             <span><FileText /></span>
             <div><b>{hasPdf ? "Technical PDF saved" : "3. PDF reference"}</b><small>{settings.sourcePdfName || "Original sanctioned/technical sheet"}</small></div>
@@ -2633,8 +2670,9 @@ export default function PlotMapper({
         </div>
 
         <div className="mapper-source-actions">
-          <button type="button" onClick={downloadPlotSheetTemplate}><FileText /> Download CSV template</button>
-          <small>Plot sheet re-import existing clickable boundary aur Booked/Sold status ko preserve karta hai.</small>
+          <button type="button" onClick={downloadPlotSheetTemplate}><FileText /> Download Plot CSV template</button>
+          <button type="button" onClick={downloadRoadAccessTemplate}><FileText /> Download Road Access CSV template</button>
+          <small>Road Access CSV sirf existing plots ka road field update karta hai; current Plot Inventory, geometry, pricing aur status untouched rehte hain.</small>
         </div>
 
         <div className="mapper-source-meta">
