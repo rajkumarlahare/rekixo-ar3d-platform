@@ -607,8 +607,8 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
 
 
 /* Long measurements belong below the polygon. */
-.diagram.has-semantic-sides > svg{height:auto;aspect-ratio:300/142}
-.diagram-legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0 0;padding:0;list-style:none}
+.diagram.has-semantic-sides > svg{height:auto;aspect-ratio:300/150}
+.diagram-legend{display:none!important}
 .diagram-legend[hidden]{display:none}
 .diagram-side{min-width:0;padding:10px;border:1px solid #33435c;border-radius:10px;background:#0b1629}
 .diagram-side-heading{display:flex;align-items:center;gap:7px;min-width:0;color:#dbe7fa;font-size:12px;font-weight:700}
@@ -1235,30 +1235,61 @@ rekixoStartPublicBoot();
     }
     legend.hidden=!legend.children.length
   }
+  // REKIXO_PUBLIC_EDGE_DIMENSIONS_V8
   function renderSemanticDiagramEdges(p,scaledPoints,cx,cy){
     const semantics=plotSideSemantics(p),group=q('#semanticEdgeLabels');
     if(!group)return false;
     group.replaceChildren();
     renderDiagramLegend(p,semantics);
     if(!semantics){group.style.display='none';return false}
+    let rendered=0;
+    const makeLine=(x1,y1,x2,y2,color,width='1.5',dash='')=>{
+      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',x1);line.setAttribute('y1',y1);
+      line.setAttribute('x2',x2);line.setAttribute('y2',y2);
+      line.setAttribute('stroke',color);line.setAttribute('stroke-width',width);
+      line.setAttribute('vector-effect','non-scaling-stroke');
+      if(dash)line.setAttribute('stroke-dasharray',dash);
+      group.appendChild(line);return line
+    };
     for(const [role,title,value,color,dash] of diagramSideSpecs(p)){
       for(const edge of semantics[role]||[]){
         const a=scaledPoints[edge],b=scaledPoints[(edge+1)%scaledPoints.length];
         if(!a||!b)continue;
-        const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1',a[0]);line.setAttribute('y1',a[1]);
-        line.setAttribute('x2',b[0]);line.setAttribute('y2',b[1]);
-        line.setAttribute('stroke',color);line.setAttribute('stroke-width','3');
-        line.setAttribute('vector-effect','non-scaling-stroke');
-        if(dash)line.setAttribute('stroke-dasharray',dash);
-        line.dataset.role=role;
-        const tooltip=document.createElementNS('http://www.w3.org/2000/svg','title');
-        tooltip.textContent=title+(value?' · '+value:'');
-        line.appendChild(tooltip);group.appendChild(line)
+        const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy)||1;
+        const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+        let nx=-dy/length,ny=dx/length;
+        if((mx-cx)*nx+(my-cy)*ny<0){nx=-nx;ny=-ny}
+        const offset=17,tick=4,textGap=9;
+        const x1=a[0]+nx*offset,y1=a[1]+ny*offset;
+        const x2=b[0]+nx*offset,y2=b[1]+ny*offset;
+        makeLine(x1,y1,x2,y2,color,'1.55',dash);
+        makeLine(x1-nx*tick,y1-ny*tick,x1+nx*tick,y1+ny*tick,color,'1.2');
+        makeLine(x2-nx*tick,y2-ny*tick,x2+nx*tick,y2+ny*tick,color,'1.2');
+
+        const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+        const tx=mx+nx*(offset+textGap),ty=my+ny*(offset+textGap);
+        let angle=Math.atan2(dy,dx)*180/Math.PI;
+        if(angle>90)angle-=180;
+        if(angle<-90)angle+=180;
+        text.setAttribute('x',tx);text.setAttribute('y',ty);
+        text.setAttribute('transform',`rotate(${angle} ${tx} ${ty})`);
+        text.setAttribute('fill',color);
+        text.setAttribute('font-size','9');
+        text.setAttribute('font-weight','900');
+        text.setAttribute('text-anchor','middle');
+        text.setAttribute('dominant-baseline','central');
+        text.setAttribute('paint-order','stroke');
+        text.setAttribute('stroke','#081225');
+        text.setAttribute('stroke-width','3');
+        text.setAttribute('stroke-linejoin','round');
+        text.textContent=title+(value?' · '+value:'');
+        group.appendChild(text);
+        rendered++
       }
     }
-    group.style.display='';
-    return true
+    group.style.display=rendered?'':'none';
+    return rendered>0
   }
 
   function diagram(p){
@@ -1269,10 +1300,11 @@ rekixoStartPublicBoot();
     q('#diagramPoly').setAttribute('points',scaledPoints.map(([x,y])=>`${x},${y}`).join(' '));
     const semantic=plotSemanticDimensions(p);
     const canonicalRendered=renderSemanticDiagramEdges(p,scaledPoints,cx,cy);
-    setLegacyDiagramDimensionsVisible(!canonicalRendered);
+    const irregular=String(p.dimensions||'').toLowerCase().includes('irregular');
+    setLegacyDiagramDimensionsVisible(!canonicalRendered&&!irregular);
     const diagramBox=q('#diagramPoly').closest('.diagram');
-    diagramBox.classList.toggle('has-semantic-sides',canonicalRendered);
-    diagramBox.querySelector('svg').setAttribute('viewBox',canonicalRendered?'0 0 300 142':'0 0 300 190');
+    diagramBox.classList.toggle('has-semantic-sides',canonicalRendered||irregular);
+    diagramBox.querySelector('svg').setAttribute('viewBox',(canonicalRendered||irregular)?'0 0 300 150':'0 0 300 190');
     // Legacy fallback contract for projects without complete canonical semantics:
     // LEFT side = Front, BOTTOM side = Depth.
     // frontEdgeIndex stays mapper metadata only; it must not swap legacy UI labels.
@@ -1281,10 +1313,10 @@ rekixoStartPublicBoot();
     const depthX=left-20,widthY=bottom+21;
     setLine('#depthLine',depthX,top,depthX,bottom);setLine('#depthTopTick',depthX-2.5,top,depthX+2.5,top);setLine('#depthBottomTick',depthX-2.5,bottom,depthX+2.5,bottom);
     setLine('#depthTopGuide',0,0,0,0);setLine('#depthBottomGuide',0,0,0,0);
-    const dt=q('#depthText');dt.textContent='Front';dt.setAttribute('aria-label',verticalText);dt.setAttribute('x',depthX-15);dt.setAttribute('y',cy);dt.setAttribute('transform',`rotate(-90 ${depthX-15} ${cy})`);
+    const dt=q('#depthText');dt.textContent=semantic.front?'Front · '+semantic.front:'Front';dt.setAttribute('aria-label',verticalText);dt.setAttribute('x',depthX-15);dt.setAttribute('y',cy);dt.setAttribute('transform',`rotate(-90 ${depthX-15} ${cy})`);
     setLine('#widthLine',left,widthY,right,widthY);setLine('#widthLeftTick',left,widthY-2.5,left,widthY+2.5);setLine('#widthRightTick',right,widthY-2.5,right,widthY+2.5);
     setLine('#widthLeftGuide',0,0,0,0);setLine('#widthRightGuide',0,0,0,0);
-    const wt=q('#widthText');wt.textContent='Depth';wt.setAttribute('aria-label',horizontalText);wt.setAttribute('x',cx);wt.setAttribute('y',widthY+20);
+    const wt=q('#widthText');wt.textContent=semantic.depth?'Depth · '+semantic.depth:'Depth';wt.setAttribute('aria-label',horizontalText);wt.setAttribute('x',cx);wt.setAttribute('y',widthY+20);
     const label=q('#diagramLabel');label.textContent=p.id;label.setAttribute('x',cx);label.setAttribute('y',cy+9)
   }
   // REKIXO_PROJECT_PRICING_UPLOAD_V1

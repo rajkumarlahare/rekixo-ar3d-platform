@@ -14,8 +14,8 @@ test("public project runtime shell and JS revalidate instead of staying stale in
   assert.match(worker, /secured\.headers\.set\("cache-control", "no-cache"\)/);
 });
 
-test("all iframe entry points share runtime v57 for this rollout", () => {
-  assert.match(rootPage, /\/project\/index\.html\?v=57/);
-  assert.match(previewPage, /preview=1&v=57/);
-  assert.match(sharedPage, /projectSlug=.*&v=57/);
+test("all iframe entry points share runtime v58 for this rollout", () => {
+  assert.match(rootPage, /\/project\/index\.html\?v=58/);
+  assert.match(previewPage, /preview=1&v=58/);
+  assert.match(sharedPage, /projectSlug=.*&v=58/);
 });
