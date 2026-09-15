@@ -17,15 +17,17 @@ test("customer drawer contract stays Front-left and Depth-bottom", () => {
   assert.doesNotMatch(html, /depthEdgeIndex.*diagram/i);
 });
 
-test("Super Admin has direct and bulk four-side edge assignment", () => {
+test("Super Admin has edge-first direct and bulk four-side assignment", () => {
   const mapper = read("app/plot-mapper.tsx");
-  assert.match(mapper, /edgeAssignMode/);
+  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V1/);
+  assert.match(mapper, /selectedSemanticEdge/);
+  assert.match(mapper, /assignSelectedSemanticRole/);
   assert.match(mapper, /bulkSemanticMode/);
   assert.match(mapper, /applyBulkEdgeDirection/);
-  assert.match(mapper, /\["front", "Front side"\]/);
-  assert.match(mapper, /\["back", "Back side"\]/);
-  assert.match(mapper, /\["depthA", "Depth A"\]/);
-  assert.match(mapper, /\["depthB", "Depth B"\]/);
+  assert.match(mapper, /\["front", "Front"/);
+  assert.match(mapper, /\["back", "Back"/);
+  assert.match(mapper, /\["depthA", "Depth A"/);
+  assert.match(mapper, /\["depthB", "Depth B"/);
   assert.match(mapper, /semantic-badge-/);
 });
 
