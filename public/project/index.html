@@ -1224,13 +1224,14 @@ rekixoStartPublicBoot();
      'widthLine','widthLeftTick','widthRightTick','widthLeftGuide','widthRightGuide','widthText']
       .forEach(id=>{const el=q('#'+id);if(el)el.style.display=visible?'':'none'})
   }
+  const REKIXO_DIAGRAM_DIMENSION_GREY='#94a3b8';
   function diagramSideSpecs(p){
     const values=plotSemanticDimensions(p);
     return [
-      ['front','Front',values.front,'#22c55e',''],
-      ['back','Back',values.back,'#60a5fa','9 4'],
-      ['depthA','Depth A',values.depth,'#f59e0b','2 4'],
-      ['depthB','Depth B',values.depth2,'#a78bfa','9 3 2 3'],
+      ['front','Front',values.front,REKIXO_DIAGRAM_DIMENSION_GREY,''],
+      ['back','Back',values.back,REKIXO_DIAGRAM_DIMENSION_GREY,'9 4'],
+      ['depthA','Depth A',values.depth,REKIXO_DIAGRAM_DIMENSION_GREY,'2 4'],
+      ['depthB','Depth B',values.depth2,REKIXO_DIAGRAM_DIMENSION_GREY,'9 3 2 3'],
     ]
   }
   function renderDiagramLegend(p,semantics){
