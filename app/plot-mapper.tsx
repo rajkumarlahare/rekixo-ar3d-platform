@@ -86,6 +86,8 @@ type MapperSettings = {
   plotSheetName?: string;
   roadAccessSheetName?: string;
   roadAccessSheetCount?: string;
+  sideMappingSheetName?: string;
+  sideMappingSheetCount?: string;
   mapWidth?: string;
   mapHeight?: string;
   masterplanOriginalWidth?: string;
@@ -856,6 +858,7 @@ export default function PlotMapper({
   const hasCad = Boolean(settings.sourceCadName);
   const hasPlotSheet = Boolean(settings.plotSheetName) || plots.length > 0;
   const hasRoadAccessSheet = Boolean(settings.roadAccessSheetName);
+  const hasSideMappingSheet = Boolean(settings.sideMappingSheetName);
   const hasPdf = Boolean(settings.sourcePdfName);
   const hasLogo = Boolean(settings.logoName);
   const logoUrl = hasLogo
@@ -1311,11 +1314,28 @@ export default function PlotMapper({
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
+  function downloadSideMappingTemplate() {
+    const text = [
+      "Plot No,Front Direction",
+      "1,right",
+      "61,left",
+      "110,right",
+      "124,top",
+      "S-13,left",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rekixo-side-mapping-template.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   async function upload(
     file: File,
-    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "roadAccessSheet" | "logo",
+    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "roadAccessSheet" | "sideMappingSheet" | "logo",
   ) {
-    if (completedProject && !["sourcePdf", "logo", "roadAccessSheet"].includes(kind)) {
+    if (completedProject && !["sourcePdf", "logo", "roadAccessSheet", "sideMappingSheet"].includes(kind)) {
       notify("Tiyansh completed project locked है");
       return;
     }
@@ -1401,6 +1421,8 @@ export default function PlotMapper({
         notify(String(Number(result.count || 0)) + " plot records import हुए");
       } else if (kind === "roadAccessSheet") {
         notify(String(Number(result.count || 0)) + " plots ka Road Access update hua — बाकी data untouched");
+      } else if (kind === "sideMappingSheet") {
+        notify(String(Number(result.count || 0)) + " plots ke Front/Back/Depth edges map hue — measurements untouched");
       } else if (kind === "masterplan") {
         notify("Masterplan replace ho gaya — existing polygons/statuses preserve hain");
       } else if (kind === "logo") {
@@ -2609,6 +2631,23 @@ export default function PlotMapper({
             />
           </label>
 
+          <label className={`mapper-upload-card ${hasSideMappingSheet ? "ready" : ""}`}>
+            <span><Target /></span>
+            <div>
+              <b>{hasSideMappingSheet ? `Side Mapping · ${settings.sideMappingSheetCount || "saved"}` : "Side Mapping CSV"}</b>
+              <small>{settings.sideMappingSheetName || "Plot No + road-facing Front Direction · only edge semantics update"}</small>
+            </div>
+            {hasSideMappingSheet && <CheckCircle2 className="mapper-ready-icon" />}
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={busy}
+              onChange={(event) =>
+                event.target.files?.[0] && upload(event.target.files[0], "sideMappingSheet")
+              }
+            />
+          </label>
+
           <label className={`mapper-upload-card ${hasPdf ? "ready" : ""}`}>
             <span><FileText /></span>
             <div><b>{hasPdf ? "Technical PDF saved" : "3. PDF reference"}</b><small>{settings.sourcePdfName || "Original sanctioned/technical sheet"}</small></div>
@@ -2672,7 +2711,8 @@ export default function PlotMapper({
         <div className="mapper-source-actions">
           <button type="button" onClick={downloadPlotSheetTemplate}><FileText /> Download Plot CSV template</button>
           <button type="button" onClick={downloadRoadAccessTemplate}><FileText /> Download Road Access CSV template</button>
-          <small>Road Access CSV sirf existing plots ka road field update karta hai; current Plot Inventory, geometry, pricing aur status untouched rehte hain.</small>
+          <button type="button" onClick={downloadSideMappingTemplate}><Target /> Download Side Mapping CSV template</button>
+          <small>Road Access aur Side Mapping isolated updates hain; Plot Inventory, measurements, geometry, pricing aur status untouched rehte hain.</small>
         </div>
 
         <div className="mapper-source-meta">
