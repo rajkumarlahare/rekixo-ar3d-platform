@@ -3,7 +3,7 @@ import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
 import { writeAudit } from "../../audit";
 import { parseCadGeometry } from "../../cad-import";
 import { cleanPlotId, type HomographyPair } from "../../mapper-geometry";
-import { parsePlotSheetText } from "../../plot-sheet";
+import { parsePlotSheetText } from "../../plot-sheet";\nimport { parseRoadAccessSheetText } from "../../road-access-sheet";
 import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
@@ -433,10 +433,11 @@ export async function POST(request: Request) {
       (kind === "logo" && ["image/jpeg", "image/png", "image/webp"].includes(file.type)) ||
       (kind === "sourcePdf" && (file.type === "application/pdf" || extension === "pdf")) ||
       (kind === "sourceCad" && ["dwg", "dxf"].includes(extension)) ||
-      (kind === "plotSheet" && ["csv", "json"].includes(extension));
+      (kind === "plotSheet" && ["csv", "json"].includes(extension)) ||
+      (kind === "roadAccessSheet" && extension === "csv");
     if (!valid)
       return Response.json(
-        { error: "Image, PDF, DWG/DXF या CSV/JSON plot sheet सही format में चुनें" },
+        { error: "Image, PDF, DWG/DXF, plot CSV/JSON या Road Access CSV सही format में चुनें" },
         { status: 400 },
       );
 
@@ -446,6 +447,7 @@ export async function POST(request: Request) {
       sourcePdf: 25 * 1024 * 1024,
       sourceCad: 25 * 1024 * 1024,
       plotSheet: 3 * 1024 * 1024,
+      roadAccessSheet: 1 * 1024 * 1024,
     };
     if (file.size > (limits[kind] || 0))
       return Response.json({ error: "File बहुत बड़ी है" }, { status: 400 });
@@ -607,6 +609,73 @@ export async function POST(request: Request) {
         cadGeometry: geometry,
         cadError,
       });
+    }
+
+    if (kind === "roadAccessSheet") {
+      let rows;
+      const sourceText = await file.text();
+      try {
+        rows = parseRoadAccessSheetText(sourceText);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Road Access CSV parse nahi hui" },
+          { status: 400 },
+        );
+      }
+      if (!rows.length)
+        return Response.json(
+          { error: "Road Access CSV me valid non-blank rows nahi mili" },
+          { status: 400 },
+        );
+      if (rows.length > 2000)
+        return Response.json(
+          { error: "Ek Road Access CSV me adhiktam 2000 rows rakhein" },
+          { status: 400 },
+        );
+
+      // Safety contract: this importer never creates plots and never touches area,
+      // dimensions, Front/Back/Depth, polygons, pricing, or Booked/Sold status.
+      const existing = await env.DB.prepare(
+        "SELECT id FROM plots WHERE project_id=?",
+      )
+        .bind(projectId)
+        .all<{ id: string }>();
+      const existingIds = new Set(existing.results.map((item) => item.id));
+      const unknown = rows.filter((row) => !existingIds.has(row.id)).map((row) => row.id);
+      if (unknown.length) {
+        return Response.json(
+          {
+            error:
+              "Road Access CSV me unknown Plot ID mile: " +
+              unknown.slice(0, 12).join(", ") +
+              (unknown.length > 12 ? "…" : ""),
+          },
+          { status: 400 },
+        );
+      }
+
+      await env.DB.batch(
+        rows.map((row) =>
+          env.DB.prepare(
+            "UPDATE plots SET road=?,updated_at=? WHERE project_id=? AND id=?",
+          ).bind(row.road, now, projectId, row.id),
+        ),
+      );
+
+      // Save this source separately. Existing plotSheet object/settings remain untouched.
+      await env.BUCKET.put(objectKey, sourceText, {
+        httpMetadata: { contentType: "text/csv; charset=utf-8" },
+      });
+      await Promise.all([
+        writeSetting(projectId, "roadAccessSheetName", file.name.slice(0, 240), now),
+        writeSetting(projectId, "roadAccessSheetCount", String(rows.length), now),
+      ]);
+      await writeAudit(actor, "mapper.roadAccess_imported", projectId, null, {
+        filename: file.name,
+        count: rows.length,
+        updatedFields: ["road"],
+      });
+      return Response.json({ ok: true, name: file.name, count: rows.length });
     }
 
     if (kind === "plotSheet") {
