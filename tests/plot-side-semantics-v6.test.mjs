@@ -41,24 +41,27 @@ test("sheet re-import preserves manual canonical semantics when new columns are 
   assert.match(route, /WHERE project_id=\?/);
 });
 
-test("Super Admin exposes direct and bulk Front Back Depth A Depth B assignment", () => {
+test("Super Admin exposes edge-first Front Back Depth A Depth B assignment", () => {
   const mapper = read("app/plot-mapper.tsx");
-  assert.match(mapper, />Front side<\/button>|\["front", "Front side"\]/);
-  assert.match(mapper, /\["back", "Back side"\]/);
-  assert.match(mapper, /\["depthA", "Depth A"\]/);
-  assert.match(mapper, /\["depthB", "Depth B"\]/);
+  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V1/);
+  assert.match(mapper, /selectedSemanticEdge/);
+  assert.match(mapper, /assignSelectedSemanticRole/);
+  assert.match(mapper, /\["front", "Front"/);
+  assert.match(mapper, /\["back", "Back"/);
+  assert.match(mapper, /\["depthA", "Depth A"/);
+  assert.match(mapper, /\["depthB", "Depth B"/);
   assert.match(mapper, /semantic-badge-/);
 });
 
-test("customer actual-edge renderer is opt-in and legacy fallback remains", () => {
+test("customer irregular diagram uses actual-edge dimensions and no guessed fallback", () => {
   const html = read("public/project/index.html");
   assert.match(html, /function plotSideSemantics/);
   assert.match(html, /parsed\.front\.length/);
   assert.match(html, /front!==null&&distinctRoles/);
-  assert.match(html, /renderSemanticDiagramEdges/);
-  assert.match(html, /Legacy fallback contract/);
-  assert.match(html, /LEFT side = Front, BOTTOM side = Depth/);
-  assert.match(html, /frontEdgeIndex stays mapper metadata only/);
+  assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V8/);
+  assert.match(html, /const irregular=.*includes\('irregular'\)/);
+  assert.match(html, /setLegacyDiagramDimensionsVisible\(!canonicalRendered&&!irregular\)/);
+  assert.match(html, /diagram-legend\{display:none!important\}/);
 });
 
 test("runtime has no VISTAR tenant hardcode", () => {
@@ -71,9 +74,9 @@ test("runtime has no VISTAR tenant hardcode", () => {
   assert.doesNotMatch(runtime, /vatika-green-city-vistar|vatika green city vistar/);
 });
 
-test("runtime cache version is v57", () => {
-  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v57/);
+test("runtime cache version is v58", () => {
+  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v58/);
   for (const file of ["app/page.tsx","app/preview/[projectId]/page.tsx","app/projects/[slug]/page.tsx"]) {
-    assert.match(read(file), /v=57/);
+    assert.match(read(file), /v=58/);
   }
 });
