@@ -1169,7 +1169,7 @@ rekixoStartPublicBoot();
         };
         const parsed={front:cleanRole('front'),back:cleanRole('back'),depthA:cleanRole('depthA'),depthB:cleanRole('depthB')};
         if(!distinctRoles(parsed))return null;
-        if(parsed.front.length&&parsed.back.length)return parsed
+        if(parsed.front.length)return parsed
       }catch(_){return null}
     }
     const front=validEdge(p.frontEdgeIndex),back=validEdge(p.backEdgeIndex),
@@ -1177,7 +1177,7 @@ rekixoStartPublicBoot();
     // Missing indices are not edge zero.
     const roles={front:front===null?[]:[front],back:back===null?[]:[back],
       depthA:depthA===null?[]:[depthA],depthB:depthB===null?[]:[depthB]};
-    return front!==null&&back!==null&&distinctRoles(roles)?roles:null
+    return front!==null&&distinctRoles(roles)?roles:null
   }
   function syncFrontDepthFacts(p){
     const semantic=plotSemanticDimensions(p),

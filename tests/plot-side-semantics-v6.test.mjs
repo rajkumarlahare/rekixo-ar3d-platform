@@ -53,8 +53,8 @@ test("Super Admin exposes direct and bulk Front Back Depth A Depth B assignment"
 test("customer actual-edge renderer is opt-in and legacy fallback remains", () => {
   const html = read("public/project/index.html");
   assert.match(html, /function plotSideSemantics/);
-  assert.match(html, /parsed\.front\.length&&parsed\.back\.length/);
-  assert.match(html, /front!==null&&back!==null/);
+  assert.match(html, /parsed\.front\.length/);
+  assert.match(html, /front!==null&&distinctRoles/);
   assert.match(html, /renderSemanticDiagramEdges/);
   assert.match(html, /Legacy fallback contract/);
   assert.match(html, /LEFT side = Front, BOTTOM side = Depth/);
@@ -71,9 +71,9 @@ test("runtime has no VISTAR tenant hardcode", () => {
   assert.doesNotMatch(runtime, /vatika-green-city-vistar|vatika green city vistar/);
 });
 
-test("runtime cache version is v56", () => {
-  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v56/);
+test("runtime cache version is v57", () => {
+  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v57/);
   for (const file of ["app/page.tsx","app/preview/[projectId]/page.tsx","app/projects/[slug]/page.tsx"]) {
-    assert.match(read(file), /v=56/);
+    assert.match(read(file), /v=57/);
   }
 });
