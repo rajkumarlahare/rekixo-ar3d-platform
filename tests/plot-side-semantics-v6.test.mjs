@@ -74,9 +74,9 @@ test("runtime has no VISTAR tenant hardcode", () => {
   assert.doesNotMatch(runtime, /vatika-green-city-vistar|vatika green city vistar/);
 });
 
-test("runtime cache version is v58", () => {
-  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v58/);
+test("runtime cache version is v59", () => {
+  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v59/);
   for (const file of ["app/page.tsx","app/preview/[projectId]/page.tsx","app/projects/[slug]/page.tsx"]) {
-    assert.match(read(file), /v=58/);
+    assert.match(read(file), /v=59/);
   }
 });

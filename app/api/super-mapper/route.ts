@@ -3,8 +3,10 @@ import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
 import { writeAudit } from "../../audit";
 import { parseCadGeometry } from "../../cad-import";
 import { cleanPlotId, type HomographyPair } from "../../mapper-geometry";
+import { edgeIndexForDisplayDirection, type EdgeDirection } from "../../plot-edge-semantics";
 import { parsePlotSheetText } from "../../plot-sheet";
 import { parseRoadAccessSheetText } from "../../road-access-sheet";
+import { parseSideMappingSheetText } from "../../side-mapping-sheet";
 import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
@@ -435,7 +437,8 @@ export async function POST(request: Request) {
       (kind === "sourcePdf" && (file.type === "application/pdf" || extension === "pdf")) ||
       (kind === "sourceCad" && ["dwg", "dxf"].includes(extension)) ||
       (kind === "plotSheet" && ["csv", "json"].includes(extension)) ||
-      (kind === "roadAccessSheet" && extension === "csv");
+      (kind === "roadAccessSheet" && extension === "csv") ||
+      (kind === "sideMappingSheet" && extension === "csv");
     if (!valid)
       return Response.json(
         { error: "Image, PDF, DWG/DXF, plot CSV/JSON या Road Access CSV सही format में चुनें" },
@@ -449,6 +452,7 @@ export async function POST(request: Request) {
       sourceCad: 25 * 1024 * 1024,
       plotSheet: 3 * 1024 * 1024,
       roadAccessSheet: 1 * 1024 * 1024,
+      sideMappingSheet: 1 * 1024 * 1024,
     };
     if (file.size > (limits[kind] || 0))
       return Response.json({ error: "File बहुत बड़ी है" }, { status: 400 });
@@ -610,6 +614,110 @@ export async function POST(request: Request) {
         cadGeometry: geometry,
         cadError,
       });
+    }
+
+    if (kind === "sideMappingSheet") {
+      let rows;
+      const sourceText = await file.text();
+      try {
+        rows = parseSideMappingSheetText(sourceText);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Side Mapping CSV parse nahi hui" },
+          { status: 400 },
+        );
+      }
+      if (!rows.length)
+        return Response.json({ error: "Side Mapping CSV me valid rows nahi mili" }, { status: 400 });
+
+      const plotRows = await env.DB.prepare(
+        "SELECT id,polygon FROM plots WHERE project_id=?",
+      )
+        .bind(projectId)
+        .all<{ id: string; polygon: string | null }>();
+      const byId = new Map(plotRows.results.map((item) => [item.id, item]));
+      const unknown = rows.filter((row) => !byId.has(row.id)).map((row) => row.id);
+      if (unknown.length) {
+        return Response.json(
+          { error: "Side Mapping CSV me unknown Plot ID mile: " + unknown.slice(0, 12).join(", ") },
+          { status: 400 },
+        );
+      }
+
+      const rotationRow = await env.DB.prepare(
+        "SELECT value FROM settings WHERE project_id=? AND key='publicRotation' LIMIT 1",
+      )
+        .bind(projectId)
+        .first<{ value: string }>();
+      const rawRotation = Number(rotationRow?.value || 0);
+      const rotation =
+        rawRotation === 1 || rawRotation === 2 || rawRotation === 3 ? rawRotation : 0;
+
+      const opposite: Record<EdgeDirection, EdgeDirection> = {
+        top: "bottom",
+        right: "left",
+        bottom: "top",
+        left: "right",
+      };
+      const depthDirections: Record<EdgeDirection, [EdgeDirection, EdgeDirection]> = {
+        top: ["right", "left"],
+        right: ["bottom", "top"],
+        bottom: ["left", "right"],
+        left: ["top", "bottom"],
+      };
+
+      const updates = rows.map((row) => {
+        const stored = byId.get(row.id)!;
+        let polygon: [number, number][];
+        try {
+          polygon = JSON.parse(stored.polygon || "[]");
+        } catch {
+          throw new Error(`Plot ${row.id}: polygon invalid hai`);
+        }
+        if (!Array.isArray(polygon) || polygon.length < 4)
+          throw new Error(`Plot ${row.id}: kam se kam 4-corner polygon chahiye`);
+
+        const backDirection = opposite[row.front];
+        const [depthADirection, depthBDirection] = depthDirections[row.front];
+        const front = edgeIndexForDisplayDirection(polygon, row.front, rotation);
+        const back = edgeIndexForDisplayDirection(polygon, backDirection, rotation);
+        const depthA = edgeIndexForDisplayDirection(polygon, depthADirection, rotation);
+        const depthB = edgeIndexForDisplayDirection(polygon, depthBDirection, rotation);
+        const selected = [front, back, depthA, depthB];
+
+        if (selected.some((edge) => edge == null) || new Set(selected).size !== 4)
+          throw new Error(`Plot ${row.id}: 4 distinct side edges resolve nahi hui`);
+
+        const edgeSemantics = serializePlotSideSemantics(polygon.length, {
+          front: [front!],
+          back: [back!],
+          depthA: [depthA!],
+          depthB: [depthB!],
+        });
+        return { id: row.id, front: front!, back: back!, depthA: depthA!, depthB: depthB!, edgeSemantics };
+      });
+
+      await env.DB.batch(
+        updates.map((row) =>
+          env.DB.prepare(
+            "UPDATE plots SET front_edge_index=?,back_edge_index=?,depth_edge_index=?,depth2_edge_index=?,edge_semantics=?,updated_at=? WHERE project_id=? AND id=?",
+          ).bind(row.front, row.back, row.depthA, row.depthB, row.edgeSemantics, now, projectId, row.id),
+        ),
+      );
+
+      await env.BUCKET.put(objectKey, sourceText, {
+        httpMetadata: { contentType: "text/csv; charset=utf-8" },
+      });
+      await Promise.all([
+        writeSetting(projectId, "sideMappingSheetName", file.name.slice(0, 240), now),
+        writeSetting(projectId, "sideMappingSheetCount", String(updates.length), now),
+      ]);
+      await writeAudit(actor, "mapper.sideMapping_imported", projectId, null, {
+        filename: file.name,
+        count: updates.length,
+        updatedFields: ["front_edge_index", "back_edge_index", "depth_edge_index", "depth2_edge_index", "edge_semantics"],
+      });
+      return Response.json({ ok: true, name: file.name, count: updates.length });
     }
 
     if (kind === "roadAccessSheet") {

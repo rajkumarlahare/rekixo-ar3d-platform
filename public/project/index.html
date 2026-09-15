@@ -1136,12 +1136,33 @@ rekixoStartPublicBoot();
     return rounded+' '+(unit==='m'?'m':'ft')
   }
   function cleanDimensionLabel(value){return String(value||'').replace(/[\u0000-\u001f\u007f]+/g,' ').replace(/\s+/g,' ').trim()}
+  function parseSideDimensionFacts(value){
+    const sides=cleanDimensionLabel(value);
+    const tokenPattern=/~?\s*\d+(?:\.\d+)?\s*(?:'\s*(?:-\s*\d+\s*")?|ft\b|m\b)/gi;
+    const tokens=(chunk)=>(cleanDimensionLabel(chunk).match(tokenPattern)||[]).map(cleanDimensionLabel);
+    const capture=(pattern)=>{
+      const match=sides.match(pattern);
+      return match?cleanDimensionLabel(match[1]):''
+    };
+    const frontTokens=tokens(capture(/(?:road\s+front|\bfront)\s+(.+?)(?=\s*[·|;]\s*(?:back|depth)|$)/i));
+    const backTokens=tokens(capture(/\bback\s+(.+?)(?=\s*[·|;]\s*(?:front|depth)|$)/i));
+    const depthTokens=tokens(capture(/\bdepth(?:\s+sides?|\s*a)?\s+(.+?)(?=\s*[·|;]\s*(?:front|back)|$)/i));
+    const depth=depthTokens[0]||'';
+    const depth2=depthTokens[1]||(depthTokens.length===1?depthTokens[0]:'');
+    return{
+      front:frontTokens[0]||'',
+      back:backTokens[0]||'',
+      depth,
+      depth2,
+    }
+  }
   function plotSemanticDimensions(p){
-    const front=cleanDimensionLabel(p.frontLabel)||plotLengthText(p.front,p.dimensionUnit);
-    const depth=cleanDimensionLabel(p.depthLabel)||plotLengthText(p.depth,p.dimensionUnit);
-    const back=cleanDimensionLabel(p.backLabel)||plotLengthText(p.back,p.dimensionUnit);
-    const depth2=cleanDimensionLabel(p.depth2Label)||plotLengthText(p.depth2,p.dimensionUnit);
     const sides=cleanDimensionLabel(p.sideDimensions);
+    const parsedSides=parseSideDimensionFacts(sides);
+    const front=cleanDimensionLabel(p.frontLabel)||plotLengthText(p.front,p.dimensionUnit)||parsedSides.front;
+    const depth=cleanDimensionLabel(p.depthLabel)||plotLengthText(p.depth,p.dimensionUnit)||parsedSides.depth;
+    const back=cleanDimensionLabel(p.backLabel)||plotLengthText(p.back,p.dimensionUnit)||parsedSides.back;
+    const depth2=cleanDimensionLabel(p.depth2Label)||plotLengthText(p.depth2,p.dimensionUnit)||parsedSides.depth2;
     const edge=validPlotSideEdge(p.frontEdgeIndex,p.points.length);
     return{front,depth,back,depth2,sides,edge}
   }
