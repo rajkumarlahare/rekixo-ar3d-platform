@@ -6,19 +6,44 @@ const client = readFileSync(
   new URL("../app/projects/[slug]/map/geo-public-map.tsx", import.meta.url),
   "utf8",
 );
+const page = readFileSync(
+  new URL("../app/projects/[slug]/map/page.tsx", import.meta.url),
+  "utf8",
+);
+const publicHandler = readFileSync(
+  new URL("../app/api/public-geo/handler.ts", import.meta.url),
+  "utf8",
+);
+const liveRoute = readFileSync(
+  new URL("../app/api/super-geo-live/route.ts", import.meta.url),
+  "utf8",
+);
 const css = readFileSync(
   new URL("../app/projects/[slug]/map/geo-public-map.module.css", import.meta.url),
   "utf8",
 );
 
 test("public map preconnects to Google Maps origins before data fetch", () => {
+  assert.match(page, /preconnect\("https:\/\/maps\.googleapis\.com"\)/);
+  assert.match(page, /preconnect\("https:\/\/maps\.gstatic\.com"/);
   assert.match(client, /function ensureGoogleMapsConnectionHints/);
   assert.match(client, /https:\/\/maps\.googleapis\.com/);
   assert.match(client, /https:\/\/maps\.gstatic\.com/);
-  assert.match(
-    client,
-    /ensureGoogleMapsConnectionHints\(\);\s*const controller = new AbortController\(\);/,
-  );
+});
+
+test("Google Maps JS starts in parallel with public Geo payload", () => {
+  assert.match(client, /mapsApiKey/);
+  assert.match(client, /loadGoogleMaps\(mapsApiKey\)/);
+  assert.match(client, /fetch\(`\/api\/public-geo\?projectSlug=/);
+  assert.match(page, /publicGoogleMapsBrowserKey/);
+});
+
+test("published geometry is precomputed and reused from immutable manifest", () => {
+  assert.match(liveRoute, /buildGeoPublicManifest/);
+  assert.match(liveRoute, /promotedManifestKey/);
+  assert.match(publicHandler, /parseGeoPublicManifest/);
+  assert.match(publicHandler, /manifestMemory/);
+  assert.match(publicHandler, /cache\.match\(cacheKey\)/);
 });
 
 test("large masterplan texture is downscaled for mobile compositing without changing geo corners", () => {
@@ -26,7 +51,7 @@ test("large masterplan texture is downscaled for mobile compositing without chan
   assert.match(client, /DESKTOP_OVERLAY_MAX_DIMENSION = 3072/);
   assert.match(client, /document\.createElement\("canvas"\)/);
   assert.match(client, /context\.drawImage\(image, 0, 0, canvas\.width, canvas\.height\)/);
-  assert.match(client, /cssProjectiveTransform\([\s\S]*surfaceWidth,[\s\S]*surfaceHeight/);
+  assert.match(client, /cssProjectiveTransform\(matrix, surfaceWidth, surfaceHeight\)/);
   assert.match(client, /corners\.map\(\(\[lng, lat\]\)/);
 });
 
@@ -36,11 +61,12 @@ test("projective overlay draw work is capped to one animation frame", () => {
   assert.match(client, /window\.cancelAnimationFrame/);
 });
 
-test("masterplan download yields priority to Google hybrid tiles on first load", () => {
+test("masterplan chooses mobile or desktop public derivative", () => {
+  assert.match(client, /masterplanUrls\?\.mobile/);
+  assert.match(client, /masterplanUrls\?\.desktop/);
+  assert.match(client, /window\.innerWidth <= 900/);
   assert.match(client, /image\.fetchPriority = "low"/);
   assert.match(client, /image\.decoding = "async"/);
-  assert.match(client, /mapTypeId: "hybrid"/);
-  assert.match(client, /clickableIcons: true/);
 });
 
 test("plot info-card helper keeps one valid function declaration", () => {
