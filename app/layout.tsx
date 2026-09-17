@@ -3,6 +3,7 @@ import "./globals.css";
 import "./super-mapper.css";
 import "./mapper-side-controls.css";
 import { panelMode } from "./admin-auth";
+import MapperUploadProgressBridge from "./mapper-upload-progress-bridge";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -29,7 +30,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <MapperUploadProgressBridge />
+        {children}
+      </body>
     </html>
   );
 }
