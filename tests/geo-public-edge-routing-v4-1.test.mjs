@@ -5,10 +5,11 @@ import test from "node:test";
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("customer Geo public APIs are routed through the generic Client Worker", async () => {
-  const [deploy, client, publicGeo] = await Promise.all([
+  const [deploy, client, publicGeoRoute, publicGeoHandler] = await Promise.all([
     source("../scripts/prepare-cloudflare-deploy.mjs"),
     source("../app/projects/[slug]/map/geo-public-map.tsx"),
     source("../app/api/public-geo/route.ts"),
+    source("../app/api/public-geo/handler.ts"),
   ]);
 
   // One narrow prefix route intentionally covers both endpoints plus query strings:
@@ -19,7 +20,8 @@ test("customer Geo public APIs are routed through the generic Client Worker", as
     "shared platform route for public Geo API prefix is missing",
   );
   assert.match(client, /\/api\/public-geo\?projectSlug=/);
-  assert.match(publicGeo, /\/api\/public-geo-masterplan\?projectSlug=/);
+  assert.match(publicGeoRoute, /export\s+\{\s*GET\s*\}\s+from\s+"\.\/handler";/);
+  assert.match(publicGeoHandler, /\/api\/public-geo-masterplan\?projectSlug=/);
 });
 
 test("public Geo route remains query-safe and does not widen shared-domain ownership", async () => {
