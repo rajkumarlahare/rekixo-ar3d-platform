@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+import { preconnect } from "react-dom";
 import { panelMode } from "../../../admin-auth";
+import { publicGoogleMapsBrowserKey } from "../../../google-maps-config";
 import { isPlatformAccessHost, projectBySlug } from "../../../project-context";
 import GeoPublicMap from "./geo-public-map";
 
 export const dynamic = "force-dynamic";
+
+const publishedProjectBySlug = cache((slug: string) => projectBySlug(slug));
 
 export async function generateMetadata({
   params,
@@ -13,7 +18,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const project = await projectBySlug(slug);
+  const project = await publishedProjectBySlug(slug);
   if (!project) return { title: "Satellite Map" };
   return {
     title: `${project.name} · Satellite Map`,
@@ -28,12 +33,26 @@ export default async function PublicGeoMapPage({
 }) {
   if (panelMode() === "super") notFound();
 
+  // Emit connection hints in the server response so DNS/TLS can start before
+  // client hydration and before either Maps JS or public Geo data is requested.
+  preconnect("https://maps.googleapis.com");
+  preconnect("https://maps.gstatic.com", { crossOrigin: "anonymous" });
+
   const { slug } = await params;
   const host = (await headers()).get("host") || "";
   if (!isPlatformAccessHost(host)) notFound();
 
-  const project = await projectBySlug(slug);
+  const [project, mapsApiKey] = await Promise.all([
+    publishedProjectBySlug(slug),
+    publicGoogleMapsBrowserKey(),
+  ]);
   if (!project) notFound();
 
-  return <GeoPublicMap projectName={project.name} projectSlug={project.slug} />;
+  return (
+    <GeoPublicMap
+      projectName={project.name}
+      projectSlug={project.slug}
+      mapsApiKey={mapsApiKey}
+    />
+  );
 }

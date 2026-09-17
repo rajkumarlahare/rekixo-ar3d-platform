@@ -89,9 +89,13 @@ config.r2_buckets = [
   },
 ];
 
+// Geo public promotion uses the Images binding to create immutable mobile and
+// desktop WebP derivatives directly from the R2 masterplan source.
+config.images = { binding: "IMAGES" };
+
 await writeFile(path, `${JSON.stringify(config)}\n`);
 console.log(
-  `Prepared ${mode} Worker: ${config.name} · shared D1/R2 · platform ${platformHost}` +
+  `Prepared ${mode} Worker: ${config.name} · shared D1/R2 · Images · platform ${platformHost}` +
     (mode === "client" && sharedDomainRoutes.length
       ? ` · routes ${sharedDomainRoutes.length}`
       : ""),

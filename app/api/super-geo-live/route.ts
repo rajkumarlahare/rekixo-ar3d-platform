@@ -1,6 +1,9 @@
 import { env } from "cloudflare:workers";
 import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
 import { writeAudit } from "../../audit";
+import { buildGeoPublicManifest, type GeoPublicSnapshot } from "../../geo-public-manifest";
+import { createGeoOverlayVariant } from "../../geo-public-image";
+import { publicGoogleMapsBrowserKey } from "../../google-maps-config";
 import { currentProjectLinks } from "../../project-links";
 
 const denied = () =>
@@ -11,6 +14,9 @@ const LIVE_SETTING_KEYS = [
   "geoPublicLabProjectId",
   "geoPublicRevision",
   "geoPublicOverlayKey",
+  "geoPublicManifestKey",
+  "geoPublicOverlayMobileKey",
+  "geoPublicOverlayDesktopKey",
   "geoPublicToken",
   "geoPublicPromotedAt",
 ] as const;
@@ -23,10 +29,6 @@ type ProjectRow = {
   publicHost: string | null;
   adminHost: string | null;
 };
-
-function runtime() {
-  return env as unknown as Record<string, unknown>;
-}
 
 async function setting(projectId: string, key: string) {
   const row = await env.DB.prepare(
@@ -48,7 +50,7 @@ async function settingsMap(projectId: string) {
 
 async function project(projectId: string) {
   return env.DB.prepare(
-    "SELECT id,name,slug,public_status AS publicStatus,public_host AS publicHost,admin_host AS adminHost FROM projects WHERE id=? AND status='active' LIMIT 1",
+    "SELECT id,name,slug,public_status AS publicStatus,status,public_host AS publicHost,admin_host AS adminHost FROM projects WHERE id=? AND status='active' LIMIT 1",
   )
     .bind(projectId)
     .first<ProjectRow>();
@@ -105,13 +107,7 @@ function customerMapUrl(source: ProjectRow) {
 }
 
 async function publicMapsKeyConfigured() {
-  const saved = await env.DB.prepare(
-    "SELECT value FROM platform_settings WHERE key='google_maps_browser_key' LIMIT 1",
-  ).first<{ value: string }>();
-  return Boolean(
-    String(saved?.value || "").trim() ||
-      String(runtime().GOOGLE_MAPS_BROWSER_KEY || "").trim(),
-  );
+  return Boolean(await publicGoogleMapsBrowserKey());
 }
 
 async function responseFor(labProjectId: string) {
@@ -228,33 +224,52 @@ export async function POST(request: Request) {
     );
   }
 
-  const snapshot = await env.DB.prepare(
+  const snapshotRow = await env.DB.prepare(
     "SELECT snapshot FROM geo_versions WHERE project_id=? AND version=? LIMIT 1",
   )
     .bind(labProjectId, revision)
     .first<{ snapshot: string }>();
-  if (!snapshot?.snapshot)
+  if (!snapshotRow?.snapshot)
     return Response.json({ error: "Published Geo snapshot missing hai" }, { status: 409 });
+
+  let manifest;
+  try {
+    manifest = buildGeoPublicManifest(
+      JSON.parse(snapshotRow.snapshot) as GeoPublicSnapshot,
+      revision,
+    );
+  } catch (error) {
+    console.warn("Geo public manifest build failed", error);
+    return Response.json(
+      { error: "Published Geo geometry customer map ke liye invalid hai" },
+      { status: 409 },
+    );
+  }
 
   const savedOverlayKey = `projects/${labProjectId}/geo/public-overlay.png`;
   let sourceOverlay = await env.BUCKET.get(savedOverlayKey);
+  let sourceOverlayKey = savedOverlayKey;
   let overlaySource = "saved-public-overlay";
   if (!sourceOverlay) {
-    sourceOverlay = await env.BUCKET.get(
-      `projects/${labProjectId}/mapper/masterplanPublic`,
-    );
+    sourceOverlayKey = `projects/${labProjectId}/mapper/masterplanPublic`;
+    sourceOverlay = await env.BUCKET.get(sourceOverlayKey);
     overlaySource = "masterplan-public-fallback";
   }
   if (!sourceOverlay) {
-    sourceOverlay = await env.BUCKET.get(`projects/${labProjectId}/mapper/masterplan`);
+    sourceOverlayKey = `projects/${labProjectId}/mapper/masterplan`;
+    sourceOverlay = await env.BUCKET.get(sourceOverlayKey);
     overlaySource = "masterplan-canonical-fallback";
   }
   if (!sourceOverlay)
     return Response.json({ error: "Geo live masterplan overlay missing hai" }, { status: 409 });
 
   const token = crypto.randomUUID();
-  const promotedOverlayKey =
-    `projects/${labProjectId}/geo/promoted/${revision}/${token}`;
+  const promotedBaseKey = `projects/${labProjectId}/geo/promoted/${revision}/${token}`;
+  const promotedOverlayKey = `${promotedBaseKey}/overlay-original`;
+  const promotedManifestKey = `${promotedBaseKey}/manifest.json`;
+  const promotedMobileKey = `${promotedBaseKey}/overlay-mobile.webp`;
+  const promotedDesktopKey = `${promotedBaseKey}/overlay-desktop.webp`;
+
   await env.BUCKET.put(promotedOverlayKey, sourceOverlay.body, {
     httpMetadata: sourceOverlay.httpMetadata,
     customMetadata: {
@@ -264,6 +279,36 @@ export async function POST(request: Request) {
       overlaySource,
     },
   });
+  await env.BUCKET.put(promotedManifestKey, JSON.stringify(manifest), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+    customMetadata: {
+      geoRevision: String(revision),
+      promotedAt: now,
+      schemaVersion: String(manifest.schemaVersion),
+    },
+  });
+
+  const variantMetadata = {
+    geoRevision: String(revision),
+    promotedAt: now,
+    overlaySource,
+  };
+  const [mobileReady, desktopReady] = await Promise.all([
+    createGeoOverlayVariant({
+      sourceKey: promotedOverlayKey,
+      targetKey: promotedMobileKey,
+      width: 1800,
+      quality: 82,
+      customMetadata: variantMetadata,
+    }),
+    createGeoOverlayVariant({
+      sourceKey: promotedOverlayKey,
+      targetKey: promotedDesktopKey,
+      width: 3072,
+      quality: 86,
+      customMetadata: variantMetadata,
+    }),
+  ]);
 
   try {
     const values: Array<[string, string]> = [
@@ -271,6 +316,9 @@ export async function POST(request: Request) {
       ["geoPublicLabProjectId", labProjectId],
       ["geoPublicRevision", String(revision)],
       ["geoPublicOverlayKey", promotedOverlayKey],
+      ["geoPublicManifestKey", promotedManifestKey],
+      ["geoPublicOverlayMobileKey", mobileReady ? promotedMobileKey : ""],
+      ["geoPublicOverlayDesktopKey", desktopReady ? promotedDesktopKey : ""],
       ["geoPublicToken", token],
       ["geoPublicPromotedAt", now],
     ];
@@ -282,7 +330,12 @@ export async function POST(request: Request) {
       ),
     );
   } catch (error) {
-    await env.BUCKET.delete(promotedOverlayKey);
+    await Promise.all([
+      env.BUCKET.delete(promotedOverlayKey),
+      env.BUCKET.delete(promotedManifestKey),
+      mobileReady ? env.BUCKET.delete(promotedMobileKey) : Promise.resolve(),
+      desktopReady ? env.BUCKET.delete(promotedDesktopKey) : Promise.resolve(),
+    ]);
     throw error;
   }
 
@@ -290,6 +343,9 @@ export async function POST(request: Request) {
     revision,
     sourceProject: context.source.name,
     overlaySource,
+    manifestPrecomputed: true,
+    mobileOverlayOptimized: mobileReady,
+    desktopOverlayOptimized: desktopReady,
     normalProjectPublishChanged: false,
     plotBusinessStateChanged: false,
   });

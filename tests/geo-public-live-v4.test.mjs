@@ -14,8 +14,20 @@ const publicRoute = readFileSync(
   new URL("../app/api/public-geo/route.ts", import.meta.url),
   "utf8",
 );
-const publicAsset = readFileSync(
+const publicHandler = readFileSync(
+  new URL("../app/api/public-geo/handler.ts", import.meta.url),
+  "utf8",
+);
+const publicManifest = readFileSync(
+  new URL("../app/geo-public-manifest.ts", import.meta.url),
+  "utf8",
+);
+const publicAssetRoute = readFileSync(
   new URL("../app/api/public-geo-masterplan/route.ts", import.meta.url),
+  "utf8",
+);
+const publicAssetHandler = readFileSync(
+  new URL("../app/api/public-geo-masterplan/handler.ts", import.meta.url),
   "utf8",
 );
 const geoMapper = readFileSync(
@@ -46,14 +58,17 @@ test("Geo Lab promotion points customer project at immutable published Geo revis
   assert.match(liveRoute, /geoPublicLabProjectId/);
   assert.match(liveRoute, /geoPublicRevision/);
   assert.match(liveRoute, /geoPublicOverlayKey/);
+  assert.match(liveRoute, /geoPublicManifestKey/);
   assert.match(liveRoute, /geoPublicToken/);
   assert.doesNotMatch(liveRoute, /UPDATE projects SET public_status/);
   assert.doesNotMatch(liveRoute, /UPDATE plots SET/);
 });
 
-test("Promotion freezes an overlay copy instead of exposing mutable Geo Lab mapper assets", () => {
+test("Promotion freezes overlay and precomputes customer geometry manifest", () => {
   assert.match(liveRoute, /geo\/promoted\/\$\{revision\}\/\$\{token\}/);
   assert.match(liveRoute, /env\.BUCKET\.put\(promotedOverlayKey/);
+  assert.match(liveRoute, /env\.BUCKET\.put\(promotedManifestKey/);
+  assert.match(liveRoute, /buildGeoPublicManifest/);
   assert.match(liveRoute, /normalProjectPublishChanged: false/);
   assert.match(liveRoute, /plotBusinessStateChanged: false/);
 });
@@ -68,25 +83,30 @@ test("Mask editor can persist exact transparent live overlay into isolated Geo L
   assert.match(overlayRoute, /sameOrigin/);
 });
 
-test("Public Geo endpoint resolves only published customer project and owned promoted lab snapshot", () => {
-  assert.match(publicRoute, /projectBySlug\(slug\)/);
-  assert.match(publicRoute, /geoPublicEnabled/);
-  assert.match(publicRoute, /validLabLink/);
-  assert.match(publicRoute, /geo_versions WHERE project_id=\? AND version=\?/);
-  assert.match(publicRoute, /applyGeoFineAlignment/);
-  assert.match(publicRoute, /mapNormalizedPointToGeo/);
-  assert.doesNotMatch(publicRoute, /\bnotes\b/);
+test("Public Geo endpoint resolves owned promoted state and reuses immutable manifest", () => {
+  assert.match(publicRoute, /export \{ GET \} from "\.\/handler"/);
+  assert.match(publicHandler, /projectBySlug\(slug\)/);
+  assert.match(publicHandler, /geoPublicEnabled/);
+  assert.match(publicHandler, /validLabLink/);
+  assert.match(publicHandler, /parseGeoPublicManifest/);
+  assert.match(publicHandler, /geo_versions WHERE project_id=\? AND version=\?/);
+  assert.match(publicManifest, /applyGeoFineAlignment/);
+  assert.match(publicManifest, /mapNormalizedPointToGeo/);
+  assert.doesNotMatch(publicHandler, /\bnotes\b/);
 });
 
-test("Public masterplan route accepts only promoted R2 key under the owned Geo Lab prefix", () => {
-  assert.match(publicAsset, /expectedPrefix = `projects\/\$\{labProjectId\}\/geo\/promoted\//);
-  assert.match(publicAsset, /overlayKey\.startsWith\(expectedPrefix\)/);
-  assert.match(publicAsset, /requestedToken !== token/);
+test("Public masterplan route accepts only owned promoted R2 keys and immutable token", () => {
+  assert.match(publicAssetRoute, /export \{ GET \} from "\.\/handler"/);
+  assert.match(publicAssetHandler, /promotedKeyAllowed/);
+  assert.match(publicAssetHandler, /projects\/\$\{labProjectId\}\/geo\/promoted\//);
+  assert.match(publicAssetHandler, /requestedToken !== token/);
+  assert.match(publicAssetHandler, /variant === "mobile"/);
 });
 
 test("Customer map page uses Google Hybrid labels plus projective masterplan and clickable polygons", () => {
   assert.match(page, /isPlatformAccessHost/);
   assert.match(page, /projectBySlug/);
+  assert.match(page, /publicGoogleMapsBrowserKey/);
   assert.match(client, /mapTypeId: "hybrid"/);
   assert.match(client, /clickableIcons: true/);
   assert.match(client, /new google\.maps\.OverlayView/);

@@ -24,12 +24,12 @@ test("public Google map is trapped inside its own stacking context", () => {
   assert.match(css, /\.loading,[\s\S]*\.error\s*\{[\s\S]*z-index:\s*60;/);
 });
 
-test("loading stays visible until Google satellite tiles really load", () => {
+test("map becomes usable before all Google satellite tiles finish", () => {
   assert.match(client, /const \[mapReady, setMapReady\] = useState\(false\)/);
+  assert.match(client, /map\.fitBounds\(bounds, 34\);[\s\S]*setMapReady\(true\)/);
   assert.match(client, /map\.addListener\("tilesloaded"/);
-  assert.match(client, /setMapReady\(true\)/);
-  assert.match(client, /!error && \(!data \|\| !mapReady\)/);
-  assert.match(client, /Google Satellite tiles load ho rahe hain/);
+  assert.match(client, /performance\.mark\?\.\("rekixo-geo-tiles-loaded"\)/);
+  assert.doesNotMatch(client, /Satellite tiles 20 sec me load nahi hue/);
 });
 
 test("public Geo payload is validated before React renders it", () => {
@@ -38,10 +38,15 @@ test("public Geo payload is validated before React renders it", () => {
   assert.match(client, /return validatePublicGeoData\(payload\)/);
 });
 
-test("Maps authorization and stalled tiles surface an error instead of blank white UI", () => {
+test("Maps authorization failure still surfaces instead of blank UI", () => {
   assert.match(client, /gm_authFailure/);
   assert.match(client, /Google Maps API key\/referrer authorization fail hui/);
-  assert.match(client, /Satellite tiles 20 sec me load nahi hue/);
+});
+
+test("plot polygons are rendered progressively instead of blocking first interaction", () => {
+  assert.match(client, /PLOT_RENDER_CHUNK_SIZE = 24/);
+  assert.match(client, /function appendPlotChunk/);
+  assert.match(client, /window\.requestAnimationFrame\(appendPlotChunk\)/);
 });
 
 test("route-level runtime errors keep a visible dark recovery screen", () => {
