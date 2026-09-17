@@ -23,8 +23,14 @@ test("customer map exposes Google Maps open and driving directions actions", () 
 
 test("destination is derived from published masterplan WGS84 corners", () => {
   assert.match(client, /const corners = data\.masterplanCorners/);
-  assert.match(client, /corners\.reduce\(\(sum, \[lng\]\) => sum \+ lng, 0\)/);
-  assert.match(client, /corners\.reduce\(\(sum, \[, lat\]\) => sum \+ lat, 0\)/);
+  assert.match(
+    client,
+    /corners\.reduce\(\(sum,\s*\[([A-Za-z_$][\w$]*)\]\)\s*=>\s*sum\s*\+\s*\1,\s*0\)/,
+  );
+  assert.match(
+    client,
+    /corners\.reduce\(\(sum,\s*\[,\s*([A-Za-z_$][\w$]*)\]\)\s*=>\s*sum\s*\+\s*\1,\s*0\)/,
+  );
   assert.match(
     client,
     /const destination = encodeURIComponent\([\s\S]*lat\.toFixed\(7\)[\s\S]*lng\.toFixed\(7\)[\s\S]*\);/,
