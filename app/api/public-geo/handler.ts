@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { projectBySlug } from "../../project-context";
 import {
   buildGeoPublicManifest,
@@ -18,6 +18,30 @@ const LIVE_SETTING_KEYS = [
   "geoPublicOverlayDesktopKey",
   "geoPublicToken",
 ] as const;
+
+const manifestMemory = new Map<string, GeoPublicManifest>();
+const MAX_HOT_MANIFESTS = 12;
+
+function rememberManifest(key: string, manifest: GeoPublicManifest) {
+  manifestMemory.delete(key);
+  manifestMemory.set(key, manifest);
+  while (manifestMemory.size > MAX_HOT_MANIFESTS) {
+    const oldest = manifestMemory.keys().next().value as string | undefined;
+    if (!oldest) break;
+    manifestMemory.delete(oldest);
+  }
+}
+
+function edgeCache() {
+  return (caches as unknown as { default: Cache }).default;
+}
+
+function publicGeoCacheKey(request: Request, slug: string) {
+  const url = new URL(request.url);
+  url.search = "";
+  url.searchParams.set("projectSlug", slug);
+  return new Request(url.toString(), { method: "GET" });
+}
 
 async function sourceLiveSettings(projectId: string) {
   const rows = await env.DB.prepare(
@@ -61,11 +85,19 @@ async function loadPublicManifest(options: {
       ? options.configuredManifestKey
       : fallbackKey;
 
+  const hot = manifestMemory.get(candidate);
+  if (hot && hot.revision === options.revision) {
+    rememberManifest(candidate, hot);
+    return { manifest: hot, source: "memory" as const };
+  }
+
   if (promotedKeyAllowed(candidate, options.labProjectId)) {
     const object = await env.BUCKET.get(candidate);
     if (object) {
       try {
-        return { manifest: parseGeoPublicManifest(await object.text(), options.revision), source: "r2" as const };
+        const manifest = parseGeoPublicManifest(await object.text(), options.revision);
+        rememberManifest(candidate, manifest);
+        return { manifest, source: "r2" as const };
       } catch (error) {
         console.warn("Cached Geo public manifest invalid, rebuilding", error);
       }
@@ -80,19 +112,20 @@ async function loadPublicManifest(options: {
   if (!version?.snapshot) throw new Error("Published Geo snapshot unavailable");
 
   const manifest = buildGeoPublicManifest(JSON.parse(version.snapshot) as GeoPublicSnapshot, options.revision);
+  rememberManifest(candidate, manifest);
   if (promotedKeyAllowed(candidate, options.labProjectId)) {
-    try {
-      await env.BUCKET.put(candidate, JSON.stringify(manifest), {
+    waitUntil(
+      env.BUCKET.put(candidate, JSON.stringify(manifest), {
         httpMetadata: { contentType: "application/json; charset=utf-8" },
         customMetadata: {
           geoRevision: String(options.revision),
           schemaVersion: String(manifest.schemaVersion),
           backfilled: "1",
         },
-      });
-    } catch (error) {
-      console.warn("Geo public manifest backfill skipped", error);
-    }
+      }).catch((error) => {
+        console.warn("Geo public manifest backfill skipped", error);
+      }),
+    );
   }
   return { manifest, source: "computed" as const };
 }
@@ -143,6 +176,11 @@ export async function GET(request: Request) {
     const slug = url.searchParams.get("projectSlug")?.trim() || "";
     if (!slug) return Response.json({ error: "Project slug required" }, { status: 400 });
 
+    const cache = edgeCache();
+    const cacheKey = publicGeoCacheKey(request, slug);
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached;
+
     const source = await projectBySlug(slug);
     if (!source) return Response.json({ error: "Published project nahi mila" }, { status: 404 });
 
@@ -185,7 +223,7 @@ export async function GET(request: Request) {
       `/api/public-geo-masterplan?projectSlug=${encodeURIComponent(source.slug)}` +
       `&v=${encodeURIComponent(token)}`;
 
-    return Response.json(
+    const response = Response.json(
       {
         schemaVersion: 2,
         project: { id: source.id, name: source.name, slug: source.slug },
@@ -204,7 +242,7 @@ export async function GET(request: Request) {
       },
       {
         headers: {
-          "cache-control": "public,max-age=0,s-maxage=10,stale-while-revalidate=30",
+          "cache-control": "public,max-age=5,stale-while-revalidate=15",
           "server-timing":
             `geo-manifest;dur=${manifestMs};desc=\"${manifestResult.source}\", total;dur=${Date.now() - startedAt}`,
           "x-rekixo-project": source.id,
@@ -214,6 +252,12 @@ export async function GET(request: Request) {
         },
       },
     );
+    waitUntil(
+      cache.put(cacheKey, response.clone()).catch((error) => {
+        console.warn("Public Geo edge cache write skipped", error);
+      }),
+    );
+    return response;
   } catch (error) {
     console.error("Public Geo map load failed", error);
     return Response.json(
