@@ -24,6 +24,11 @@ type PublicGeoData = {
   revision: number;
   maps: { enabled: boolean; apiKey: string | null };
   masterplanUrl: string;
+  masterplanUrls?: {
+    original?: string;
+    mobile?: string;
+    desktop?: string;
+  };
   masterplanCorners: [number, number][];
   bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number };
   features: PublicFeature[];
@@ -187,17 +192,11 @@ function validatePublicGeoData(payload: PublicGeoData) {
 
 function googleMapsLinks(data: PublicGeoData) {
   const corners = data.masterplanCorners;
-  const lng =
-    corners.reduce((sum, [lng]) => sum + lng, 0) / corners.length;
-  const lat =
-    corners.reduce((sum, [, lat]) => sum + lat, 0) / corners.length;
-  const destination = encodeURIComponent(
-    `${lat.toFixed(7)},${lng.toFixed(7)}`,
-  );
-
+  const lng = corners.reduce((sum, [value]) => sum + value, 0) / corners.length;
+  const lat = corners.reduce((sum, [, value]) => sum + value, 0) / corners.length;
+  const destination = encodeURIComponent(`${lat.toFixed(7)},${lng.toFixed(7)}`);
   return {
-    open:
-      `https://www.google.com/maps/search/?api=1&query=${destination}`,
+    open: `https://www.google.com/maps/search/?api=1&query=${destination}`,
     directions:
       `https://www.google.com/maps/dir/?api=1&destination=${destination}` +
       "&travelmode=driving&dir_action=navigate",
@@ -210,8 +209,15 @@ function plotStyle(status: string) {
   return { fillColor: "#18b968", strokeColor: "#63e6ad" };
 }
 
+function masterplanUrlForViewport(data: PublicGeoData) {
+  if (window.innerWidth <= 900)
+    return data.masterplanUrls?.mobile || data.masterplanUrl;
+  return data.masterplanUrls?.desktop || data.masterplanUrl;
+}
+
 const MOBILE_OVERLAY_MAX_DIMENSION = 2304;
 const DESKTOP_OVERLAY_MAX_DIMENSION = 3072;
+const PLOT_RENDER_CHUNK_SIZE = 24;
 
 function addMasterplanOverlay(
   google: GoogleRoot,
@@ -232,7 +238,6 @@ function addMasterplanOverlay(
     drawFrame = window.requestAnimationFrame(() => {
       drawFrame = null;
       if (!host || !surface || !surfaceWidth || !surfaceHeight) return;
-
       try {
         const projection = overlay.getProjection();
         if (!projection) return;
@@ -240,7 +245,6 @@ function addMasterplanOverlay(
           projection.fromLatLngToDivPixel(new google.maps.LatLng(lat, lng)),
         );
         if (target.length !== 4 || target.some((point) => !point)) return;
-
         const source: MapperPoint[] = [
           [0, 0],
           [1, 0],
@@ -253,11 +257,7 @@ function addMasterplanOverlay(
             target: [target[index]!.x, target[index]!.y] as MapperPoint,
           })),
         );
-        host.style.transform = cssProjectiveTransform(
-          matrix,
-          surfaceWidth,
-          surfaceHeight,
-        );
+        host.style.transform = cssProjectiveTransform(matrix, surfaceWidth, surfaceHeight);
         host.style.visibility = "visible";
       } catch (error) {
         host.style.visibility = "hidden";
@@ -277,16 +277,11 @@ function addMasterplanOverlay(
 
   const prepareCompositorSurface = (image: HTMLImageElement) => {
     if (!host || !image.naturalWidth || !image.naturalHeight) return;
-
-    const largestDimension = Math.max(
-      image.naturalWidth,
-      image.naturalHeight,
-    );
+    const largestDimension = Math.max(image.naturalWidth, image.naturalHeight);
     const maxDimension =
       window.innerWidth <= 900
         ? MOBILE_OVERLAY_MAX_DIMENSION
         : DESKTOP_OVERLAY_MAX_DIMENSION;
-
     if (largestDimension <= maxDimension) {
       useOriginalImage(image);
       return;
@@ -296,25 +291,19 @@ function addMasterplanOverlay(
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-
     const context = canvas.getContext("2d", { alpha: true });
     if (!context) {
       useOriginalImage(image);
       return;
     }
-
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
     surface = canvas;
     surfaceWidth = canvas.width;
     surfaceHeight = canvas.height;
     host.replaceChildren(canvas);
-
-    // Promoted PNG remains the immutable source of truth. This smaller canvas
-    // is browser-only and only reduces GPU/compositor work during pan/zoom.
     sourceImage = null;
     draw();
   };
@@ -322,37 +311,29 @@ function addMasterplanOverlay(
   overlay.onAdd = () => {
     host = document.createElement("div");
     host.className = styles.masterplanOverlay;
-
     const image = document.createElement("img");
     sourceImage = image;
     image.alt = "Project masterplan";
     image.draggable = false;
     image.decoding = "async";
-    // Let Google Hybrid tiles/labels win the first-load network race.
     image.fetchPriority = "low";
     image.onload = () => prepareCompositorSurface(image);
     image.onerror = () => {
       if (host) host.style.visibility = "hidden";
       console.warn("Public masterplan overlay image load failed");
     };
-
     const panes = overlay.getPanes();
     if (!panes?.overlayLayer) {
       host.style.visibility = "hidden";
-      console.warn("Public masterplan overlay pane unavailable");
       return;
     }
-
     panes.overlayLayer.appendChild(host);
     image.src = url;
   };
 
   overlay.draw = draw;
   overlay.onRemove = () => {
-    if (drawFrame !== null) {
-      window.cancelAnimationFrame(drawFrame);
-      drawFrame = null;
-    }
+    if (drawFrame !== null) window.cancelAnimationFrame(drawFrame);
     if (sourceImage) {
       sourceImage.onload = null;
       sourceImage.onerror = null;
@@ -361,9 +342,8 @@ function addMasterplanOverlay(
     host?.remove();
     sourceImage = null;
     surface = null;
-    surfaceWidth = 0;
-    surfaceHeight = 0;
     host = null;
+    drawFrame = null;
   };
   overlay.setMap(map);
   return overlay;
@@ -373,15 +353,11 @@ function plotInfoCard(feature: PublicFeature) {
   const card = document.createElement("div");
   card.className = styles.infoCard;
   const title = document.createElement("strong");
-  title.textContent = feature.linkedPlotId
-    ? `Plot ${feature.linkedPlotId}`
-    : feature.name;
+  title.textContent = feature.linkedPlotId ? `Plot ${feature.linkedPlotId}` : feature.name;
   card.appendChild(title);
-
   const status = document.createElement("span");
   status.textContent = `Status: ${feature.status[0].toUpperCase()}${feature.status.slice(1)}`;
   card.appendChild(status);
-
   if (feature.sqft > 0) {
     const area = document.createElement("span");
     area.textContent = `Area: ${feature.sqft.toLocaleString("en-IN")} Sq.Ft`;
@@ -400,12 +376,47 @@ function plotInfoCard(feature: PublicFeature) {
   return card;
 }
 
+function createPlotPolygon(
+  google: GoogleRoot,
+  map: MapInstance,
+  info: InfoWindow,
+  feature: PublicFeature,
+) {
+  const style = plotStyle(feature.status);
+  const polygon = new google.maps.Polygon({
+    map,
+    paths: feature.path.map(([lng, lat]) => ({ lat, lng })),
+    clickable: Boolean(feature.linkedPlotId),
+    fillColor: style.fillColor,
+    fillOpacity: feature.linkedPlotId ? 0.09 : 0.03,
+    strokeColor: style.strokeColor,
+    strokeOpacity: feature.linkedPlotId ? 0.95 : 0.55,
+    strokeWeight: feature.linkedPlotId ? 1.6 : 1.2,
+    zIndex: feature.linkedPlotId ? 30 : 20,
+  });
+  if (feature.linkedPlotId) {
+    polygon.addListener("click", (event) => {
+      info.setContent(plotInfoCard(feature));
+      const fallback = feature.path[0];
+      if (event.latLng) {
+        info.setPosition({ lat: event.latLng.lat(), lng: event.latLng.lng() });
+      } else if (fallback) {
+        info.setPosition({ lat: fallback[1], lng: fallback[0] });
+      }
+      info.open({ map });
+    });
+  }
+  return polygon;
+}
+
 export default function GeoPublicMap({
   projectName,
   projectSlug,
+  mapsApiKey,
 }: {
   projectName: string;
   projectSlug: string;
+  mapsApiKey: string | null;
 }) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const [data, setData] = useState<PublicGeoData | null>(null);
@@ -415,10 +426,18 @@ export default function GeoPublicMap({
   useEffect(() => {
     ensureGoogleMapsConnectionHints();
     const controller = new AbortController();
-    fetch(
-      `/api/public-geo?projectSlug=${encodeURIComponent(projectSlug)}`,
-      { cache: "no-store", signal: controller.signal },
-    )
+
+    if (mapsApiKey) {
+      void loadGoogleMaps(mapsApiKey).catch((reason) => {
+        if (controller.signal.aborted) return;
+        setError(reason instanceof Error ? reason.message : "Google Satellite load fail hui");
+      });
+    }
+
+    fetch(`/api/public-geo?projectSlug=${encodeURIComponent(projectSlug)}`, {
+      cache: "default",
+      signal: controller.signal,
+    })
       .then(async (response) => {
         const payload = (await response.json()) as PublicGeoData;
         if (!response.ok) throw new Error(payload.error || "Satellite map load nahi hua");
@@ -434,21 +453,22 @@ export default function GeoPublicMap({
         setError(reason instanceof Error ? reason.message : "Satellite map load nahi hua");
       });
     return () => controller.abort();
-  }, [projectSlug]);
+  }, [mapsApiKey, projectSlug]);
 
   useEffect(() => {
     if (!data || !mapNodeRef.current) return;
-    if (!data.maps.enabled || !data.maps.apiKey) {
+    const effectiveMapsKey = mapsApiKey || data.maps.apiKey;
+    if (!effectiveMapsKey) {
       setError("Google Satellite key public website ke liye configured nahi hai");
       return;
     }
 
     let cancelled = false;
     let overlay: OverlayView | null = null;
-    let polygons: Polygon[] = [];
+    const polygons: Polygon[] = [];
     let info: InfoWindow | null = null;
     let tilesListener: Listener | null = null;
-    let tileTimer: number | null = null;
+    let polygonFrame: number | null = null;
     const previousAuthFailure = win().gm_authFailure;
 
     setMapReady(false);
@@ -459,18 +479,15 @@ export default function GeoPublicMap({
       setError("Google Maps API key/referrer authorization fail hui");
     };
 
-    loadGoogleMaps(data.maps.apiKey)
+    loadGoogleMaps(effectiveMapsKey)
       .then((google) => {
         if (cancelled || !mapNodeRef.current) return;
         const map = new google.maps.Map(mapNodeRef.current, {
-          // Hybrid preserves satellite imagery while allowing Google's
-          // road/highway/locality/place labels to render around the project.
           mapTypeId: "hybrid",
           disableDefaultUI: false,
           streetViewControl: false,
           mapTypeControl: true,
           fullscreenControl: true,
-          // Keep Google's available POI icons/labels interactive.
           clickableIcons: true,
           gestureHandling: "greedy",
         });
@@ -478,62 +495,37 @@ export default function GeoPublicMap({
           { lat: data.bounds.minLat, lng: data.bounds.minLng },
           { lat: data.bounds.maxLat, lng: data.bounds.maxLng },
         );
+        map.fitBounds(bounds, 34);
 
+        // Do not block first usable paint on every satellite tile. tilesloaded is
+        // telemetry only; the map becomes usable as soon as the Map instance exists.
+        setMapReady(true);
         tilesListener = map.addListener("tilesloaded", () => {
           if (cancelled) return;
-          if (tileTimer !== null) {
-            window.clearTimeout(tileTimer);
-            tileTimer = null;
-          }
-          setError("");
-          setMapReady(true);
+          performance.mark?.("rekixo-geo-tiles-loaded");
         });
-        tileTimer = window.setTimeout(() => {
-          if (cancelled) return;
-          setMapReady(false);
-          setError(
-            "Satellite tiles 20 sec me load nahi hue. Maps key/referrer aur network check karein.",
-          );
-        }, 20_000);
-
-        map.fitBounds(bounds, 34);
 
         overlay = addMasterplanOverlay(
           google,
           map,
-          data.masterplanUrl,
+          masterplanUrlForViewport(data),
           data.masterplanCorners,
         );
 
         info = new google.maps.InfoWindow();
-        polygons = data.features.map((feature) => {
-          const style = plotStyle(feature.status);
-          const polygon = new google.maps.Polygon({
-            map,
-            paths: feature.path.map(([lng, lat]) => ({ lat, lng })),
-            clickable: Boolean(feature.linkedPlotId),
-            fillColor: style.fillColor,
-            fillOpacity: feature.linkedPlotId ? 0.09 : 0.03,
-            strokeColor: style.strokeColor,
-            strokeOpacity: feature.linkedPlotId ? 0.95 : 0.55,
-            strokeWeight: feature.linkedPlotId ? 1.6 : 1.2,
-            zIndex: feature.linkedPlotId ? 30 : 20,
-          });
-          if (feature.linkedPlotId) {
-            polygon.addListener("click", (event) => {
-              info?.setContent(plotInfoCard(feature));
-              const latLng = event.latLng;
-              const fallback = feature.path[0];
-              if (latLng) {
-                info?.setPosition({ lat: latLng.lat(), lng: latLng.lng() });
-              } else if (fallback) {
-                info?.setPosition({ lat: fallback[1], lng: fallback[0] });
-              }
-              info?.open({ map });
-            });
+        let nextFeatureIndex = 0;
+        const appendPlotChunk = () => {
+          polygonFrame = null;
+          if (cancelled || !info) return;
+          const end = Math.min(nextFeatureIndex + PLOT_RENDER_CHUNK_SIZE, data.features.length);
+          for (; nextFeatureIndex < end; nextFeatureIndex += 1) {
+            polygons.push(createPlotPolygon(google, map, info, data.features[nextFeatureIndex]!));
           }
-          return polygon;
-        });
+          if (nextFeatureIndex < data.features.length) {
+            polygonFrame = window.requestAnimationFrame(appendPlotChunk);
+          }
+        };
+        polygonFrame = window.requestAnimationFrame(appendPlotChunk);
       })
       .catch((reason) => {
         if (!cancelled)
@@ -542,14 +534,14 @@ export default function GeoPublicMap({
 
     return () => {
       cancelled = true;
-      if (tileTimer !== null) window.clearTimeout(tileTimer);
+      if (polygonFrame !== null) window.cancelAnimationFrame(polygonFrame);
       tilesListener?.remove?.();
       overlay?.setMap(null);
       polygons.forEach((polygon) => polygon.setMap(null));
       info?.close();
       win().gm_authFailure = previousAuthFailure;
     };
-  }, [data]);
+  }, [data, mapsApiKey]);
 
   const googleLinks = data ? googleMapsLinks(data) : null;
 
@@ -568,20 +560,10 @@ export default function GeoPublicMap({
 
       {googleLinks && mapReady ? (
         <nav className={styles.mapActions} aria-label="External map actions">
-          <a
-            href={googleLinks.open}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Open project location in Google Maps"
-          >
+          <a href={googleLinks.open} target="_blank" rel="noopener noreferrer">
             Open in Google Maps
           </a>
-          <a
-            href={googleLinks.directions}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Get driving directions to project"
-          >
+          <a href={googleLinks.directions} target="_blank" rel="noopener noreferrer">
             Directions
           </a>
         </nav>
@@ -598,9 +580,7 @@ export default function GeoPublicMap({
 
       {!error && (!data || !mapReady) ? (
         <div className={styles.loading}>
-          {data
-            ? "Google Satellite tiles load ho rahe hain…"
-            : "Satellite map data load ho raha hai…"}
+          {data ? "Google Satellite initialize ho raha hai…" : "Satellite map data load ho raha hai…"}
         </div>
       ) : null}
       {error ? (
