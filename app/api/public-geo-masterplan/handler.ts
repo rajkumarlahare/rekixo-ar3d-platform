@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env, waitUntil } from "cloudflare:workers";
 import { projectBySlug } from "../../project-context";
 import { createGeoOverlayVariant } from "../../geo-public-image";
 
@@ -10,6 +10,24 @@ const LIVE_SETTING_KEYS = [
   "geoPublicOverlayDesktopKey",
   "geoPublicToken",
 ] as const;
+
+function edgeCache() {
+  return (caches as unknown as { default: Cache }).default;
+}
+
+function masterplanCacheKey(
+  request: Request,
+  slug: string,
+  token: string,
+  variant: "mobile" | "desktop" | null,
+) {
+  const url = new URL(request.url);
+  url.search = "";
+  url.searchParams.set("projectSlug", slug);
+  url.searchParams.set("v", token);
+  if (variant) url.searchParams.set("variant", variant);
+  return new Request(url.toString(), { method: "GET" });
+}
 
 async function liveSettings(projectId: string) {
   const rows = await env.DB.prepare(
@@ -99,6 +117,12 @@ export async function GET(request: Request) {
     requestedVariant === "mobile" || requestedVariant === "desktop"
       ? requestedVariant
       : null;
+
+  const cache = edgeCache();
+  const cacheKey = masterplanCacheKey(request, source.slug, token, variant);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
   const objectKey = variant
     ? await optimizedVariantKey({ live, labProjectId, overlayKey, variant })
     : overlayKey;
@@ -117,5 +141,14 @@ export async function GET(request: Request) {
     "x-rekixo-geo-overlay-variant": objectKey === overlayKey ? "original" : variant || "original",
   });
   if (object.httpEtag) headers.set("etag", object.httpEtag);
-  return new Response(object.body, { headers });
+  const response = new Response(object.body, { headers });
+
+  if (requestedToken) {
+    waitUntil(
+      cache.put(cacheKey, response.clone()).catch((error) => {
+        console.warn("Geo masterplan edge cache write skipped", error);
+      }),
+    );
+  }
+  return response;
 }
