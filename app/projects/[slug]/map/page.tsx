@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { preconnect } from "react-dom";
 import { panelMode } from "../../../admin-auth";
 import { publicGoogleMapsBrowserKey } from "../../../google-maps-config";
 import { isPlatformAccessHost, projectBySlug } from "../../../project-context";
@@ -28,6 +29,11 @@ export default async function PublicGeoMapPage({
   params: Promise<{ slug: string }>;
 }) {
   if (panelMode() === "super") notFound();
+
+  // Emit connection hints in the server response so DNS/TLS can start before
+  // client hydration and before either Maps JS or public Geo data is requested.
+  preconnect("https://maps.googleapis.com");
+  preconnect("https://maps.gstatic.com", { crossOrigin: "anonymous" });
 
   const { slug } = await params;
   const host = (await headers()).get("host") || "";
