@@ -45,7 +45,10 @@ test("Maps authorization failure still surfaces instead of blank UI", () => {
 
 test("plot polygons are rendered progressively instead of blocking first interaction", () => {
   assert.match(client, /PLOT_RENDER_CHUNK_SIZE = 24/);
-  assert.match(client, /function appendPlotChunk/);
+  assert.match(
+    client,
+    /(?:function\s+appendPlotChunk|const\s+appendPlotChunk\s*=\s*\(\)\s*=>)/,
+  );
   assert.match(client, /window\.requestAnimationFrame\(appendPlotChunk\)/);
 });
 
