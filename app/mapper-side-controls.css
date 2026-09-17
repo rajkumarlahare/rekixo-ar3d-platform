@@ -1,0 +1,101 @@
+/* REKIXO_MAPPER_SIDE_CONTROLS_VISIBLE_V1
+   Keep semantic Front/Back/Depth controls reachable while the masterplan is
+   zoomed to precision levels. The mapper image can become many viewports tall
+   at 1800%; these controls must therefore be viewport-anchored on touch devices
+   instead of living below the scaled image in normal document flow. */
+
+@media (max-width: 700px), (any-pointer: coarse), (hover: none) {
+  .mapper-v4-canvas .plot-side-assigner {
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
+    z-index: 10050 !important;
+    width: min(calc(100vw - 12px), 560px) !important;
+    max-height: min(42dvh, 250px);
+    margin: 0 !important;
+    padding: 8px !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(-50%);
+    border-color: #395170 !important;
+    background: #071423f4 !important;
+    box-shadow: 0 14px 42px #000c, 0 0 0 1px #ffffff0a;
+    backdrop-filter: blur(12px);
+  }
+
+  .mapper-v4-canvas .plot-side-assigner-head {
+    gap: 7px;
+  }
+
+  .mapper-v4-canvas .plot-side-assigner-head b {
+    font-size: 12px;
+  }
+
+  .mapper-v4-canvas .plot-side-assigner-head span {
+    margin-top: 1px;
+    font-size: 9px;
+  }
+
+  .mapper-v4-canvas .plot-side-assigner-head > button {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .mapper-v4-canvas .plot-side-role-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 5px;
+    margin-top: 7px;
+  }
+
+  .mapper-v4-canvas .plot-side-role-grid button {
+    min-height: 46px;
+    padding: 6px 7px;
+    border-radius: 9px;
+  }
+
+  .mapper-v4-canvas .plot-side-role-grid strong {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .mapper-v4-canvas .plot-side-role-grid small {
+    font-size: 8px;
+    white-space: nowrap;
+  }
+
+  .mapper-v4-canvas .plot-side-assigner-help {
+    display: none;
+  }
+
+  /* Leave scroll room behind the dock so the last visible image area and the
+     sticky action bar are not permanently covered by semantic controls. */
+  .mapper-v4-canvas:has(.plot-side-assigner) {
+    scroll-padding-bottom: 190px;
+  }
+}
+
+/* Fullscreen/focus mode gets the same guarantee on mouse/pen devices too. */
+.mapper-v4-canvas:fullscreen .plot-side-assigner {
+  position: fixed !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
+  z-index: 10050 !important;
+  width: min(calc(100vw - 16px), 620px) !important;
+  margin: 0 !important;
+  transform: translateX(-50%);
+  box-shadow: 0 14px 42px #000c, 0 0 0 1px #ffffff0a;
+}
+
+/* Very narrow phones get two columns instead of crushed labels. */
+@media (max-width: 360px) {
+  .mapper-v4-canvas .plot-side-role-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .mapper-v4-canvas .plot-side-assigner {
+    max-height: min(48dvh, 300px);
+  }
+}
