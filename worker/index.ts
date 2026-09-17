@@ -124,16 +124,99 @@ function isSensitiveClientPath(pathname: string) {
   );
 }
 
-function isPublicProjectRuntimeAsset(pathname: string) {
-  const canonical = pathname.startsWith("/__rekixo/")
+function canonicalRuntimePath(pathname: string) {
+  return pathname.startsWith("/__rekixo/")
     ? pathname.slice("/__rekixo".length)
     : pathname;
+}
+
+function isPublicProjectRuntimeAsset(pathname: string) {
+  const canonical = canonicalRuntimePath(pathname);
   return (
     canonical === "/project/index.html" ||
     canonical === "/project/project-geometry.js" ||
     canonical === "/project/three-view.js" ||
     canonical === "/project/plots-data.js"
   );
+}
+
+function isPublicProjectIndex(pathname: string) {
+  return canonicalRuntimePath(pathname) === "/project/index.html";
+}
+
+async function publicRuntimeProjectId(url: URL, env: Env) {
+  const explicitProjectId = String(url.searchParams.get("projectId") || "").trim();
+  if (explicitProjectId) return explicitProjectId;
+
+  const slug = String(url.searchParams.get("projectSlug") || "").trim();
+  if (slug) {
+    const project = await env.DB.prepare(
+      "SELECT id FROM projects WHERE slug=? AND status='active' LIMIT 1",
+    )
+      .bind(slug)
+      .first<{ id: string }>();
+    if (project?.id) return project.id;
+  }
+
+  const host = normalizedHost(url.hostname);
+  if (!host) return null;
+
+  const domain = await env.DB.prepare(
+    "SELECT project_id AS projectId FROM project_domains WHERE host=? AND status='active' AND kind IN ('public','both') LIMIT 1",
+  )
+    .bind(host)
+    .first<{ projectId: string }>();
+  if (domain?.projectId) return domain.projectId;
+
+  const legacy = await env.DB.prepare(
+    "SELECT id FROM projects WHERE public_host=? AND status='active' LIMIT 1",
+  )
+    .bind(host)
+    .first<{ id: string }>();
+  return legacy?.id || null;
+}
+
+async function applyPublicCustomerActionPolicy(
+  response: Response,
+  request: Request,
+  env: Env,
+) {
+  if (request.method !== "GET") return response;
+  const url = new URL(request.url);
+  if (!isPublicProjectIndex(url.pathname)) return response;
+  if (!(response.headers.get("content-type") || "").toLowerCase().includes("text/html"))
+    return response;
+
+  const projectId = await publicRuntimeProjectId(url, env);
+  if (!projectId) return response;
+
+  const setting = await env.DB.prepare(
+    "SELECT value FROM settings WHERE project_id=? AND key='customerCallEnabled' LIMIT 1",
+  )
+    .bind(projectId)
+    .first<{ value: string }>();
+
+  // Backward-compatible default is ON. Only an explicit project value of 0
+  // removes public calling. WhatsApp remains available and expands full-width.
+  if (setting?.value !== "0" || !response.body) return response;
+
+  const policyStyle =
+    '<style id="rekixo-customer-call-disabled">#callTop,#callBtn{display:none!important}.actions{grid-template-columns:minmax(0,1fr)!important}</style>';
+  const source = await response.text();
+  const body = source.includes("</head>")
+    ? source.replace("</head>", `${policyStyle}</head>`)
+    : `${policyStyle}${source}`;
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  headers.delete("etag");
+  headers.set("cache-control", "no-cache");
+
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 const worker = {
@@ -185,6 +268,8 @@ const worker = {
       // browser never escapes to the boss/Vercel asset namespace.
       response = await rewriteSharedAssets(response);
     }
+
+    response = await applyPublicCustomerActionPolicy(response, request, env);
 
     const secured = new Response(response.body, response);
     secured.headers.set("x-content-type-options", "nosniff");

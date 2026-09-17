@@ -15,6 +15,7 @@ import ClientAdminManager from "./client-admin-manager";
 import GeoLabClone from "./geo-lab-clone";
 import GeoMapper from "./geo-mapper";
 import PlotMapper from "./plot-mapper";
+import ProjectCustomerActionsManager from "./project-customer-actions-manager";
 import ProjectDomainManager from "./project-domain-manager";
 import ProjectPublishPanel from "./project-publish-panel";
 import ProjectProfileManager from "./project-profile-manager";
@@ -114,7 +115,7 @@ export default function SuperAdminDashboard({
     tab === "clients"
       ? "Create projects, assign client access and manage domains."
       : tab === "profile"
-        ? "One canonical contact profile — Super Admin, Client Admin aur public site sab isi data ko use karte hain."
+        ? "One canonical contact profile plus project-wise customer actions — Super Admin controls what the public site exposes."
         : tab === "mapper"
           ? "Company masterplan से client website के clickable plots तैयार करें।"
           : tab === "geo"
@@ -201,6 +202,11 @@ export default function SuperAdminDashboard({
               <>
                 <ProjectProfileManager
                   key={projectId}
+                  projectId={projectId}
+                  notify={notify}
+                />
+                <ProjectCustomerActionsManager
+                  key={`customer-actions:${projectId}`}
                   projectId={projectId}
                   notify={notify}
                 />

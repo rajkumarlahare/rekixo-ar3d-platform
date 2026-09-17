@@ -18,6 +18,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   "plotStatusBookedColor",
   "plotStatusSoldColor",
   "pricingEnabled",
+  "customerCallEnabled",
   "publicInitialViewMode",
   "publicInitialFocusX",
   "publicInitialFocusY",
