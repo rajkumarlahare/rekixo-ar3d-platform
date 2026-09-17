@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { panelMode } from "../../../admin-auth";
+import { publicGoogleMapsBrowserKey } from "../../../google-maps-config";
 import { isPlatformAccessHost, projectBySlug } from "../../../project-context";
 import GeoPublicMap from "./geo-public-map";
 
@@ -32,8 +33,17 @@ export default async function PublicGeoMapPage({
   const host = (await headers()).get("host") || "";
   if (!isPlatformAccessHost(host)) notFound();
 
-  const project = await projectBySlug(slug);
+  const [project, mapsApiKey] = await Promise.all([
+    projectBySlug(slug),
+    publicGoogleMapsBrowserKey(),
+  ]);
   if (!project) notFound();
 
-  return <GeoPublicMap projectName={project.name} projectSlug={project.slug} />;
+  return (
+    <GeoPublicMap
+      projectName={project.name}
+      projectSlug={project.slug}
+      mapsApiKey={mapsApiKey}
+    />
+  );
 }
