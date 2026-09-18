@@ -60,3 +60,15 @@ test("loupe is imperative so handle dragging does not rerender the whole mapper 
   assert.doesNotMatch(mapper, /\[loupePoint,\s*setLoupePoint\]/);
   assert.doesNotMatch(mapper, /\[draggingPoint,\s*setDraggingPoint\]/);
 });
+
+test("draft selection guide stays 60 percent thinner than the canonical mapped polygon stroke", () => {
+  assert.match(
+    css,
+    /\.mapper-image-wrap polygon\s*\{[^}]*stroke-width:\s*3;/s,
+  );
+  assert.match(
+    css,
+    /\.mapper-image-wrap polygon\.draft\s*\{[^}]*stroke-width:\s*1\.2;/s,
+  );
+});
+
