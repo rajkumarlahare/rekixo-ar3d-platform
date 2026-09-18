@@ -21,6 +21,7 @@ const LIVE_SETTING_KEYS = [
   "geoPublicPromotedAt",
   "geoPublicPlotClicks",
   "geoPublicShowLegend",
+  "geoPublicShowPolygons",
 ] as const;
 
 type ProjectRow = {
@@ -145,6 +146,7 @@ async function responseFor(labProjectId: string) {
     display: {
       plotClicks: live.get("geoPublicPlotClicks") !== "0",
       showLegend: live.get("geoPublicShowLegend") !== "0",
+      showPolygons: live.get("geoPublicShowPolygons") !== "0",
     },
     promotion: {
       enabled: promotedEnabled,
@@ -189,6 +191,7 @@ export async function POST(request: Request) {
     action?: string;
     plotClicks?: boolean;
     showLegend?: boolean;
+    showPolygons?: boolean;
   };
   const labProjectId = String(body.projectId || "").trim();
   if (!labProjectId)
@@ -218,9 +221,20 @@ export async function POST(request: Request) {
     if (typeof body.plotClicks !== "boolean" || typeof body.showLegend !== "boolean")
       return Response.json({ error: "Geo display settings invalid hain" }, { status: 400 });
 
+    // Backward-compatible with an older cached Super Admin bundle that does not
+    // send showPolygons yet. Missing setting means ON for existing/future projects.
+    const current = await settingsMap(context.source.id);
+    const showPolygons =
+      typeof body.showPolygons === "boolean"
+        ? body.showPolygons
+        : current.get("geoPublicShowPolygons") !== "0";
+    // Hidden polygons must never leave invisible public click targets behind.
+    const plotClicks = showPolygons ? body.plotClicks : false;
+
     const values: Array<[string, string]> = [
-      ["geoPublicPlotClicks", body.plotClicks ? "1" : "0"],
+      ["geoPublicPlotClicks", plotClicks ? "1" : "0"],
       ["geoPublicShowLegend", body.showLegend ? "1" : "0"],
+      ["geoPublicShowPolygons", showPolygons ? "1" : "0"],
     ];
     await env.DB.batch(
       values.map(([key, value]) =>
@@ -230,8 +244,9 @@ export async function POST(request: Request) {
       ),
     );
     await writeAudit(actor, "geo.customer_display_saved", context.source.id, labProjectId, {
-      plotClicks: body.plotClicks,
+      plotClicks,
       showLegend: body.showLegend,
+      showPolygons,
     });
     const result = await responseFor(labProjectId);
     return Response.json(result, {
