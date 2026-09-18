@@ -971,7 +971,7 @@ rekixoStartPublicBoot();
   const clientGallery = q('#clientGallery');
   const imageLightbox = q('#imageLightbox'),lightboxImage=q('#lightboxImage'),lightboxCaption=q('#lightboxCaption');
 
-  let fit = 1, scale = 1, pan = {x:0,y:0};
+  let fit = 1, minFit = 1, scale = 1, pan = {x:0,y:0};
   let selected = null, showAll = false, statusExpanded = true, statusFilter = null;
   let toastTimer = null, mode3D = false, engine3D = null, mapRaf = 0, resizeRaf = 0;
   let PUBLIC_READY = false, HAS_MASTERPLAN = false;
@@ -1031,10 +1031,15 @@ rekixoStartPublicBoot();
     viewportHeight=viewport.clientHeight;
     const fw = viewportWidth / size.w;
     const fh = viewportHeight / size.h;
-    // Mobile is cover-fit: no left/right letterbox. Image and clickable SVG
-    // remain one immutable world, so any overflow is handled only by pan.
-    fit = mobile ? Math.max(fw,fh) : Math.min(fw,fh);
+    const containFit = Math.min(fw,fh);
+    // Opening/reset behavior stays unchanged: mobile starts cover-fit while
+    // desktop starts contain-fit. minFit is independent and lets users zoom
+    // out only as far as the full masterplan fitting safely in the viewport.
+    fit = mobile ? Math.max(fw,fh) : containFit;
     if(!Number.isFinite(fit) || fit <= 0) fit = .3;
+    minFit = Number.isFinite(containFit) && containFit > 0
+      ? Math.min(containFit,fit)
+      : fit;
   }
   function limits(){
     const sw=publicRotation%2?H:W,sh=publicRotation%2?W:H;
@@ -1399,7 +1404,7 @@ rekixoStartPublicBoot();
   }
   function close(){drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');scrim.classList.remove('open')}
   function focusPlot(p){const target=Math.max(scale,fit*1.85);scale=Math.min(target,fit*4.5);const r=rotateOffset(p.center[0]-W/2,p.center[1]-H/2,publicRotation);pan.x=-r.x*scale;pan.y=-r.y*scale;render()}
-  function zoomAt(newScale,sx,sy){newScale=clamp(newScale,fit,fit*4.5);const r=viewport.getBoundingClientRect(),mx=sx-r.left-r.width/2,my=sy-r.top-r.height/2,cx=(mx-pan.x)/scale,cy=(my-pan.y)/scale;pan.x=mx-cx*newScale;pan.y=my-cy*newScale;scale=newScale;scheduleRender()}
+  function zoomAt(newScale,sx,sy){newScale=clamp(newScale,minFit,fit*4.5);const r=viewport.getBoundingClientRect(),mx=sx-r.left-r.width/2,my=sy-r.top-r.height/2,cx=(mx-pan.x)/scale,cy=(my-pan.y)/scale;pan.x=mx-cx*newScale;pan.y=my-cy*newScale;scale=newScale;scheduleRender()}
   function zoomCenter(factor){const r=viewport.getBoundingClientRect();zoomAt(scale*factor,r.left+r.width/2,r.top+r.height/2)}
   function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
   function midpoint(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2}}
@@ -1491,7 +1496,7 @@ rekixoStartPublicBoot();
         setGestureActive(true)
       }
       const r=gesture.rect;
-      const ns=clamp(gesture.scale*distance(a,b)/gesture.dist,fit,fit*4.5),oldMx=gesture.mid.x-r.left-r.width/2,oldMy=gesture.mid.y-r.top-r.height/2,cx=(oldMx-gesture.pan.x)/gesture.scale,cy=(oldMy-gesture.pan.y)/gesture.scale,newMx=m.x-r.left-r.width/2,newMy=m.y-r.top-r.height/2;
+      const ns=clamp(gesture.scale*distance(a,b)/gesture.dist,minFit,fit*4.5),oldMx=gesture.mid.x-r.left-r.width/2,oldMy=gesture.mid.y-r.top-r.height/2,cx=(oldMx-gesture.pan.x)/gesture.scale,cy=(oldMy-gesture.pan.y)/gesture.scale,newMx=m.x-r.left-r.width/2,newMy=m.y-r.top-r.height/2;
       scale=ns;pan.x=newMx-cx*scale;pan.y=newMy-cy*scale;scheduleRender();
       return;
     }
@@ -1597,7 +1602,7 @@ rekixoStartPublicBoot();
   q('#amenitiesBtn').onclick=()=>toast('Amenities details not configured');
   q('#galleryBtn').onclick=openGallery;q('#galleryClose').onclick=closeGallery;q('#lightboxClose').onclick=closeFullImage;galleryModal.addEventListener('click',e=>{if(e.target===galleryModal)closeGallery()});imageLightbox.addEventListener('click',e=>{if(e.target===imageLightbox||e.target.classList.contains('lightbox-figure'))closeFullImage()});document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(imageLightbox.classList.contains('open'))closeFullImage();else if(galleryModal.classList.contains('open'))closeGallery()});q('#locationBtn').onclick=()=>MAP_URL?window.open(MAP_URL,'_blank','noopener,noreferrer'):toast('Location link not configured');
 
-  function onResize(){if(resizeRaf)return;resizeRaf=requestAnimationFrame(()=>{resizeRaf=0;if(mode3D){engine3D?.resize();return}const oldFit=fit||1,z=scale/oldFit;calcFit();scale=clamp(fit*z,fit,fit*4.5);render()})}
+  function onResize(){if(resizeRaf)return;resizeRaf=requestAnimationFrame(()=>{resizeRaf=0;if(mode3D){engine3D?.resize();return}const oldFit=fit||1,z=scale/oldFit;calcFit();scale=clamp(fit*z,minFit,fit*4.5);render()})}
   window.addEventListener('resize',onResize);
   window.visualViewport?.addEventListener('resize',onResize);
 
