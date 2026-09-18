@@ -2951,29 +2951,52 @@ export default function PlotMapper({
                       role === "back" ? "#60a5fa" :
                       role === "depthA" ? "#f59e0b" :
                       role === "depthB" ? "#a78bfa" : "#ffffff";
+                    const handleEdgePointerDown = (event: React.PointerEvent<SVGLineElement>) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    };
+                    const handleEdgePointerUp = (event: React.PointerEvent<SVGLineElement>) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSelectedSemanticEdge(index);
+                      setEdgeAssignMode(null);
+                    };
                     return (
-                      <line
-                        key={`semantic-edge-picker-${index}`}
-                        x1={point[0] * 1000}
-                        y1={point[1] * 1000}
-                        x2={next[0] * 1000}
-                        y2={next[1] * 1000}
-                        stroke={selected ? "#ffffff" : roleColor}
-                        strokeOpacity={selected ? 1 : role ? .9 : .42}
-                        strokeWidth={selected ? 18 : role ? 13 : 11}
-                        vectorEffect="non-scaling-stroke"
-                        style={{ cursor: "pointer", pointerEvents: "stroke" }}
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onPointerUp={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setSelectedSemanticEdge(index);
-                          setEdgeAssignMode(null);
-                        }}
-                      />
+                      <g key={`semantic-edge-picker-${index}`}>
+                        {/*
+                          Keep a generous invisible hit target for Android accuracy, but
+                          render the visible semantic guide as a thin dashed line. This
+                          prevents Front/Back/Depth overlays from hiding the actual
+                          masterplan boundary at 1800% zoom.
+                        */}
+                        <line
+                          className="semantic-edge-hit-target"
+                          x1={point[0] * 1000}
+                          y1={point[1] * 1000}
+                          x2={next[0] * 1000}
+                          y2={next[1] * 1000}
+                          stroke="rgba(255,255,255,0.001)"
+                          strokeWidth={30}
+                          vectorEffect="non-scaling-stroke"
+                          style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                          onPointerDown={handleEdgePointerDown}
+                          onPointerUp={handleEdgePointerUp}
+                        />
+                        <line
+                          className="semantic-edge-visible-guide"
+                          x1={point[0] * 1000}
+                          y1={point[1] * 1000}
+                          x2={next[0] * 1000}
+                          y2={next[1] * 1000}
+                          stroke={selected ? "#ffffff" : roleColor}
+                          strokeOpacity={selected ? .95 : role ? .82 : .34}
+                          strokeWidth={selected ? 4.5 : role ? 3.5 : 2.5}
+                          strokeDasharray={selected ? "8 5" : role ? "7 5" : "5 6"}
+                          strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke"
+                          style={{ pointerEvents: "none" }}
+                        />
+                      </g>
                     );
                   })}
                   {!calibrationMode && points.length >= 3 && ([
@@ -2993,11 +3016,11 @@ export default function PlotMapper({
                         y={((a[1] + b[1]) / 2) * 1000}
                         fill={color}
                         stroke="#08111f"
-                        strokeWidth={5}
+                        strokeWidth={2.4 / Math.max(1, zoom)}
                         paintOrder="stroke"
                         textAnchor="middle"
                         dominantBaseline="central"
-                        fontSize={24 / Math.max(1, zoom)}
+                        fontSize={19 / Math.max(1, zoom)}
                         fontWeight={900}
                         style={{ pointerEvents: "none" }}
                       >{badge}</text>
