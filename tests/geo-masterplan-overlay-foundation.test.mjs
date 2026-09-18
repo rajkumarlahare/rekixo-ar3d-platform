@@ -19,14 +19,14 @@ test("Geo Mapper passes generated features and plot details to visual preview", 
   assert.match(source, /dimensions:\s*string/);
 });
 
-test("Satellite preview contains calibrated image overlay and clickable polygons", () => {
+test("Satellite preview contains calibrated image overlay and plot polygons", () => {
   const source = read("app/geo-visual-calibration.tsx");
   assert.match(source, /REKIXO_GEO_MASTERPLAN_OVERLAY_V2_7/);
   assert.match(source, /new google\.maps\.OverlayView\(\)/);
   assert.match(source, /new google\.maps\.Polygon\(/);
   assert.match(source, /new google\.maps\.InfoWindow\(\)/);
   assert.match(source, /Masterplan overlay preview/);
-  assert.match(source, /Clickable plots/);
+  assert.match(source, /Plot overlay preview/);
   assert.match(source, /solveGeoCalibration/);
   assert.match(source, /mapNormalizedPointToGeo/);
   assert.match(source, /solveHomography/);
