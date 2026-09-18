@@ -420,11 +420,16 @@ function createPlotPolygon(
   plotClicks: boolean,
 ) {
   const style = plotStyle(feature.status);
-  const interactive = plotClicks && Boolean(feature.linkedPlotId);
+  const hasLinkedPlot = Boolean(feature.linkedPlotId);
+  const interactive = plotClicks && hasLinkedPlot;
   const polygon = new google.maps.Polygon({
     map,
     paths: feature.path.map(([lng, lat]) => ({ lat, lng })),
-    clickable: interactive,
+    // Keep plot polygons in Google's stable interactive overlay rendering path
+    // even when detail actions are disabled. This preserves masterplan/polygon
+    // z-order on mobile. "Non-clickable" public behavior is enforced by not
+    // attaching the click listener unless interactive is true.
+    clickable: hasLinkedPlot,
     fillColor: style.fillColor,
     fillOpacity: feature.linkedPlotId ? 0.09 : 0.03,
     strokeColor: style.strokeColor,
