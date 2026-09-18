@@ -23,7 +23,7 @@ type PublicGeoData = {
   project: { id: string; name: string; slug: string };
   revision: number;
   maps: { enabled: boolean; apiKey: string | null };
-  display?: { plotClicks?: boolean; showLegend?: boolean };
+  display?: { plotClicks?: boolean; showLegend?: boolean; showPolygons?: boolean };
   masterplanUrl: string;
   masterplanUrls?: {
     original?: string;
@@ -557,28 +557,30 @@ export default function GeoPublicMap({
           data.masterplanCorners,
         );
 
-        info = new google.maps.InfoWindow();
-        let nextFeatureIndex = 0;
-        const appendPlotChunk = () => {
-          polygonFrame = null;
-          if (cancelled || !info) return;
-          const end = Math.min(nextFeatureIndex + PLOT_RENDER_CHUNK_SIZE, data.features.length);
-          for (; nextFeatureIndex < end; nextFeatureIndex += 1) {
-            polygons.push(
-              createPlotPolygon(
-                google,
-                map,
-                info,
-                data.features[nextFeatureIndex]!,
-                data.display?.plotClicks !== false,
-              ),
-            );
-          }
-          if (nextFeatureIndex < data.features.length) {
-            polygonFrame = window.requestAnimationFrame(appendPlotChunk);
-          }
-        };
-        polygonFrame = window.requestAnimationFrame(appendPlotChunk);
+        if (data.display?.showPolygons !== false) {
+          info = new google.maps.InfoWindow();
+          let nextFeatureIndex = 0;
+          const appendPlotChunk = () => {
+            polygonFrame = null;
+            if (cancelled || !info) return;
+            const end = Math.min(nextFeatureIndex + PLOT_RENDER_CHUNK_SIZE, data.features.length);
+            for (; nextFeatureIndex < end; nextFeatureIndex += 1) {
+              polygons.push(
+                createPlotPolygon(
+                  google,
+                  map,
+                  info,
+                  data.features[nextFeatureIndex]!,
+                  data.display?.plotClicks !== false,
+                ),
+              );
+            }
+            if (nextFeatureIndex < data.features.length) {
+              polygonFrame = window.requestAnimationFrame(appendPlotChunk);
+            }
+          };
+          polygonFrame = window.requestAnimationFrame(appendPlotChunk);
+        }
       })
       .catch((reason) => {
         if (!cancelled)
