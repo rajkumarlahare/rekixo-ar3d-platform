@@ -11,7 +11,7 @@ test("mobile presentation cover-fits from final displayed geometry", () => {
   assert.match(source, /function isMobilePanorama\(\)/);
   assert.match(source, /const size=displaySize\(\)/);
   assert.match(source, /return size\.w\/Math\.max\(1,size\.h\)>vw\/Math\.max\(1,vh\)/);
-  assert.match(source, /fit = mobile \? Math\.max\(fw,fh\) : Math\.min\(fw,fh\)/);
+  assert.match(source, /fit = mobile \? Math\.max\(fw,fh\) : containFit/);
   assert.match(source, /<svg class="hotspots" id="hotspots"/);
   assert.doesNotMatch(source, /<svg class="hotspots show-all"/);
 });
