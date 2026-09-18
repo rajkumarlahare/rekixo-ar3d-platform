@@ -23,6 +23,7 @@ type PublicGeoData = {
   project: { id: string; name: string; slug: string };
   revision: number;
   maps: { enabled: boolean; apiKey: string | null };
+  display?: { plotClicks?: boolean; showLegend?: boolean };
   masterplanUrl: string;
   masterplanUrls?: {
     original?: string;
@@ -381,12 +382,14 @@ function createPlotPolygon(
   map: MapInstance,
   info: InfoWindow,
   feature: PublicFeature,
+  plotClicks: boolean,
 ) {
   const style = plotStyle(feature.status);
+  const interactive = plotClicks && Boolean(feature.linkedPlotId);
   const polygon = new google.maps.Polygon({
     map,
     paths: feature.path.map(([lng, lat]) => ({ lat, lng })),
-    clickable: Boolean(feature.linkedPlotId),
+    clickable: interactive,
     fillColor: style.fillColor,
     fillOpacity: feature.linkedPlotId ? 0.09 : 0.03,
     strokeColor: style.strokeColor,
@@ -394,7 +397,7 @@ function createPlotPolygon(
     strokeWeight: feature.linkedPlotId ? 1.6 : 1.2,
     zIndex: feature.linkedPlotId ? 30 : 20,
   });
-  if (feature.linkedPlotId) {
+  if (interactive) {
     polygon.addListener("click", (event) => {
       info.setContent(plotInfoCard(feature));
       const fallback = feature.path[0];
@@ -519,7 +522,15 @@ export default function GeoPublicMap({
           if (cancelled || !info) return;
           const end = Math.min(nextFeatureIndex + PLOT_RENDER_CHUNK_SIZE, data.features.length);
           for (; nextFeatureIndex < end; nextFeatureIndex += 1) {
-            polygons.push(createPlotPolygon(google, map, info, data.features[nextFeatureIndex]!));
+            polygons.push(
+              createPlotPolygon(
+                google,
+                map,
+                info,
+                data.features[nextFeatureIndex]!,
+                data.display?.plotClicks !== false,
+              ),
+            );
           }
           if (nextFeatureIndex < data.features.length) {
             polygonFrame = window.requestAnimationFrame(appendPlotChunk);
@@ -569,7 +580,7 @@ export default function GeoPublicMap({
         </nav>
       ) : null}
 
-      {data ? (
+      {data && data.display?.showLegend !== false ? (
         <section className={styles.legend} aria-label="Plot availability">
           <span><i className={styles.available} /> Available <b>{data.counts.available}</b></span>
           <span><i className={styles.booked} /> Booked <b>{data.counts.booked}</b></span>
