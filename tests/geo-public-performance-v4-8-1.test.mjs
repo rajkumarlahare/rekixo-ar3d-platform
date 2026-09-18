@@ -61,12 +61,16 @@ test("projective overlay draw work is capped to one animation frame", () => {
   assert.match(client, /window\.cancelAnimationFrame/);
 });
 
-test("masterplan chooses mobile or desktop public derivative", () => {
+test("masterplan chooses optimized derivative with original-image fallback", () => {
   assert.match(client, /masterplanUrls\?\.mobile/);
   assert.match(client, /masterplanUrls\?\.desktop/);
+  assert.match(client, /masterplanUrls\?\.original/);
   assert.match(client, /window\.innerWidth <= 900/);
-  assert.match(client, /image\.fetchPriority = "low"/);
+  assert.match(client, /image\.fetchPriority = "high"/);
   assert.match(client, /image\.decoding = "async"/);
+  assert.match(client, /Optimized masterplan overlay unavailable; retrying original/);
+  assert.match(client, /window\.setTimeout\(\(\) => \{/);
+  assert.match(client, /12000/);
 });
 
 test("plot info-card helper keeps one valid function declaration", () => {
