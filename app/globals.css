@@ -1768,6 +1768,8 @@ body {
 .mapper-image-wrap polygon.draft {
   fill: #ffd15455;
   stroke: #ffd154;
+  /* Selection guide only: keep the 3px saved/mapped polygon stroke untouched. */
+  stroke-width: 1.2;
   stroke-dasharray: 8 5;
 }
 .mapper-image-wrap circle.point {
