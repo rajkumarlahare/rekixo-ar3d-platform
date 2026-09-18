@@ -3053,13 +3053,26 @@ export default function PlotMapper({
                     left: `${x * 100}%`,
                     top: `${y * 100}%`,
                     transform: `translate(-50%, -50%) rotate(${-rotationDegrees}deg)`,
-                  }}
+                    // Keep the draggable hit target large for touch accuracy, while
+                    // shrinking only the visible numbered badge as zoom increases.
+                    // At 1800% the badge is 25% of its normal size (75% smaller).
+                    "--mapper-corner-visual-scale": String(
+                      Math.max(
+                        0.25,
+                        1 -
+                          ((Math.max(1, zoom) - 1) /
+                            Math.max(1, MAX_MAPPER_ZOOM - 1)) *
+                            0.75,
+                      ),
+                    ),
+                  } as React.CSSProperties}
+                  data-corner={index + 1}
                   onPointerDown={(event) => dragHandle(event, index)}
                   onPointerMove={(event) => moveHandle(event, index)}
                   onPointerUp={endHandle}
                   onPointerCancel={endHandle}
                   aria-label={`Drag corner ${index + 1}`}
-                >{index + 1}</button>
+                />
               ))}
             </div>
             <div
