@@ -50,7 +50,7 @@ test("generic public map contains the full natural masterplan and keeps rotated 
   assert.match(publicPage, /return size\.w\/Math\.max\(1,size\.h\)>vw\/Math\.max\(1,vh\)/);
   assert.match(
     publicPage,
-    /fit = mobile \? Math\.max\(fw,fh\) : Math\.min\(fw,fh\)/,
+    /fit = mobile \? Math\.max\(fw,fh\) : containFit/,
   );
   assert.doesNotMatch(
     publicPage,
