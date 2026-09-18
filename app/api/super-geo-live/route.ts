@@ -19,6 +19,8 @@ const LIVE_SETTING_KEYS = [
   "geoPublicOverlayDesktopKey",
   "geoPublicToken",
   "geoPublicPromotedAt",
+  "geoPublicPlotClicks",
+  "geoPublicShowLegend",
 ] as const;
 
 type ProjectRow = {
@@ -140,6 +142,10 @@ async function responseFor(labProjectId: string) {
     geo: context.geoState,
     overlaySaved: Boolean(overlayHead),
     mapsKeyConfigured,
+    display: {
+      plotClicks: live.get("geoPublicPlotClicks") !== "0",
+      showLegend: live.get("geoPublicShowLegend") !== "0",
+    },
     promotion: {
       enabled: promotedEnabled,
       current: promotedCurrent,
@@ -181,6 +187,8 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     projectId?: string;
     action?: string;
+    plotClicks?: boolean;
+    showLegend?: boolean;
   };
   const labProjectId = String(body.projectId || "").trim();
   if (!labProjectId)
@@ -200,6 +208,31 @@ export async function POST(request: Request) {
       .run();
 
     await writeAudit(actor, "geo.customer_live_disabled", context.source.id, labProjectId, {});
+    const result = await responseFor(labProjectId);
+    return Response.json(result, {
+      headers: { "cache-control": "private,no-store" },
+    });
+  }
+
+  if (body.action === "save_display") {
+    if (typeof body.plotClicks !== "boolean" || typeof body.showLegend !== "boolean")
+      return Response.json({ error: "Geo display settings invalid hain" }, { status: 400 });
+
+    const values: Array<[string, string]> = [
+      ["geoPublicPlotClicks", body.plotClicks ? "1" : "0"],
+      ["geoPublicShowLegend", body.showLegend ? "1" : "0"],
+    ];
+    await env.DB.batch(
+      values.map(([key, value]) =>
+        env.DB.prepare(
+          "INSERT INTO settings (project_id,key,value,updated_at) VALUES (?,?,?,?) ON CONFLICT(project_id,key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
+        ).bind(context.source.id, key, value, now),
+      ),
+    );
+    await writeAudit(actor, "geo.customer_display_saved", context.source.id, labProjectId, {
+      plotClicks: body.plotClicks,
+      showLegend: body.showLegend,
+    });
     const result = await responseFor(labProjectId);
     return Response.json(result, {
       headers: { "cache-control": "private,no-store" },
