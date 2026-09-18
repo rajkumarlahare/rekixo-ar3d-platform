@@ -22,6 +22,7 @@ const LIVE_SETTING_KEYS = [
   "geoPublicPlotClicks",
   "geoPublicShowLegend",
   "geoPublicShowPolygons",
+  "geoPublicViewMode",
 ] as const;
 
 type ProjectRow = {
@@ -147,6 +148,7 @@ async function responseFor(labProjectId: string) {
       plotClicks: live.get("geoPublicPlotClicks") !== "0",
       showLegend: live.get("geoPublicShowLegend") !== "0",
       showPolygons: live.get("geoPublicShowPolygons") !== "0",
+      viewMode: live.get("geoPublicViewMode") === "masterplan" ? "masterplan" : "north",
     },
     promotion: {
       enabled: promotedEnabled,
@@ -192,6 +194,7 @@ export async function POST(request: Request) {
     plotClicks?: boolean;
     showLegend?: boolean;
     showPolygons?: boolean;
+    viewMode?: "north" | "masterplan";
   };
   const labProjectId = String(body.projectId || "").trim();
   if (!labProjectId)
@@ -228,6 +231,12 @@ export async function POST(request: Request) {
       typeof body.showPolygons === "boolean"
         ? body.showPolygons
         : current.get("geoPublicShowPolygons") !== "0";
+    const viewMode =
+      body.viewMode === "masterplan" || body.viewMode === "north"
+        ? body.viewMode
+        : current.get("geoPublicViewMode") === "masterplan"
+          ? "masterplan"
+          : "north";
     // Hidden polygons must never leave invisible public click targets behind.
     const plotClicks = showPolygons ? body.plotClicks : false;
 
@@ -235,6 +244,7 @@ export async function POST(request: Request) {
       ["geoPublicPlotClicks", plotClicks ? "1" : "0"],
       ["geoPublicShowLegend", body.showLegend ? "1" : "0"],
       ["geoPublicShowPolygons", showPolygons ? "1" : "0"],
+      ["geoPublicViewMode", viewMode],
     ];
     await env.DB.batch(
       values.map(([key, value]) =>
@@ -247,6 +257,7 @@ export async function POST(request: Request) {
       plotClicks,
       showLegend: body.showLegend,
       showPolygons,
+      viewMode,
     });
     const result = await responseFor(labProjectId);
     return Response.json(result, {
