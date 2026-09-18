@@ -116,6 +116,7 @@ type GeoLiveInfo = {
     plotClicks: boolean;
     showLegend: boolean;
     showPolygons: boolean;
+    viewMode: "north" | "masterplan";
   };
   promotion?: {
     enabled: boolean;
@@ -451,6 +452,7 @@ setFineAlignment(data.fineAlignment || { ...ZERO_GEO_FINE_ALIGNMENT });
     showPolygons: boolean,
     plotClicks: boolean,
     showLegend: boolean,
+    viewMode: "north" | "masterplan",
   ) {
     setLiveBusy(true);
     try {
@@ -463,6 +465,7 @@ setFineAlignment(data.fineAlignment || { ...ZERO_GEO_FINE_ALIGNMENT });
           showPolygons,
           plotClicks: showPolygons ? plotClicks : false,
           showLegend,
+          viewMode,
         }),
       });
       const data = (await response.json()) as GeoLiveInfo;
@@ -761,6 +764,7 @@ async function generatePlots() {
                       ? liveInfo.display?.plotClicks !== false
                       : false,
                     liveInfo.display?.showLegend !== false,
+                    liveInfo.display?.viewMode === "masterplan" ? "masterplan" : "north",
                   )
                 }
                 disabled={liveBusy || busy}
@@ -779,6 +783,7 @@ async function generatePlots() {
                     liveInfo.display?.showPolygons !== false,
                     event.target.checked,
                     liveInfo.display?.showLegend !== false,
+                    liveInfo.display?.viewMode === "masterplan" ? "masterplan" : "north",
                   )
                 }
                 disabled={
@@ -798,14 +803,33 @@ async function generatePlots() {
                     liveInfo.display?.showPolygons !== false,
                     liveInfo.display?.plotClicks !== false,
                     event.target.checked,
+                    liveInfo.display?.viewMode === "masterplan" ? "masterplan" : "north",
                   )
                 }
                 disabled={liveBusy || busy}
               />
               Availability / Booked / Sold bar
             </label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <span>View orientation</span>
+              <select
+                value={liveInfo.display?.viewMode === "masterplan" ? "masterplan" : "north"}
+                onChange={(event) =>
+                  void saveGeoDisplay(
+                    liveInfo.display?.showPolygons !== false,
+                    liveInfo.display?.plotClicks !== false,
+                    liveInfo.display?.showLegend !== false,
+                    event.target.value === "masterplan" ? "masterplan" : "north",
+                  )
+                }
+                disabled={liveBusy || busy}
+              >
+                <option value="masterplan">Masterplan aligned (website-style)</option>
+                <option value="north">North-up (GIS)</option>
+              </select>
+            </label>
             <small>
-              Project-scoped setting hai. Plot shapes OFF hone par public map polygon render aur invisible click targets dono band rehte hain; doosre customer Geo maps par koi effect nahi hoga.
+              Project-scoped setting hai. Masterplan aligned mode sirf public camera rotate karta hai; GPS calibration, saved corners aur Directions unchanged rehte hain. Plot shapes OFF hone par public map polygon render aur invisible click targets dono band rehte hain.
             </small>
           </div>
           <div className={styles.toolbar}>
