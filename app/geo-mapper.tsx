@@ -112,6 +112,10 @@ type GeoLiveInfo = {
   };
   overlaySaved?: boolean;
   mapsKeyConfigured?: boolean;
+  display?: {
+    plotClicks: boolean;
+    showLegend: boolean;
+  };
   promotion?: {
     enabled: boolean;
     current: boolean;
@@ -442,6 +446,30 @@ setFineAlignment(data.fineAlignment || { ...ZERO_GEO_FINE_ALIGNMENT });
     }
   }
 
+  async function saveGeoDisplay(plotClicks: boolean, showLegend: boolean) {
+    setLiveBusy(true);
+    try {
+      const response = await fetch("/api/super-geo-live", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          action: "save_display",
+          plotClicks,
+          showLegend,
+        }),
+      });
+      const data = (await response.json()) as GeoLiveInfo;
+      if (!response.ok) throw new Error(data.error || "Customer Geo display settings save nahi hue");
+      setLiveInfo(data);
+      notify("Customer Satellite Map display settings save ho gaye");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Customer Geo display settings save nahi hue");
+    } finally {
+      setLiveBusy(false);
+    }
+  }
+
   async function copyCustomerMapLink() {
     const url = liveInfo?.customerMapUrl;
     if (!url) return;
@@ -705,6 +733,48 @@ async function generatePlots() {
                 Source website abhi draft hai. Promotion ke baad source project ko normal Review & Publish se website publish karein.
               </p>
             ) : null}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              marginTop: 10,
+              alignItems: "center",
+            }}
+          >
+            <b style={{ width: "100%" }}>Public map behavior</b>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <input
+                type="checkbox"
+                checked={liveInfo.display?.plotClicks !== false}
+                onChange={(event) =>
+                  void saveGeoDisplay(
+                    event.target.checked,
+                    liveInfo.display?.showLegend !== false,
+                  )
+                }
+                disabled={liveBusy || busy}
+              />
+              Plot tap / details
+            </label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <input
+                type="checkbox"
+                checked={liveInfo.display?.showLegend !== false}
+                onChange={(event) =>
+                  void saveGeoDisplay(
+                    liveInfo.display?.plotClicks !== false,
+                    event.target.checked,
+                  )
+                }
+                disabled={liveBusy || busy}
+              />
+              Availability / Booked / Sold bar
+            </label>
+            <small>
+              Project-scoped setting hai; doosre customer Geo maps par koi effect nahi hoga.
+            </small>
           </div>
           <div className={styles.toolbar}>
             <button
