@@ -63,3 +63,22 @@ test("legacy CSS remains fallback styling only", () => {
   assert.match(css, /\.mapper-image-wrap \.mapped-plot text \{[\s\S]*font-size: 20px;/);
   assert.match(css, /@media\(max-width:620px\)[\s\S]*\.mapper-image-wrap \.mapped-plot text\{font-size:13px\}/);
 });
+
+
+test("semantic side overlay keeps a large touch target without covering the masterplan edge", () => {
+  assert.match(mapper, /className="semantic-edge-hit-target"/);
+  assert.match(mapper, /strokeWidth=\{30\}[\s\S]*pointerEvents: "stroke"/);
+  assert.match(mapper, /className="semantic-edge-visible-guide"/);
+  assert.match(
+    mapper,
+    /strokeWidth=\{selected \? 4\.5 : role \? 3\.5 : 2\.5\}/,
+  );
+  assert.match(mapper, /strokeDasharray=\{selected \? "8 5" : role \? "7 5" : "5 6"\}/);
+  assert.doesNotMatch(mapper, /strokeWidth=\{selected \? 18 : role \? 13 : 11\}/);
+});
+
+test("semantic F B D1 D2 badges remain screen-stable at 1800 percent zoom", () => {
+  assert.match(mapper, /strokeWidth=\{2\.4 \/ Math\.max\(1, zoom\)\}/);
+  assert.match(mapper, /fontSize=\{19 \/ Math\.max\(1, zoom\)\}/);
+  assert.doesNotMatch(mapper, /strokeWidth=\{5\}[\s\S]*semantic-badge/);
+});
