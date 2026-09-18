@@ -1590,7 +1590,7 @@ function goToCenter() {
         previewPlotFeatures.length === 0
       }
     />
-    <span>Clickable plots ({previewPlotFeatures.length})</span>
+    <span>Plot overlay preview ({previewPlotFeatures.length})</span>
   </label>
   <label className={styles.mapPreviewToggle}>
     <input
@@ -1603,8 +1603,7 @@ function goToCenter() {
   </label>
 </div>
 <div className={styles.mapPreviewHint}>
-  Masterplan visual layer neeche rahegi; generated Geo plot polygons uske upar
-  click capture karenge. Fine Align image + plots ko ek shared geographic transform se move/rotate karta hai.
+  Ye sirf Geo Lab preview control hai. Public customer map ka plot click behavior Customer Satellite Live settings se control hota hai. Fine Align image + plots ko ek shared geographic transform se move/rotate karta hai.
 </div>
 <div
   className={`${styles.fineAlignPanel} ${
