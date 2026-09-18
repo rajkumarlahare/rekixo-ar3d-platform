@@ -41,7 +41,7 @@ test("only actual overflow activates measured ping-pong motion", () => {
   assert.match(page, /if\(overflow<=3\)return/);
   assert.match(page, /subtitleTrack\.style\.setProperty\('--rekixo-subtitle-shift',`-\$\{overflow\}px`\)/);
   assert.match(page, /subtitleLane\.classList\.add\('is-overflowing'\)/);
-  assert.match(page, /\.brand-subtitle\.is-overflowing \.brand-subtitle-track\{animation:rekixo-subtitle-pan var\(--rekixo-subtitle-duration,8s\) ease-in-out infinite\}/);
+  assert.match(page, /\.brand-subtitle\.is-overflowing \.brand-subtitle-track\{animation:rekixo-subtitle-pan var\(--rekixo-subtitle-duration,20s\) ease-in-out infinite\}/);
   assert.match(page, /@keyframes rekixo-subtitle-pan\{0%,14%,100%\{transform:translate3d\(0,0,0\)\}42%,64%\{transform:translate3d\(var\(--rekixo-subtitle-shift,0px\),0,0\)\}\}/);
 });
 
@@ -65,3 +65,10 @@ test("map geometry remains untouched", () => {
   assert.match(page, /matrixTransform\(ctm\.inverse\(\)\)/);
   assert.match(page, /const mapped=normalized\.map\(\(\[x,y\]\)=>\[x\*W,y\*H\]\)/);
 });
+
+test("customer subtitle ticker runs 60 percent slower without changing travel distance", () => {
+  assert.match(page, /const baseDuration=Math\.max\(7,Math\.min\(12,7\+overflow\/45\)\)/);
+  assert.match(page, /const duration=baseDuration\/0\.4/);
+  assert.match(page, /same travel distance takes 2\.5x longer/);
+});
+
