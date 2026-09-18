@@ -46,8 +46,9 @@ test("public Geo display policy is source-project scoped and backward compatible
 });
 
 test("public plot interaction and availability legend can be disabled independently", () => {
-  assert.match(publicMap, /const interactive = plotClicks && Boolean\(feature\.linkedPlotId\)/);
-  assert.match(publicMap, /clickable: interactive/);
+  assert.match(publicMap, /const hasLinkedPlot = Boolean\(feature\.linkedPlotId\)/);
+  assert.match(publicMap, /const interactive = plotClicks && hasLinkedPlot/);
+  assert.match(publicMap, /clickable: hasLinkedPlot/);
   assert.match(publicMap, /if \(interactive\) \{/);
   assert.match(publicMap, /data\.display\?\.plotClicks !== false/);
   assert.match(publicMap, /data && data\.display\?\.showLegend !== false/);
