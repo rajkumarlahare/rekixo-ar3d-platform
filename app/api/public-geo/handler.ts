@@ -17,6 +17,8 @@ const LIVE_SETTING_KEYS = [
   "geoPublicOverlayMobileKey",
   "geoPublicOverlayDesktopKey",
   "geoPublicToken",
+  "geoPublicPlotClicks",
+  "geoPublicShowLegend",
 ] as const;
 
 const manifestMemory = new Map<string, GeoPublicManifest>();
@@ -193,6 +195,8 @@ export async function GET(request: Request) {
     const overlayKey = String(live.get("geoPublicOverlayKey") || "");
     const manifestKey = String(live.get("geoPublicManifestKey") || "");
     const token = String(live.get("geoPublicToken") || "");
+    const plotClicks = live.get("geoPublicPlotClicks") !== "0";
+    const showLegend = live.get("geoPublicShowLegend") !== "0";
     if (!labProjectId || revision < 1 || !overlayKey || !token)
       return Response.json({ error: "Geo live pointer incomplete hai" }, { status: 404 });
 
@@ -229,6 +233,7 @@ export async function GET(request: Request) {
         project: { id: source.id, name: source.name, slug: source.slug },
         revision,
         maps: { enabled: Boolean(mapsKey), apiKey: mapsKey || null },
+        display: { plotClicks, showLegend },
         masterplanUrl: baseMasterplanUrl,
         masterplanUrls: {
           original: baseMasterplanUrl,
