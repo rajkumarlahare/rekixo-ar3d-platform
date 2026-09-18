@@ -210,10 +210,16 @@ function plotStyle(status: string) {
   return { fillColor: "#18b968", strokeColor: "#63e6ad" };
 }
 
-function masterplanUrlForViewport(data: PublicGeoData) {
-  if (window.innerWidth <= 900)
-    return data.masterplanUrls?.mobile || data.masterplanUrl;
-  return data.masterplanUrls?.desktop || data.masterplanUrl;
+function masterplanUrlsForViewport(data: PublicGeoData) {
+  const original = data.masterplanUrls?.original || data.masterplanUrl;
+  const primary =
+    window.innerWidth <= 900
+      ? data.masterplanUrls?.mobile || original
+      : data.masterplanUrls?.desktop || original;
+  return {
+    primary,
+    fallback: primary === original ? null : original,
+  };
 }
 
 const MOBILE_OVERLAY_MAX_DIMENSION = 2304;
@@ -224,6 +230,7 @@ function addMasterplanOverlay(
   google: GoogleRoot,
   map: MapInstance,
   url: string,
+  fallbackUrl: string | null,
   corners: [number, number][],
 ) {
   const overlay = new google.maps.OverlayView();
@@ -233,6 +240,7 @@ function addMasterplanOverlay(
   let surfaceWidth = 0;
   let surfaceHeight = 0;
   let drawFrame: number | null = null;
+  let loadFallbackTimer: number | null = null;
 
   const draw = () => {
     if (drawFrame !== null) return;
@@ -317,9 +325,30 @@ function addMasterplanOverlay(
     image.alt = "Project masterplan";
     image.draggable = false;
     image.decoding = "async";
-    image.fetchPriority = "low";
-    image.onload = () => prepareCompositorSurface(image);
+    image.fetchPriority = "high";
+
+    const clearLoadTimer = () => {
+      if (loadFallbackTimer !== null) {
+        window.clearTimeout(loadFallbackTimer);
+        loadFallbackTimer = null;
+      }
+    };
+    const tryFallback = () => {
+      if (!fallbackUrl || image.dataset.rekixoFallback === "1") return false;
+      image.dataset.rekixoFallback = "1";
+      clearLoadTimer();
+      console.warn("Optimized masterplan overlay unavailable; retrying original");
+      image.src = fallbackUrl;
+      return true;
+    };
+
+    image.onload = () => {
+      clearLoadTimer();
+      prepareCompositorSurface(image);
+    };
     image.onerror = () => {
+      if (tryFallback()) return;
+      clearLoadTimer();
       if (host) host.style.visibility = "hidden";
       console.warn("Public masterplan overlay image load failed");
     };
@@ -330,11 +359,17 @@ function addMasterplanOverlay(
     }
     panes.overlayLayer.appendChild(host);
     image.src = url;
+    if (fallbackUrl) {
+      loadFallbackTimer = window.setTimeout(() => {
+        if (!surface) tryFallback();
+      }, 12000);
+    }
   };
 
   overlay.draw = draw;
   overlay.onRemove = () => {
     if (drawFrame !== null) window.cancelAnimationFrame(drawFrame);
+    if (loadFallbackTimer !== null) window.clearTimeout(loadFallbackTimer);
     if (sourceImage) {
       sourceImage.onload = null;
       sourceImage.onerror = null;
@@ -508,10 +543,12 @@ export default function GeoPublicMap({
           performance.mark?.("rekixo-geo-tiles-loaded");
         });
 
+        const masterplanUrls = masterplanUrlsForViewport(data);
         overlay = addMasterplanOverlay(
           google,
           map,
-          masterplanUrlForViewport(data),
+          masterplanUrls.primary,
+          masterplanUrls.fallback,
           data.masterplanCorners,
         );
 
