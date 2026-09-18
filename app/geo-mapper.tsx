@@ -115,6 +115,7 @@ type GeoLiveInfo = {
   display?: {
     plotClicks: boolean;
     showLegend: boolean;
+    showPolygons: boolean;
   };
   promotion?: {
     enabled: boolean;
@@ -446,7 +447,11 @@ setFineAlignment(data.fineAlignment || { ...ZERO_GEO_FINE_ALIGNMENT });
     }
   }
 
-  async function saveGeoDisplay(plotClicks: boolean, showLegend: boolean) {
+  async function saveGeoDisplay(
+    showPolygons: boolean,
+    plotClicks: boolean,
+    showLegend: boolean,
+  ) {
     setLiveBusy(true);
     try {
       const response = await fetch("/api/super-geo-live", {
@@ -455,7 +460,8 @@ setFineAlignment(data.fineAlignment || { ...ZERO_GEO_FINE_ALIGNMENT });
         body: JSON.stringify({
           projectId,
           action: "save_display",
-          plotClicks,
+          showPolygons,
+          plotClicks: showPolygons ? plotClicks : false,
           showLegend,
         }),
       });
@@ -747,14 +753,39 @@ async function generatePlots() {
             <label style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
               <input
                 type="checkbox"
-                checked={liveInfo.display?.plotClicks !== false}
+                checked={liveInfo.display?.showPolygons !== false}
                 onChange={(event) =>
                   void saveGeoDisplay(
                     event.target.checked,
+                    event.target.checked
+                      ? liveInfo.display?.plotClicks !== false
+                      : false,
                     liveInfo.display?.showLegend !== false,
                   )
                 }
                 disabled={liveBusy || busy}
+              />
+              Show plot shapes / outlines
+            </label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <input
+                type="checkbox"
+                checked={
+                  liveInfo.display?.showPolygons !== false &&
+                  liveInfo.display?.plotClicks !== false
+                }
+                onChange={(event) =>
+                  void saveGeoDisplay(
+                    liveInfo.display?.showPolygons !== false,
+                    event.target.checked,
+                    liveInfo.display?.showLegend !== false,
+                  )
+                }
+                disabled={
+                  liveBusy ||
+                  busy ||
+                  liveInfo.display?.showPolygons === false
+                }
               />
               Plot tap / details
             </label>
@@ -764,6 +795,7 @@ async function generatePlots() {
                 checked={liveInfo.display?.showLegend !== false}
                 onChange={(event) =>
                   void saveGeoDisplay(
+                    liveInfo.display?.showPolygons !== false,
                     liveInfo.display?.plotClicks !== false,
                     event.target.checked,
                   )
@@ -773,7 +805,7 @@ async function generatePlots() {
               Availability / Booked / Sold bar
             </label>
             <small>
-              Project-scoped setting hai; doosre customer Geo maps par koi effect nahi hoga.
+              Project-scoped setting hai. Plot shapes OFF hone par public map polygon render aur invisible click targets dono band rehte hain; doosre customer Geo maps par koi effect nahi hoga.
             </small>
           </div>
           <div className={styles.toolbar}>
