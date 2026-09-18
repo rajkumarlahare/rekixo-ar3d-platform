@@ -20,6 +20,7 @@ const LIVE_SETTING_KEYS = [
   "geoPublicPlotClicks",
   "geoPublicShowLegend",
   "geoPublicShowPolygons",
+  "geoPublicViewMode",
 ] as const;
 
 const manifestMemory = new Map<string, GeoPublicManifest>();
@@ -199,6 +200,7 @@ export async function GET(request: Request) {
     const showPolygons = live.get("geoPublicShowPolygons") !== "0";
     const plotClicks = showPolygons && live.get("geoPublicPlotClicks") !== "0";
     const showLegend = live.get("geoPublicShowLegend") !== "0";
+    const viewMode = live.get("geoPublicViewMode") === "masterplan" ? "masterplan" : "north";
     if (!labProjectId || revision < 1 || !overlayKey || !token)
       return Response.json({ error: "Geo live pointer incomplete hai" }, { status: 404 });
 
@@ -235,7 +237,7 @@ export async function GET(request: Request) {
         project: { id: source.id, name: source.name, slug: source.slug },
         revision,
         maps: { enabled: Boolean(mapsKey), apiKey: mapsKey || null },
-        display: { plotClicks, showLegend, showPolygons },
+        display: { plotClicks, showLegend, showPolygons, viewMode },
         masterplanUrl: baseMasterplanUrl,
         masterplanUrls: {
           original: baseMasterplanUrl,
