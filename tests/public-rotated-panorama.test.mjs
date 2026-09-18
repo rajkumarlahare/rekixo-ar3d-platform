@@ -25,7 +25,7 @@ test("mobile panorama is decided by displayed aspect, not quarter-turn alone", (
 });
 
 test("mobile cover-fit removes side letterbox while desktop remains contain-fit", () => {
-  assert.match(source, /fit = mobile \? Math\.max\(fw,fh\) : Math\.min\(fw,fh\)/);
+  assert.match(source, /fit = mobile \? Math\.max\(fw,fh\) : containFit/);
   assert.match(source, /function initialPanForPresentation\(\)/);
   assert.match(source, /if\(!isMobilePanorama\(\)\)return\{x:0,y:0\}/);
   assert.match(source, /return\{x:l\.x,y:0\}/);
