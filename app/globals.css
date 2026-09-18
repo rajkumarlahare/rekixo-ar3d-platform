@@ -2963,3 +2963,43 @@ body {
     transition-delay:0s!important
   }
 }
+
+
+/* Rekixo Mapper V5.9 — zoom-aware precision corner markers */
+/*
+  The draggable button remains a 36px touch target. Only the visible numbered
+  circle scales down with mapper zoom, so exact plot corners stay visible without
+  making drag/edit gestures harder on Android.
+*/
+.mapper-v4-canvas .mapper-point-handle.draggable {
+  width: 36px !important;
+  height: 36px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: transparent !important;
+  box-shadow: none !important;
+  font-size: 0 !important;
+  overflow: visible;
+  padding: 0 !important;
+}
+.mapper-v4-canvas .mapper-point-handle.draggable::before {
+  content: attr(data-corner);
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #f2b82d;
+  color: #07111f;
+  box-shadow: 0 2px 9px #000c, 0 0 0 2px #ffb30055;
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1;
+  transform: scale(var(--mapper-corner-visual-scale, 1));
+  transform-origin: center;
+  pointer-events: none;
+}
+.mapper-v4-canvas .mapper-point-handle.draggable:active::before {
+  filter: brightness(1.08);
+}
