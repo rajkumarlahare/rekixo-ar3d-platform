@@ -23,7 +23,7 @@ type PublicGeoData = {
   project: { id: string; name: string; slug: string };
   revision: number;
   maps: { enabled: boolean; apiKey: string | null };
-  display?: { plotClicks?: boolean; showLegend?: boolean; showPolygons?: boolean };
+  display?: { plotClicks?: boolean; showLegend?: boolean; showPolygons?: boolean; viewMode?: "north" | "masterplan" };
   masterplanUrl: string;
   masterplanUrls?: {
     original?: string;
@@ -43,6 +43,8 @@ type Listener = { remove?: () => void };
 type MapInstance = {
   addListener(eventName: string, listener: () => void): Listener;
   fitBounds(bounds: unknown, padding?: number): void;
+  setHeading?(heading: number): void;
+  setTilt?(tilt: number): void;
 };
 type Projection = {
   fromLatLngToDivPixel(latLng: LatLng): { x: number; y: number } | null;
@@ -76,6 +78,7 @@ type GoogleRoot = {
     OverlayView: new () => OverlayView;
     Polygon: new (options: Record<string, unknown>) => Polygon;
     InfoWindow: new (options?: Record<string, unknown>) => InfoWindow;
+    RenderingType?: { VECTOR?: unknown };
   };
 };
 
@@ -90,6 +93,36 @@ let mapsPromise: Promise<GoogleRoot> | null = null;
 
 function win() {
   return window as RekixoWindow;
+}
+
+function bearingDegrees(
+  start: [number, number],
+  end: [number, number],
+) {
+  const rad = Math.PI / 180;
+  const lat1 = start[1] * rad;
+  const lat2 = end[1] * rad;
+  const dLng = (end[0] - start[0]) * rad;
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
+
+function averageHeadingDegrees(a: number, b: number) {
+  const rad = Math.PI / 180;
+  const x = Math.cos(a * rad) + Math.cos(b * rad);
+  const y = Math.sin(a * rad) + Math.sin(b * rad);
+  return (Math.atan2(y, x) / rad + 360) % 360;
+}
+
+function masterplanAlignedHeading(corners: [number, number][]) {
+  if (corners.length !== 4) return 0;
+  const topEdge = bearingDegrees(corners[0]!, corners[1]!);
+  const bottomEdge = bearingDegrees(corners[3]!, corners[2]!);
+  const horizontalBearing = averageHeadingDegrees(topEdge, bottomEdge);
+  return (horizontalBearing - 90 + 360) % 360;
 }
 
 function ensureGoogleMapsConnectionHints() {
@@ -525,20 +558,32 @@ export default function GeoPublicMap({
     loadGoogleMaps(effectiveMapsKey)
       .then((google) => {
         if (cancelled || !mapNodeRef.current) return;
+        const vectorRenderingType = google.maps.RenderingType?.VECTOR;
         const map = new google.maps.Map(mapNodeRef.current, {
           mapTypeId: "hybrid",
+          ...(vectorRenderingType ? { renderingType: vectorRenderingType } : {}),
           disableDefaultUI: false,
           streetViewControl: false,
           mapTypeControl: true,
           fullscreenControl: true,
           clickableIcons: true,
           gestureHandling: "greedy",
+          headingInteractionEnabled: false,
+          tiltInteractionEnabled: false,
         });
         const bounds = new google.maps.LatLngBounds(
           { lat: data.bounds.minLat, lng: data.bounds.minLng },
           { lat: data.bounds.maxLat, lng: data.bounds.maxLng },
         );
         map.fitBounds(bounds, 34);
+        if (data.display?.viewMode === "masterplan") {
+          // Presentation-only camera rotation: GPS calibration and promoted
+          // masterplan corners stay untouched. This makes the live Geo view
+          // read like the straight client-site masterplan while satellite
+          // imagery rotates underneath it.
+          map.setTilt?.(0);
+          map.setHeading?.(masterplanAlignedHeading(data.masterplanCorners));
+        }
 
         // Do not block first usable paint on every satellite tile. tilesloaded is
         // telemetry only; the map becomes usable as soon as the Map instance exists.
