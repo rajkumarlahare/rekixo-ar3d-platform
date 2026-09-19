@@ -2,7 +2,8 @@
 -- Source: user-supplied sanctioned Mangal Raj Park layout, 2026-09-19.
 -- Safety: project-scoped, 84-row guarded, geometry/status/pricing untouched.
 
-CREATE TEMP TABLE _mangal_target (project_id TEXT PRIMARY KEY);
+DROP TABLE IF EXISTS _mangal_target;
+CREATE TABLE _mangal_target (project_id TEXT PRIMARY KEY);
 INSERT INTO _mangal_target(project_id)
 SELECT DISTINCT p.id FROM projects p
 WHERE p.status='active' AND (
@@ -14,10 +15,12 @@ WHERE p.status='active' AND (
   )
 );
 
-CREATE TEMP TABLE _mangal_target_guard (n INTEGER NOT NULL CHECK (n=1));
+DROP TABLE IF EXISTS _mangal_target_guard;
+CREATE TABLE _mangal_target_guard (n INTEGER NOT NULL CHECK (n=1));
 INSERT INTO _mangal_target_guard(n) SELECT COUNT(*) FROM _mangal_target;
 
-CREATE TEMP TABLE _mangal_measurement_source (
+DROP TABLE IF EXISTS _mangal_measurement_source;
+CREATE TABLE _mangal_measurement_source (
   plot_id INTEGER PRIMARY KEY, sqm REAL NOT NULL,
   front REAL, back REAL, depth_a REAL, depth_b REAL,
   front_label TEXT NOT NULL, back_label TEXT NOT NULL,
@@ -116,10 +119,12 @@ INSERT INTO _mangal_measurement_source(
   (83,134.938,9,9,15,14.385,'9.000 m','9.000 m','15.000 m','14.385 m','Front 9.000 m · Back 9.000 m · Depth A 15.000 m · Depth B 14.385 m','9.000 M WIDE ROAD','high',1,'Sanctioned side labels transcribed from uploaded Mangal Raj Park layout.'),
   (84,131.223,9.022,9,14.385,14.255,'9.022 m','9.000 m','14.385 m','14.255 m','Front 9.022 m · Back 9.000 m · Depth A 14.385 m · Depth B 14.255 m','9.000 M WIDE ROAD','high',1,'Sanctioned irregular plot beside open space; printed principal lengths retained.');
 
-CREATE TEMP TABLE _mangal_source_guard (n INTEGER NOT NULL CHECK (n=84));
+DROP TABLE IF EXISTS _mangal_source_guard;
+CREATE TABLE _mangal_source_guard (n INTEGER NOT NULL CHECK (n=84));
 INSERT INTO _mangal_source_guard(n) SELECT COUNT(*) FROM _mangal_measurement_source;
 
-CREATE TEMP TABLE _mangal_plot_guard (n INTEGER NOT NULL CHECK (n=84));
+DROP TABLE IF EXISTS _mangal_plot_guard;
+CREATE TABLE _mangal_plot_guard (n INTEGER NOT NULL CHECK (n=84));
 INSERT INTO _mangal_plot_guard(n)
 SELECT COUNT(*)
 FROM plots p
@@ -239,3 +244,12 @@ SELECT project_id,'measurementSheetReviewCount','2',strftime('%Y-%m-%dT%H:%M:%fZ
 FROM _mangal_target
 WHERE 1
 ON CONFLICT(project_id,key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at;
+
+
+-- D1 does not permit TEMP tables in remote migrations. These ordinary staging
+-- tables are migration-local by name and are removed after the guarded backfill.
+DROP TABLE IF EXISTS _mangal_plot_guard;
+DROP TABLE IF EXISTS _mangal_source_guard;
+DROP TABLE IF EXISTS _mangal_measurement_source;
+DROP TABLE IF EXISTS _mangal_target_guard;
+DROP TABLE IF EXISTS _mangal_target;
