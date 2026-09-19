@@ -147,7 +147,7 @@ function assertAreaConsistency(
       sqmToSqft(sqmInput.value, sqmToSqftFactor),
     ) > tolerance
   ) {
-    throw new Error("Sqft aur Sqm values project conversion policy ke 1% tolerance ke andar match nahi kar rahe");
+    throw new Error("Sqft aur Sqm values 1% tolerance ke andar project conversion policy se match nahi kar rahe");
   }
   if (
     sqmInput.supplied &&
@@ -164,7 +164,7 @@ function assertAreaConsistency(
       sqmToSqft(sqydToSqm(sqydInput.value), sqmToSqftFactor),
     ) > tolerance
   ) {
-    throw new Error("Sqft aur Sqyd values project conversion policy ke 1% tolerance ke andar match nahi kar rahe");
+    throw new Error("Sqft aur Sqyd values 1% tolerance ke andar project conversion policy se match nahi kar rahe");
   }
 }
 
