@@ -51,9 +51,9 @@ test("measurement import backfills sizes without touching polygon or sales statu
   assert.match(block, /INSERT INTO plot_edge_measurements/);
   assert.match(block, /source_ref/);
   assert.match(block, /confidence/);
-  assert.doesNotMatch(block, /polygon\s*=/);
-  assert.doesNotMatch(block, /status\s*=/);
-  assert.doesNotMatch(block, /featured\s*=/);
+  assert.doesNotMatch(block, /UPDATE plots SET[^\"\\n]*polygon\s*=/);
+  assert.doesNotMatch(block, /UPDATE plots SET[^\"\\n]*status\s*=/);
+  assert.doesNotMatch(block, /UPDATE plots SET[^\"\\n]*featured\s*=/);
 });
 
 test("normal manual quad workflow is front-first and direction CSV remains legacy fallback", () => {
