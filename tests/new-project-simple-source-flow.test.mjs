@@ -7,9 +7,9 @@ const read = (path) => fs.readFileSync(path, "utf8");
 test("Plot Mapper presents one normal onboarding path and moves correction sources to Advanced", () => {
   const mapper = read("app/plot-mapper.tsx");
   assert.match(mapper, /Normal new-project flow/);
-  assert.match(mapper, /Masterplan → one verified Plot Data file → map boundaries → quality check → preview → publish/);
+  assert.match(mapper, /Masterplan → verified Plot Data → AI measurement manifest when needed → front-first boundaries → quality check → preview → publish/);
   assert.match(mapper, /2\. Verified Plot Data/);
-  assert.match(mapper, /ONE CSV\/JSON: area \+ road \+ Front\/Back\/Depth A\/Depth B \+ Front Direction/);
+  assert.match(mapper, /authoritative area \+ road \+ side sizes; Front Direction legacy\/optional/);\n  assert.match(mapper, /AI Measurement Manifest/);\n  assert.match(mapper, /Download AI Measurement Manifest template/);
   assert.match(mapper, /Advanced \/ corrections/);
   assert.match(mapper, /Road Access correction CSV/);
   assert.match(mapper, /Side Mapping correction CSV/);
