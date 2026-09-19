@@ -3,8 +3,11 @@ import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
 import { writeAudit } from "../../audit";
 import { parseCadGeometry } from "../../cad-import";
 import { cleanPlotId, type HomographyPair } from "../../mapper-geometry";
-import { edgeIndexForDisplayDirection, type EdgeDirection } from "../../plot-edge-semantics";
+import { type EdgeDirection } from "../../plot-edge-semantics";
 import { assessPlotSheetRows, parsePlotSheetText } from "../../plot-sheet";
+import { normalizeSqmToSqftFactor } from "../../area-policy";
+import { parsePlotMeasurementSheetText } from "../../measurement-sheet";
+import { resolveFourSideEdges } from "../../plot-side-resolver";
 import { parseRoadAccessSheetText } from "../../road-access-sheet";
 import { parseSideMappingSheetText } from "../../side-mapping-sheet";
 import {
@@ -41,6 +44,7 @@ const SETTINGS_WHITELIST = new Set([
   "cadReviewCount",
   "publicRotation",
   "address",
+  "sqmToSqftFactor",
 ]);
 
 async function projectExists(projectId: string) {
@@ -249,6 +253,47 @@ async function deleteSettings(projectId: string, keys: string[]) {
   );
 }
 
+async function projectSqmToSqftFactor(projectId: string) {
+  const row = await env.DB.prepare(
+    "SELECT value FROM settings WHERE project_id=? AND key='sqmToSqftFactor' LIMIT 1",
+  )
+    .bind(projectId)
+    .first<{ value: string }>();
+  return normalizeSqmToSqftFactor(row?.value);
+}
+
+type EdgeBinding = {
+  id: string;
+  pointCount: number;
+  front: number;
+  back: number;
+  depthA: number;
+  depthB: number;
+};
+
+async function syncMeasurementBindings(
+  projectId: string,
+  bindings: EdgeBinding[],
+  now: string,
+) {
+  if (!bindings.length) return;
+  const statements = bindings.flatMap((binding) =>
+    ([
+      ["front", binding.front],
+      ["back", binding.back],
+      ["depthA", binding.depthA],
+      ["depthB", binding.depthB],
+    ] as const).map(([role, edge]) =>
+      env.DB.prepare(
+        "UPDATE plot_edge_measurements SET edge_index=?,point_count=?,updated_at=? WHERE project_id=? AND plot_id=? AND role=?",
+      ).bind(edge, binding.pointCount, now, projectId, binding.id, role),
+    ),
+  );
+  for (let index = 0; index < statements.length; index += 80) {
+    await env.DB.batch(statements.slice(index, index + 80));
+  }
+}
+
 function validCalibrationPair(value: unknown): value is HomographyPair {
   if (!value || typeof value !== "object") return false;
   const pair = value as HomographyPair;
@@ -276,6 +321,12 @@ function validatedSetting(key: string, raw: unknown) {
     if (!Number.isInteger(number) || number < 0 || number > 3)
       throw new Error("publicRotation invalid hai");
     return String(number);
+  }
+  if (key === "sqmToSqftFactor") {
+    const number = Number(raw);
+    if (!Number.isFinite(number) || number < 9 || number > 12)
+      throw new Error("Sq.M to Sq.Ft factor 9 aur 12 ke beech hona chahiye");
+    return String(Number(number.toFixed(6)));
   }
   if (["cadMatchedCount", "cadReviewCount"].includes(key)) {
     const number = Number(raw);
