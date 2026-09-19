@@ -788,9 +788,10 @@ export default function PlotMapper({
     setImageUrl(assetUrl("masterplan"));
     setImageReady(false);
     setNaturalImageSize(null);
-    const firstUnmapped = [...nextPlots].sort(plotSort).find((plot) => !plot.polygon);
+    const orderedNextPlots = [...nextPlots].sort(plotSort);
+    const firstUnmapped = orderedNextPlots.find((plot) => !plot.polygon);
     if (firstUnmapped) loadPlotDetails(firstUnmapped, false);
-    else if (nextPlots.length) setPlotId(nextPlotId([...nextPlots].sort(plotSort).at(-1)?.id || "1"));
+    else if (orderedNextPlots.length) loadPlotDetails(orderedNextPlots[0], false);
     else setPlotId("1");
     setExcludedAutoIds(new Set());
     const savedPairs = String(nextSettings.calibrationPairs || "");
@@ -1186,33 +1187,43 @@ export default function PlotMapper({
     }
   }
 
-  function selectNextPlot(afterId = "") {
-    const ordered = [...plots].sort(plotSort);
+  function selectNextPlot(afterId = "", sourcePlots: Plot[] = plots) {
+    const ordered = [...sourcePlots].sort(plotSort);
     const remaining = ordered.filter((plot) => !plot.polygon && plot.id !== afterId);
     const currentIndex = ordered.findIndex((plot) => plot.id === afterId);
     const next =
       remaining.find((plot) => ordered.indexOf(plot) > currentIndex) || remaining[0] || null;
-    if (next) loadPlotDetails(next, false);
-    else {
-      setPoints([]);
-      setEditingId("");
-      setManualPhase("select");
-      setPlotId(nextPlotId(afterId || ordered.at(-1)?.id || "1"));
-      setDimensions("");
-      setSqft("");
-      setRoad("");
-      setFront("");
-      setBack("");
-      setDepth("");
-      setDepth2("");
-      setDimensionUnit("ft");
-      setFrontEdgeIndex("");
-      setDepthEdgeIndex("");
-      setBackEdgeIndex("");
-      setDepth2EdgeIndex("");
-      setEdgeAssignMode(null);
-    setSelectedSemanticEdge(null);
+    if (next) {
+      loadPlotDetails(next, false);
+      return true;
     }
+
+    const fallback =
+      ordered.find((plot) => plot.id === afterId) || ordered[0] || null;
+    if (fallback) {
+      loadPlotDetails(fallback, false);
+      return false;
+    }
+
+    setPoints([]);
+    setEditingId("");
+    setManualPhase("select");
+    setPlotId("1");
+    setDimensions("");
+    setSqft("");
+    setRoad("");
+    setFront("");
+    setBack("");
+    setDepth("");
+    setDepth2("");
+    setDimensionUnit("ft");
+    setFrontEdgeIndex("");
+    setDepthEdgeIndex("");
+    setBackEdgeIndex("");
+    setDepth2EdgeIndex("");
+    setEdgeAssignMode(null);
+    setSelectedSemanticEdge(null);
+    return false;
   }
 
   function selectSiblingPlot(offset: -1 | 1) {
@@ -2612,9 +2623,14 @@ export default function PlotMapper({
         // Ignore local draft cleanup failures.
       }
       setToolMode("pan");
-      selectNextPlot(verified.plot.id);
+      const hasNextInventoryPlot = selectNextPlot(
+        verified.plot.id,
+        verified.plots,
+      );
       notify(
-        `Plot ${verified.plot.id} SERVER VERIFIED ✓ — live project data ready; next plot open`,
+        hasNextInventoryPlot
+          ? `Plot ${verified.plot.id} SERVER VERIFIED ✓ — next inventory plot open`
+          : `Plot ${verified.plot.id} SERVER VERIFIED ✓ — all ${verified.plots.length} inventory plots mapped`,
       );
     } catch (error) {
       notify(error instanceof Error ? error.message : "Plot save नहीं हुआ");
