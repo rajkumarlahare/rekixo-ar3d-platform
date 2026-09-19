@@ -33,6 +33,91 @@ function validPolygon(raw: string) {
   }
 }
 
+type PublishPlotRow = {
+  id: string;
+  polygon: string;
+  dimensions: string;
+  road: string;
+  front: number | null;
+  back: number | null;
+  depth: number | null;
+  depth2: number | null;
+  frontLabel: string | null;
+  backLabel: string | null;
+  depthLabel: string | null;
+  depth2Label: string | null;
+  sideDimensions: string | null;
+  frontEdgeIndex: number | null;
+  backEdgeIndex: number | null;
+  depthEdgeIndex: number | null;
+  depth2EdgeIndex: number | null;
+};
+
+function hasFourSideMeasurements(plot: PublishPlotRow) {
+  const direct = [
+    plot.front != null || Boolean(String(plot.frontLabel || "").trim()),
+    plot.back != null || Boolean(String(plot.backLabel || "").trim()),
+    plot.depth != null || Boolean(String(plot.depthLabel || "").trim()),
+    plot.depth2 != null || Boolean(String(plot.depth2Label || "").trim()),
+  ];
+  if (direct.every(Boolean)) return true;
+  const sides = String(plot.sideDimensions || "").toLowerCase();
+  if (!sides.includes("front") || !sides.includes("back") || !sides.includes("depth"))
+    return false;
+  const measurements =
+    sides.match(/\d+(?:\.\d+)?\s*(?:m\b|ft\b|'|feet\b|meter\b|metre\b)/gi) || [];
+  return measurements.length >= 4;
+}
+
+function hasFourSideSemantics(plot: PublishPlotRow) {
+  const indexes = [
+    plot.frontEdgeIndex,
+    plot.backEdgeIndex,
+    plot.depthEdgeIndex,
+    plot.depth2EdgeIndex,
+  ];
+  return indexes.every(
+    (value) => value != null && Number.isInteger(Number(value)) && Number(value) >= 0,
+  ) && new Set(indexes.map(Number)).size === 4;
+}
+
+function plotDetailWarnings(plots: PublishPlotRow[]) {
+  if (!plots.length) return [] as string[];
+  const missingDimensions = plots.filter(
+    (plot) => !String(plot.dimensions || "").trim(),
+  );
+  const missingRoad = plots.filter((plot) => !String(plot.road || "").trim());
+  const missingSides = plots.filter((plot) => !hasFourSideMeasurements(plot));
+  const missingSemantics = plots.filter((plot) => !hasFourSideSemantics(plot));
+  const genericAreaOnly = plots.filter(
+    (plot) =>
+      /approved\s+(?:plan\s+)?area|sanctioned\s+irregular\s+plot/i.test(
+        String(plot.dimensions || ""),
+      ) && !hasFourSideMeasurements(plot),
+  );
+
+  const warnings: string[] = [];
+  if (missingDimensions.length)
+    warnings.push(
+      `${missingDimensions.length} plots me Dimensions missing hain`,
+    );
+  if (missingRoad.length)
+    warnings.push(`${missingRoad.length} plots me Road Access missing hai`);
+  if (missingSides.length)
+    warnings.push(
+      `${missingSides.length} plots me Front / Back / Depth A / Depth B incomplete hain`,
+    );
+  if (missingSemantics.length)
+    warnings.push(
+      `${missingSemantics.length} plots me Front/Back/Depth edge mapping incomplete hai`,
+    );
+  if (genericAreaOnly.length)
+    warnings.push(
+      `${genericAreaOnly.length} plots generic approved-area text par hain; exact side details verify karein`,
+    );
+  return warnings;
+}
+
 async function publishState(projectId: string) {
   const project = await env.DB.prepare(
     "SELECT id,name,slug,kind,status,public_status AS publicStatus,published_at AS publishedAt,publish_version AS publishVersion,public_host AS publicHost,admin_host AS adminHost FROM projects WHERE id=? AND status!='deleted' LIMIT 1",
@@ -53,9 +138,11 @@ async function publishState(projectId: string) {
   if (!project) return null;
 
   const [plotResult, settingsResult] = await Promise.all([
-    env.DB.prepare("SELECT id,polygon FROM plots WHERE project_id=? ORDER BY id")
+    env.DB.prepare(
+      "SELECT id,polygon,dimensions,road,front,back,depth,depth2,front_label AS frontLabel,back_label AS backLabel,depth_label AS depthLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=? ORDER BY id",
+    )
       .bind(projectId)
-      .all<{ id: string; polygon: string }>(),
+      .all<PublishPlotRow>(),
     env.DB.prepare(
       "SELECT key,value FROM settings WHERE project_id=? AND key IN ('masterplanName','mapWidth','mapHeight','shareTitle','shareDescription','shareImage','location','address','phone1')",
     )
@@ -74,6 +161,7 @@ async function publishState(projectId: string) {
   const legacy = projectId === LEGACY_PROJECT;
   const geoLab = project.kind === "geo_lab";
   const reasons: string[] = [];
+  const warnings = legacy ? [] : plotDetailWarnings(plots);
 
   if (!legacy) {
     if (geoLab) reasons.push("Geo Lab project public publish ke liye locked hai");
@@ -111,6 +199,8 @@ async function publishState(projectId: string) {
     masterplanReady: legacy || Boolean(settings.masterplanName),
     ready: reasons.length === 0,
     reasons,
+    warnings,
+    detailQualityReady: warnings.length === 0,
     primaryDomain: primaryDomain || project.publicHost,
     primaryAdminDomain: primaryAdminDomain || project.adminHost,
     ...links,
@@ -168,6 +258,7 @@ export async function POST(request: Request) {
       mapped: state.mapped,
       total: state.total,
       previousVersion: state.publishVersion,
+      detailQualityWarnings: state.warnings,
     });
   } else {
     if (projectId === LEGACY_PROJECT)

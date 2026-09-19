@@ -68,15 +68,30 @@ This file is the implementation checklist for every present and future client pr
 
 ## Plot sheet requirements
 
+The normal new-project path uses **one canonical Plot CSV/JSON**. Separate Road Access
+and Side Mapping sheets remain isolated correction tools only.
+
 CSV/JSON must support equivalent headers for:
 
 - Plot ID / Plot No / Lot No
 - sqft and/or sqm and/or sqyd
 - dimensions
-- facing / road access
+- road access
+- Front / Back / Depth A / Depth B
+- explicit Dimension Unit (`m` or `ft`) whenever numeric side measurements exist
+- Front Direction (`top`, `right`, `bottom`, `left`) for automatic semantic edge mapping
+- optional exact display labels / Side Dimensions
 - optional notes
 
-If one area unit is supplied, derive the other units. Import must preserve an already-mapped polygon and current booking/sold status.
+Before import, a no-write preflight must reject malformed/contradictory values and report
+missing Dimensions, Road Access, four-side measurements and Front Direction. If multiple
+area units are supplied, they must agree within tolerance. Never silently assume feet for
+unitless numeric side measurements.
+
+If one area unit is supplied, derive the other units. Import must preserve an already-mapped
+polygon and current booking/sold status. Front Direction may be stored before geometry exists;
+once a polygon is available, Rekixo should resolve Front / Back / Depth A / Depth B edge
+semantics automatically.
 
 ## Public 2D/3D requirements
 

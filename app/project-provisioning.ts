@@ -66,6 +66,7 @@ function defaultProjectSettings(projectName: string) {
     shareTitle: projectName,
     shareDescription: `Explore ${projectName} with AR 3D interactive plot visualization.`,
     shareTemplate: SHARE_TEMPLATE,
+    plotFrontDirections: "{}",
   };
 }
 

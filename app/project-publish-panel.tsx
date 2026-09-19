@@ -19,6 +19,8 @@ type State = {
   invalid?: number;
   ready?: boolean;
   reasons?: string[];
+  warnings?: string[];
+  detailQualityReady?: boolean;
   publicUrl?: string;
   adminUrl?: string;
   platformUrl?: string;
@@ -86,12 +88,26 @@ export default function ProjectPublishPanel({
   async function action(next: "publish" | "unpublish") {
     const republishing =
       next === "publish" && state.publicStatus === "published";
+    const qualityWarnings =
+      next === "publish" && state.warnings?.length ? state.warnings : [];
+    const publishPrompt =
+      qualityWarnings.length
+        ? [
+            republishing
+              ? "Latest changes publish karne se pehle plot-detail warnings check karein:"
+              : "Project publish-ready hai, lekin plot-detail warnings hain:",
+            "",
+            ...qualityWarnings.map((warning) => "• " + warning),
+            "",
+            "Public website par incomplete details dikh sakti hain. Phir bhi publish karein?",
+          ].join("\n")
+        : republishing
+          ? "Latest project changes ko public website par publish karein?"
+          : "Project ko public website par publish karein?";
     if (
       !confirm(
         next === "publish"
-          ? republishing
-            ? "Latest project changes ko public website par publish karein?"
-            : "Project ko public website par publish karein?"
+          ? publishPrompt
           : "Public website ko draft mode me le jayein?",
       )
     )
@@ -167,6 +183,25 @@ export default function ProjectPublishPanel({
             <li key={reason}>{reason}</li>
           ))}
         </ul>
+      ) : null}
+
+      {state.warnings?.length ? (
+        <div className="rekixo-publish-quality-warning">
+          <b>Plot detail quality check</b>
+          <p>
+            Website publish ho sakti hai, lekin ye data gaps customer drawer me
+            incomplete ya generic details dikha sakte hain.
+          </p>
+          <ul>
+            {state.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : state.total ? (
+        <div className="rekixo-publish-quality-ready">
+          <CheckCircle2 /> Plot details quality check passed
+        </div>
       ) : null}
 
       <div className="rekixo-publish-actions">

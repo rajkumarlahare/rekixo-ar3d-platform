@@ -1,3 +1,5 @@
+> Current production onboarding contract: see `REKIXO-NEW-PROJECT-WORKFLOW.md`. This file documents the guided mapper history; where older wording conflicts, the production contract and `AUTO-CAD-MAPPER-SPEC.md` win.
+
 # Tiyansh / Rekixo — Guided Multi-Project Plot Mapper
 
 Date: 2026-09-07
@@ -10,16 +12,18 @@ Owner workflow:
 
 1. Create/select a client project in Super Admin.
 2. Open **Plot Mapper**.
-3. Upload the project's masterplan image. The browser normalizes it to the same 1200×2133 coordinate plane used by the Tiyansh 2D/3D engine.
-4. Optionally upload the original technical PDF as a project-scoped reference drawing.
-5. Select Plot 1 boundary.
+3. Upload the project's masterplan image. The browser preserves the project's own aspect ratio/dimensions; polygons are saved as normalized 0..1 coordinates. Tiyansh 1200×2133 is legacy-only, not a new-project coordinate template.
+4. Upload one canonical Plot CSV/JSON with area, Dimensions, Road Access, Front/Back/Depth A/Depth B, explicit unit, and Front Direction. Rekixo preflights the file before import.
+5. Optionally upload the original technical PDF as a project-scoped reference drawing.
+6. Select Plot 1 boundary.
    - Rectangle: two opposite taps.
    - Irregular: tap each corner, then finish boundary.
-6. Fill plot number, dimensions, area and road access.
-7. Press **Confirm & start next**.
-8. The polygon and plot details are saved to the selected project's D1 rows.
-9. The mapper immediately resets to the next plot number and starts boundary selection again.
-10. Public website loads the same saved polygon for SVG hit-testing and the WebGL 3D overlay.
+7. If the canonical CSV supplied Front Direction, Front/Back/Depth edge semantics are resolved automatically when the polygon is saved.
+8. Press **Confirm & start next**.
+9. The polygon and plot details are saved to the selected project's D1 rows with server read-back verification.
+10. The mapper immediately resets to the next plot number and starts boundary selection again.
+11. Confirm the Plot Data Quality card is complete before public handoff.
+12. Public website loads the same saved polygon for SVG hit-testing and the WebGL 3D overlay.
 
 ## Important architecture rules
 
@@ -37,7 +41,7 @@ Owner workflow:
 
 The raster masterplan image is the canonical mapping surface because both SVG hit areas and WebGL need one deterministic coordinate plane/texture. The source PDF is stored project-by-project as the original technical reference. This avoids having the browser's PDF viewer introduce page chrome, zoom or coordinate drift into plot boundaries.
 
-If a future requirement is **PDF-only mapping**, add a controlled PDF.js rasterization step that converts the selected PDF page to the same 1200×2133 mapping surface before selection. Do not map directly on the native browser PDF viewer.
+If a future requirement is **PDF-only mapping**, add a controlled PDF.js rasterization step that converts the selected PDF page to a project-owned raster surface while preserving its aspect ratio. Do not force it into Tiyansh dimensions and do not map directly on the native browser PDF viewer.
 
 ## Main changed files
 

@@ -2467,6 +2467,12 @@ body {
 .rekixo-publish-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:14px 0}
 .rekixo-publish-stats span{border:1px solid #253752;border-radius:12px;padding:11px;color:#8493af}.rekixo-publish-stats b{display:block;color:#fff;margin-top:5px}
 .rekixo-publish-reasons{margin:12px 0;padding:12px 12px 12px 30px;border:1px solid #75451d;border-radius:12px;background:#2a1c0b;color:#ffd278}
+.rekixo-publish-quality-warning{margin:12px 0;padding:13px 14px;border:1px solid #80551f;border-radius:12px;background:#2a200d;color:#e9c46d}
+.rekixo-publish-quality-warning>b{display:block;color:#ffd978;margin-bottom:5px}
+.rekixo-publish-quality-warning>p{margin:0 0 8px;color:#baa979;font-size:12px;line-height:1.45}
+.rekixo-publish-quality-warning>ul{margin:0;padding-left:20px;font-size:12px;line-height:1.55}
+.rekixo-publish-quality-ready{margin:12px 0;display:flex;align-items:center;gap:8px;padding:11px 13px;border:1px solid #245b48;border-radius:12px;background:#0d2a22;color:#62dfa4;font-size:12px;font-weight:800}
+.rekixo-publish-quality-ready svg{width:16px;height:16px}
 .rekixo-publish-actions{display:flex;flex-wrap:wrap;gap:9px}.rekixo-publish-panel>small{display:block;margin-top:11px;color:#7d8ba4}
 @media(max-width:720px){
   .rekixo-domain-link{grid-template-columns:1fr 42px 42px}.rekixo-domain-link span{grid-column:1/-1}.rekixo-domain-link code{min-width:0}
