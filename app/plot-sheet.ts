@@ -1,5 +1,12 @@
 import { cleanPlotId } from "./mapper-geometry";
 import type { EdgeDirection } from "./plot-edge-semantics";
+import {
+  normalizeSqmToSqftFactor,
+  sqftToSqm,
+  sqmToSqft,
+  sqmToSqyd,
+  sqydToSqm,
+} from "./area-policy";
 
 export type PlotSheetRow = {
   id: string;
@@ -129,28 +136,35 @@ function assertAreaConsistency(
   sqftInput: { value: number; supplied: boolean },
   sqmInput: { value: number; supplied: boolean },
   sqydInput: { value: number; supplied: boolean },
+  sqmToSqftFactor: number,
 ) {
   const tolerance = 0.01;
   if (
     sqftInput.supplied &&
     sqmInput.supplied &&
-    relativeDifference(sqftInput.value, sqmInput.value * 10.7639) > tolerance
+    relativeDifference(
+      sqftInput.value,
+      sqmToSqft(sqmInput.value, sqmToSqftFactor),
+    ) > tolerance
   ) {
-    throw new Error("Sqft aur Sqm values 1% tolerance ke andar match nahi kar rahe");
-  }
-  if (
-    sqftInput.supplied &&
-    sqydInput.supplied &&
-    relativeDifference(sqftInput.value, sqydInput.value * 9) > tolerance
-  ) {
-    throw new Error("Sqft aur Sqyd values 1% tolerance ke andar match nahi kar rahe");
+    throw new Error("Sqft aur Sqm values project conversion policy ke 1% tolerance ke andar match nahi kar rahe");
   }
   if (
     sqmInput.supplied &&
     sqydInput.supplied &&
-    relativeDifference(sqmInput.value * 10.7639, sqydInput.value * 9) > tolerance
+    relativeDifference(sqmInput.value, sqydToSqm(sqydInput.value)) > tolerance
   ) {
     throw new Error("Sqm aur Sqyd values 1% tolerance ke andar match nahi kar rahe");
+  }
+  if (
+    sqftInput.supplied &&
+    sqydInput.supplied &&
+    relativeDifference(
+      sqftInput.value,
+      sqmToSqft(sqydToSqm(sqydInput.value), sqmToSqftFactor),
+    ) > tolerance
+  ) {
+    throw new Error("Sqft aur Sqyd values project conversion policy ke 1% tolerance ke andar match nahi kar rahe");
   }
 }
 
@@ -234,20 +248,23 @@ function cleanDimensionText(value: unknown, maxLength: number) {
     .slice(0, maxLength);
 }
 
-function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
+function normalizeRow(
+  input: Record<string, unknown>,
+  sqmToSqftFactor: number,
+): PlotSheetRow | null {
   const id = cleanPlotId(String(input.id || ""));
   if (!id) return null;
   const sqftInput = areaValue(input.sqft, "Sqft");
   const sqmInput = areaValue(input.sqm, "Sqm");
   const sqydInput = areaValue(input.sqyd, "Sqyd");
-  assertAreaConsistency(sqftInput, sqmInput, sqydInput);
+  assertAreaConsistency(sqftInput, sqmInput, sqydInput, sqmToSqftFactor);
   let sqft = sqftInput.value;
   let sqm = sqmInput.value;
   let sqyd = sqydInput.value;
-  if (!sqft && sqm) sqft = sqm * 10.7639;
-  if (!sqft && sqyd) sqft = sqyd * 9;
-  if (!sqm && sqft) sqm = sqft / 10.7639;
-  if (!sqyd && sqft) sqyd = sqft / 9;
+  if (!sqm && sqft) sqm = sqftToSqm(sqft, sqmToSqftFactor);
+  if (!sqm && sqyd) sqm = sqydToSqm(sqyd);
+  if (!sqft && sqm) sqft = sqmToSqft(sqm, sqmToSqftFactor);
+  if (!sqyd && sqm) sqyd = sqmToSqyd(sqm);
   if (!sqft) return null;
   const dimensions = String(input.dimensions || "").trim().slice(0, 120);
   const front = optionalPositive(input.front, "Front");
@@ -292,7 +309,12 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
   };
 }
 
-export function parsePlotSheetText(text: string, filename: string) {
+export function parsePlotSheetText(
+  text: string,
+  filename: string,
+  options: { sqmToSqftFactor?: number } = {},
+) {
+  const areaFactor = normalizeSqmToSqftFactor(options.sqmToSqftFactor);
   if (filename.toLowerCase().endsWith(".json")) {
     const parsed = JSON.parse(text) as unknown;
     const list = Array.isArray(parsed)
@@ -303,7 +325,7 @@ export function parsePlotSheetText(text: string, filename: string) {
     return assertUniqueRows(
       list
         .map((item) => normalizedObject((item || {}) as Record<string, unknown>))
-        .map((item) => normalizeRow(item))
+        .map((item) => normalizeRow(item, areaFactor))
         .filter((row): row is PlotSheetRow => Boolean(row)),
     );
   }
@@ -370,7 +392,7 @@ export function parsePlotSheetText(text: string, filename: string) {
           sideDimensions: value(row, indexes.sideDimensions),
           frontDirection: value(row, indexes.frontDirection),
           notes: value(row, indexes.notes),
-        }),
+        }, areaFactor),
       )
       .filter((row): row is PlotSheetRow => Boolean(row)),
   );
@@ -443,8 +465,7 @@ export function assessPlotSheetRows(rows: PlotSheetRow[]): PlotSheetQuality {
       genericAreaOnlyDimensions.push(row.id);
     }
 
-    if (dimensions && road && fullSides && hasFrontMapping)
-      fullDetailCount += 1;
+    if (dimensions && road && fullSides) fullDetailCount += 1;
   }
 
   return {
@@ -459,7 +480,6 @@ export function assessPlotSheetRows(rows: PlotSheetRow[]): PlotSheetQuality {
     richDetailReady:
       rows.length > 0 &&
       fullDetailCount === rows.length &&
-      !genericAreaOnlyDimensions.length &&
-      !missingFrontDirection.length,
+      !genericAreaOnlyDimensions.length,
   };
 }
