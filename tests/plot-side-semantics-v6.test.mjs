@@ -58,7 +58,7 @@ test("customer irregular diagram uses actual-edge dimensions and no guessed fall
   assert.match(html, /function plotSideSemantics/);
   assert.match(html, /parsed\.front\.length/);
   assert.match(html, /front!==null&&distinctRoles/);
-  assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V8/);
+  assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V9/);
   assert.match(html, /const irregular=.*includes\('irregular'\)/);
   assert.match(html, /setLegacyDiagramDimensionsVisible\(!canonicalRendered&&!irregular\)/);
   assert.match(html, /diagram-legend\{display:none!important\}/);
@@ -75,8 +75,8 @@ test("runtime has no VISTAR tenant hardcode", () => {
 });
 
 test("runtime cache version is v60", () => {
-  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v60/);
+  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v61/);
   for (const file of ["app/page.tsx","app/preview/[projectId]/page.tsx","app/projects/[slug]/page.tsx"]) {
-    assert.match(read(file), /v=60/);
+    assert.match(read(file), /v=61/);
   }
 });
