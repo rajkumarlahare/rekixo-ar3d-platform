@@ -3750,7 +3750,7 @@ export default function PlotMapper({
 
           {manualPhase === "select" ? <>
             <div className="mapper-mode">
-              <button className={shape === "quad" ? "active" : ""} onClick={() => { setShape("quad"); setPoints([]); }}>Perspective plot · 4 corners</button>
+              <button className={shape === "quad" ? "active" : ""} onClick={() => { setShape("quad"); setPoints([]); }}>Front-first plot · 4 corners</button>
               <button className={shape === "polygon" ? "active" : ""} onClick={() => { setShape("polygon"); setPoints([]); }}>Irregular · corner taps</button>
             </div>
             <div className="mapper-actions compact">
@@ -3762,7 +3762,7 @@ export default function PlotMapper({
               <button onClick={clonePreviousShape}><Copy />Clone previous</button>
               {shape === "polygon" && <button className="primary" disabled={points.length < 3} onClick={() => setManualPhase("details")}><CheckCircle2 />Boundary complete</button>}
             </div>
-            <small className="mapper-help">पहले PAN में plot को बड़ा zoom करें → SELECT करें → clockwise corners tap करें. Existing plot vertex/edge auto-snap होगा. Numbered handle drag करके pixel-level correction करें.</small>
+            <small className="mapper-help">4-corner plot: Tap 1 + Tap 2 road-facing Front boundary ke dono endpoints par karein, phir same direction me clockwise baki 2 corners tap karein. Rekixo automatically Front → Depth A → Back → Depth B bind karega. Existing vertex/edge auto-snap hota hai.</small>
           </> : <>
             <div className="mapper-fields guided-fields">
               <label><span>Plot number</span><input value={plotId} readOnly={Boolean(currentPlot)} onChange={(event) => setPlotId(event.target.value)} /></label>
@@ -3786,7 +3786,7 @@ export default function PlotMapper({
               }}>Dimensions → Front/Depth</button>
               <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
             </div>
-            <small className="mapper-help">Irregular plot: masterplan par boundary edge tap karein, phir Assign plot sides module me Front / Back / Depth A / Depth B choose karein. Front hamesha road-facing boundary hai. Measurements plot sheet/fields se aati hain; edge role visual selection se save hota hai.</small>
+            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular/corner-road exception me Assign plot sides module se Front / Back / Depth A / Depth B verify/correct karein. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
             <div className="mapper-actions">
               <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
               <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
