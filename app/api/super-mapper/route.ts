@@ -416,6 +416,31 @@ async function savePlots(
       ),
     );
   }
+  const bindings: EdgeBinding[] = [];
+  for (const plot of saved) {
+    if (!plot.polygon || !plot.edgeSemantics) continue;
+    try {
+      const polygon = JSON.parse(plot.polygon) as unknown[];
+      if (!Array.isArray(polygon) || polygon.length < 4) continue;
+      const semantics = parsePlotSideSemantics(plot.edgeSemantics, polygon.length);
+      const front = semantics?.roles.front?.[0];
+      const back = semantics?.roles.back?.[0];
+      const depthA = semantics?.roles.depthA?.[0];
+      const depthB = semantics?.roles.depthB?.[0];
+      if (![front, back, depthA, depthB].every(Number.isInteger)) continue;
+      bindings.push({
+        id: plot.id,
+        pointCount: polygon.length,
+        front: Number(front),
+        back: Number(back),
+        depthA: Number(depthA),
+        depthB: Number(depthB),
+      });
+    } catch {
+      // Binding metadata must never block the canonical plot save.
+    }
+  }
+  await syncMeasurementBindings(projectId, bindings, now);
   return saved;
 }
 
