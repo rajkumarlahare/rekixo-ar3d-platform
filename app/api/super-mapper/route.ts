@@ -4,7 +4,7 @@ import { writeAudit } from "../../audit";
 import { parseCadGeometry } from "../../cad-import";
 import { cleanPlotId, type HomographyPair } from "../../mapper-geometry";
 import { edgeIndexForDisplayDirection, type EdgeDirection } from "../../plot-edge-semantics";
-import { parsePlotSheetText } from "../../plot-sheet";
+import { assessPlotSheetRows, parsePlotSheetText } from "../../plot-sheet";
 import { parseRoadAccessSheetText } from "../../road-access-sheet";
 import { parseSideMappingSheetText } from "../../side-mapping-sheet";
 import {
@@ -437,6 +437,7 @@ export async function POST(request: Request) {
       (kind === "sourcePdf" && (file.type === "application/pdf" || extension === "pdf")) ||
       (kind === "sourceCad" && ["dwg", "dxf"].includes(extension)) ||
       (kind === "plotSheet" && ["csv", "json"].includes(extension)) ||
+      (kind === "plotSheetPreflight" && ["csv", "json"].includes(extension)) ||
       (kind === "roadAccessSheet" && extension === "csv") ||
       (kind === "sideMappingSheet" && extension === "csv");
     if (!valid)
@@ -451,6 +452,7 @@ export async function POST(request: Request) {
       sourcePdf: 25 * 1024 * 1024,
       sourceCad: 25 * 1024 * 1024,
       plotSheet: 3 * 1024 * 1024,
+      plotSheetPreflight: 3 * 1024 * 1024,
       roadAccessSheet: 1 * 1024 * 1024,
       sideMappingSheet: 1 * 1024 * 1024,
     };
@@ -787,6 +789,43 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, name: file.name, count: rows.length });
     }
 
+    if (kind === "plotSheetPreflight") {
+      let rows;
+      try {
+        rows = parsePlotSheetText(await file.text(), file.name);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Plot sheet preflight parse nahi hui" },
+          { status: 400 },
+        );
+      }
+      if (!rows.length)
+        return Response.json({ error: "Plot sheet me valid rows nahi mili" }, { status: 400 });
+      if (rows.length > 2000)
+        return Response.json(
+          { error: "Ek project me adhiktam 2000 plot rows import karein" },
+          { status: 400 },
+        );
+
+      const quality = assessPlotSheetRows(rows);
+      await writeAudit(actor, "mapper.plotSheet_preflight", projectId, null, {
+        filename: file.name,
+        count: rows.length,
+        richDetailReady: quality.richDetailReady,
+        missingDimensions: quality.missingDimensions.length,
+        missingRoad: quality.missingRoad.length,
+        missingSideMeasurements: quality.missingSideMeasurements.length,
+        partialSideMeasurements: quality.partialSideMeasurements.length,
+        genericAreaOnlyDimensions: quality.genericAreaOnlyDimensions.length,
+      });
+      return Response.json({
+        ok: true,
+        name: file.name,
+        count: rows.length,
+        quality,
+      });
+    }
+
     if (kind === "plotSheet") {
       let rows;
       try {
@@ -801,6 +840,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "Plot sheet me valid rows nahi mili" }, { status: 400 });
       if (rows.length > 2000)
         return Response.json({ error: "Ek project me adhiktam 2000 plot rows import karein" }, { status: 400 });
+      const quality = assessPlotSheetRows(rows);
       // Store only after parsing succeeds, so a bad upload does not replace the
       // last known-good source sheet.
       await env.BUCKET.put(objectKey, file.stream(), {
@@ -816,8 +856,20 @@ export async function POST(request: Request) {
       await writeAudit(actor, "mapper.plotSheet_imported", projectId, null, {
         filename: file.name,
         count: saved.length,
+        richDetailReady: quality.richDetailReady,
+        fullDetailCount: quality.fullDetailCount,
+        missingDimensions: quality.missingDimensions.length,
+        missingRoad: quality.missingRoad.length,
+        missingSideMeasurements: quality.missingSideMeasurements.length,
+        partialSideMeasurements: quality.partialSideMeasurements.length,
       });
-      return Response.json({ ok: true, name: file.name, count: saved.length, plots: saved });
+      return Response.json({
+        ok: true,
+        name: file.name,
+        count: saved.length,
+        plots: saved,
+        quality,
+      });
     }
 
     // Technical PDF and future ordinary mapper source assets.

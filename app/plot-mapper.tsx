@@ -114,6 +114,27 @@ type AutoMatch = {
   areaErrorRatio: number | null;
 };
 
+type PlotSheetQualitySummary = {
+  total: number;
+  fullDetailCount: number;
+  missingDimensions: string[];
+  missingRoad: string[];
+  missingSideMeasurements: string[];
+  partialSideMeasurements: string[];
+  genericAreaOnlyDimensions: string[];
+  richDetailReady: boolean;
+};
+
+type CurrentPlotQuality = {
+  total: number;
+  dimensionsComplete: number;
+  roadComplete: number;
+  fourSidesComplete: number;
+  mappedSemanticsComplete: number;
+  genericAreaOnly: number;
+  richDetailReady: boolean;
+};
+
 type GesturePoint = { x: number; y: number };
 
 type PanGesture = {
@@ -174,6 +195,93 @@ const MOBILE_MAPPING_PIXELS = 10_000_000;
 const MOBILE_PUBLIC_DIMENSION = 2048;
 const MOBILE_PUBLIC_PIXELS = 3_000_000;
 const MASTERPLAN_UPLOAD_TIMEOUT_MS = 120_000;
+
+function plotHasFourSideMeasurements(plot: Plot) {
+  const roles = [
+    plot.front != null || Boolean(String(plot.frontLabel || "").trim()),
+    plot.back != null || Boolean(String(plot.backLabel || "").trim()),
+    plot.depth != null || Boolean(String(plot.depthLabel || "").trim()),
+    plot.depth2 != null || Boolean(String(plot.depth2Label || "").trim()),
+  ];
+  if (roles.every(Boolean)) return true;
+
+  const sides = String(plot.sideDimensions || "").toLowerCase();
+  if (!sides.includes("front") || !sides.includes("back") || !sides.includes("depth"))
+    return false;
+  const measurements =
+    sides.match(/\d+(?:\.\d+)?\s*(?:m\b|ft\b|'|feet\b|meter\b|metre\b)/gi) || [];
+  return measurements.length >= 4;
+}
+
+function plotHasFourSideSemantics(plot: Plot) {
+  const polygon = parsePolygon(plot);
+  if (polygon.length < 4) return false;
+  const parsed = parsePlotSideSemantics(plot.edgeSemantics, polygon.length);
+  if (
+    parsed?.roles.front?.length &&
+    parsed.roles.back?.length &&
+    parsed.roles.depthA?.length &&
+    parsed.roles.depthB?.length
+  ) {
+    return true;
+  }
+  const indexes = [
+    plot.frontEdgeIndex,
+    plot.backEdgeIndex,
+    plot.depthEdgeIndex,
+    plot.depth2EdgeIndex,
+  ].map((value) =>
+    value == null || String(value).trim() === "" ? null : Number(value),
+  );
+  return (
+    indexes.every(
+      (value) =>
+        value != null &&
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value < polygon.length,
+    ) && new Set(indexes).size === 4
+  );
+}
+
+function currentPlotQuality(plots: Plot[]): CurrentPlotQuality {
+  const total = plots.length;
+  let dimensionsComplete = 0;
+  let roadComplete = 0;
+  let fourSidesComplete = 0;
+  let mappedSemanticsComplete = 0;
+  let genericAreaOnly = 0;
+
+  for (const plot of plots) {
+    const dimensions = String(plot.dimensions || "").trim();
+    if (dimensions) dimensionsComplete += 1;
+    if (String(plot.road || "").trim()) roadComplete += 1;
+    const sidesComplete = plotHasFourSideMeasurements(plot);
+    if (sidesComplete) fourSidesComplete += 1;
+    if (plotHasFourSideSemantics(plot)) mappedSemanticsComplete += 1;
+    if (
+      /approved\s+(?:plan\s+)?area|sanctioned\s+irregular\s+plot/i.test(dimensions) &&
+      !sidesComplete
+    ) {
+      genericAreaOnly += 1;
+    }
+  }
+
+  return {
+    total,
+    dimensionsComplete,
+    roadComplete,
+    fourSidesComplete,
+    mappedSemanticsComplete,
+    genericAreaOnly,
+    richDetailReady:
+      total > 0 &&
+      dimensionsComplete === total &&
+      roadComplete === total &&
+      fourSidesComplete === total &&
+      genericAreaOnly === 0,
+  };
+}
 
 async function apiResult(response: Response) {
   const raw = await response.text();
@@ -843,6 +951,7 @@ export default function PlotMapper({
   }, [completedProject, manualPhase, plotId, points, projectId, shape]);
 
   const mappedPlots = useMemo(() => plots.filter((plot) => parsePolygon(plot).length >= 3), [plots]);
+  const plotQuality = useMemo(() => currentPlotQuality(plots), [plots]);
   const inventoryPlots = useMemo(() => [...plots].sort(plotSort), [plots]);
   const unmappedPlots = useMemo(
     () => inventoryPlots.filter((plot) => parsePolygon(plot).length < 3),
@@ -1288,8 +1397,8 @@ export default function PlotMapper({
 
   function downloadPlotSheetTemplate() {
     const text = [
-      "Plot No,Sqft,Sqm,Dimensions,Facing,Front,Back,Depth,Depth 2,Dimension Unit,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
-      "1,1162.08,108,Irregular,East face,12,10,9,9.5,m,1,3,2,4,12 m,10 m,9 m,9.5 m,Front/Back/Depth A/Depth B,",
+      "Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
+      "1,1162.08,108,129.12,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,1,3,2,4,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -1329,6 +1438,80 @@ export default function PlotMapper({
     link.download = "rekixo-side-mapping-template.csv";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  async function preflightPlotSheet(file: File) {
+    setBusy(true);
+    let quality: PlotSheetQualitySummary | null = null;
+    try {
+      const data = new FormData();
+      data.append("projectId", projectId);
+      data.append("kind", "plotSheetPreflight");
+      data.append("file", file);
+      const response = await fetch("/api/super-mapper", {
+        method: "POST",
+        body: data,
+      });
+      const result = await apiResult(response);
+      quality = (result.quality || null) as PlotSheetQualitySummary | null;
+      if (!quality) throw new Error("Plot sheet quality report nahi mila");
+
+      if (!quality.richDetailReady) {
+        const problemLines = [
+          quality.missingDimensions.length
+            ? `Dimensions missing: ${quality.missingDimensions.length}`
+            : "",
+          quality.missingRoad.length
+            ? `Road Access missing: ${quality.missingRoad.length}`
+            : "",
+          quality.missingSideMeasurements.length
+            ? `Front/Back/Depth A/Depth B missing: ${quality.missingSideMeasurements.length}`
+            : "",
+          quality.partialSideMeasurements.length
+            ? `Partial side measurements: ${quality.partialSideMeasurements.length}`
+            : "",
+          quality.genericAreaOnlyDimensions.length
+            ? `Generic approved-area text without sides: ${quality.genericAreaOnlyDimensions.length}`
+            : "",
+        ].filter(Boolean);
+
+        const examples = [
+          ...quality.missingSideMeasurements,
+          ...quality.partialSideMeasurements,
+          ...quality.genericAreaOnlyDimensions,
+        ].filter((id, index, list) => list.indexOf(id) === index).slice(0, 12);
+
+        const proceed = window.confirm(
+          [
+            `CSV parse OK: ${quality.total} plots.`,
+            "",
+            "Rich plot details abhi complete nahi hain:",
+            ...problemLines.map((line) => "• " + line),
+            examples.length ? `Affected examples: ${examples.join(", ")}` : "",
+            "",
+            "Aise import karne par Venkatesh jaisa Front / Back / Depth detail sab plots me nahi dikhega.",
+            "Phir bhi import karna hai?",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+        if (!proceed) {
+          notify("Plot CSV import roka gaya — pehle quality issues correct karein");
+          return;
+        }
+      } else {
+        notify(
+          `Preflight PASS ✓ — ${quality.fullDetailCount}/${quality.total} plots rich-detail ready`,
+        );
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Plot CSV preflight fail hui");
+      return;
+    } finally {
+      setBusy(false);
+    }
+
+    if (quality) await upload(file, "plotSheet");
   }
 
   async function upload(
@@ -1418,7 +1601,12 @@ export default function PlotMapper({
       } else if (kind === "sourceCad") {
         notify(String((result.cadGeometry as CadGeometry | undefined)?.candidates.length || 0) + " CAD boundaries मिलीं");
       } else if (kind === "plotSheet") {
-        notify(String(Number(result.count || 0)) + " plot records import हुए");
+        const quality = (result.quality || null) as PlotSheetQualitySummary | null;
+        notify(
+          quality
+            ? `${Number(result.count || 0)} plots imported · full details ${quality.fullDetailCount}/${quality.total}`
+            : String(Number(result.count || 0)) + " plot records import हुए",
+        );
       } else if (kind === "roadAccessSheet") {
         notify(String(Number(result.count || 0)) + " plots ka Road Access update hua — बाकी data untouched");
       } else if (kind === "sideMappingSheet") {
@@ -2570,7 +2758,9 @@ export default function PlotMapper({
         <div className="mapper-v2-progress">
           <span className={hasMasterplan ? "done" : "active"}><b>1</b> Sources</span>
           <span className={mappedPlots.length ? "done" : hasMasterplan ? "active" : ""}><b>2</b> Plot Mapping</span>
-          <span className={hasPlotSheet ? "done" : ""}><b>3</b> Details</span>
+          <span className={hasPlotSheet ? (plotQuality.richDetailReady ? "done" : "active") : ""}>
+            <b>3</b> Details{hasPlotSheet && !plotQuality.richDetailReady ? " ⚠" : ""}
+          </span>
           <span className={unmappedPlots.length ? "active" : mappedPlots.length ? "done" : ""}><b>4</b> Review</span>
           <span className={mappedPlots.length && !unmappedPlots.length ? "done" : ""}><b>5</b> Publish</span>
         </div>
@@ -2611,7 +2801,17 @@ export default function PlotMapper({
             <span><FileText /></span>
             <div><b>{hasPlotSheet ? `Plot inventory · ${plots.length}` : "2. Plot details sheet"}</b><small>{settings.plotSheetName || "CSV/JSON: ID, sqft/sqm, dimensions, facing"}</small></div>
             {hasPlotSheet && <CheckCircle2 className="mapper-ready-icon" />}
-            <input type="file" accept=".csv,.json,text/csv,application/json" disabled={busy || completedProject} onChange={(event) => event.target.files?.[0] && upload(event.target.files[0], "plotSheet")} />
+            <input
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              disabled={busy || completedProject}
+              onChange={(event) => {
+                const input = event.currentTarget;
+                const file = input.files?.[0] || null;
+                input.value = "";
+                if (file) void preflightPlotSheet(file);
+              }}
+            />
           </label>
 
           <label className={`mapper-upload-card ${hasRoadAccessSheet ? "ready" : ""}`}>
@@ -2724,6 +2924,40 @@ export default function PlotMapper({
           <span>Last server verify: <b>{lastVerifiedId ? `Plot ${lastVerifiedId} ✓` : "—"}</b></span>
           {!completedProject && <span>Mapper view: <b>{rotationDegrees}° local</b></span>}
         </div>
+
+        {plots.length > 0 && (
+          <div className={`mapper-data-quality ${plotQuality.richDetailReady ? "ready" : "warning"}`}>
+            <div className="mapper-data-quality-head">
+              <div>
+                <b>Plot Data Quality</b>
+                <small>
+                  Customer drawer me Venkatesh-jaisi complete details ke liye har plot ka
+                  Dimensions + Road + Front/Back/Depth A/Depth B hona chahiye.
+                </small>
+              </div>
+              <strong>
+                {plotQuality.richDetailReady
+                  ? "RICH DETAILS READY"
+                  : `${plotQuality.fourSidesComplete}/${plotQuality.total} FULL SIDES`}
+              </strong>
+            </div>
+            <div className="mapper-data-quality-grid">
+              <span>Dimensions <b>{plotQuality.dimensionsComplete}/{plotQuality.total}</b></span>
+              <span>Road Access <b>{plotQuality.roadComplete}/{plotQuality.total}</b></span>
+              <span>4-side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
+              <span>Mapped side semantics <b>{plotQuality.mappedSemanticsComplete}/{plotQuality.total}</b></span>
+            </div>
+            {!plotQuality.richDetailReady && (
+              <p>
+                ⚠ CSV import ho sakti hai, lekin incomplete rows customer site par Front /
+                Back / Depth detail nahi dikhayengi.
+                {plotQuality.genericAreaOnly
+                  ? ` ${plotQuality.genericAreaOnly} plot(s) me generic approved-area text mila.`
+                  : ""}
+              </p>
+            )}
+          </div>
+        )}
         {settings.sourcePdfName && <a className="mapper-pdf-link" href={assetUrl("sourcePdf")} target="_blank" rel="noreferrer"><FileText /> Open technical PDF reference</a>}
         {settings.cadParseError && <div className="mapper-warning">CAD source सुरक्षित है, लेकिन automatic geometry parse नहीं हुआ: {settings.cadParseError}. DXF export upload करें या Manual Precise fallback use करें.</div>}
       </div>

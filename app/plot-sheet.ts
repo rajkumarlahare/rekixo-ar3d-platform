@@ -107,9 +107,48 @@ function assertUniqueRows(rows: PlotSheetRow[]) {
   return rows;
 }
 
-function finite(value: unknown) {
-  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+function areaValue(value: unknown, label: string) {
+  const raw = String(value ?? "").replace(/,/g, "").trim();
+  if (!raw) return { value: 0, supplied: false };
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${label} valid non-negative number hona chahiye`);
+  }
+  return { value: parsed, supplied: true };
+}
+
+function relativeDifference(left: number, right: number) {
+  const scale = Math.max(Math.abs(left), Math.abs(right), 1e-9);
+  return Math.abs(left - right) / scale;
+}
+
+function assertAreaConsistency(
+  sqftInput: { value: number; supplied: boolean },
+  sqmInput: { value: number; supplied: boolean },
+  sqydInput: { value: number; supplied: boolean },
+) {
+  const tolerance = 0.01;
+  if (
+    sqftInput.supplied &&
+    sqmInput.supplied &&
+    relativeDifference(sqftInput.value, sqmInput.value * 10.7639) > tolerance
+  ) {
+    throw new Error("Sqft aur Sqm values 1% tolerance ke andar match nahi kar rahe");
+  }
+  if (
+    sqftInput.supplied &&
+    sqydInput.supplied &&
+    relativeDifference(sqftInput.value, sqydInput.value * 9) > tolerance
+  ) {
+    throw new Error("Sqft aur Sqyd values 1% tolerance ke andar match nahi kar rahe");
+  }
+  if (
+    sqmInput.supplied &&
+    sqydInput.supplied &&
+    relativeDifference(sqmInput.value * 10.7639, sqydInput.value * 9) > tolerance
+  ) {
+    throw new Error("Sqm aur Sqyd values 1% tolerance ke andar match nahi kar rahe");
+  }
 }
 
 function optionalPositive(value: unknown, label: string) {
@@ -157,7 +196,9 @@ function dimensionUnit(value: unknown, dimensions: string, hasMeasurement: boole
   const hint = dimensions.toLowerCase().replace(/[′’]/g, "'");
   if (hint.includes("'") || /\b(ft|feet|foot)\b/.test(hint)) return "ft" as const;
   if (/\b(m|meter|metre|meters|metres)\b/.test(hint)) return "m" as const;
-  return "ft" as const;
+  throw new Error(
+    "Front/Back/Depth measurements ke saath Dimension Unit (m ya ft) explicitly dena zaroori hai",
+  );
 }
 
 function edgeIndex(value: unknown, label: string) {
@@ -180,9 +221,13 @@ function cleanDimensionText(value: unknown, maxLength: number) {
 function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
   const id = cleanPlotId(String(input.id || ""));
   if (!id) return null;
-  let sqft = finite(input.sqft);
-  let sqm = finite(input.sqm);
-  let sqyd = finite(input.sqyd);
+  const sqftInput = areaValue(input.sqft, "Sqft");
+  const sqmInput = areaValue(input.sqm, "Sqm");
+  const sqydInput = areaValue(input.sqyd, "Sqyd");
+  assertAreaConsistency(sqftInput, sqmInput, sqydInput);
+  let sqft = sqftInput.value;
+  let sqm = sqmInput.value;
+  let sqyd = sqydInput.value;
   if (!sqft && sqm) sqft = sqm * 10.7639;
   if (!sqft && sqyd) sqft = sqyd * 9;
   if (!sqm && sqft) sqm = sqft / 10.7639;
@@ -310,4 +355,79 @@ export function parsePlotSheetText(text: string, filename: string) {
       )
       .filter((row): row is PlotSheetRow => Boolean(row)),
   );
+}
+
+
+export type PlotSheetQuality = {
+  total: number;
+  fullDetailCount: number;
+  missingDimensions: string[];
+  missingRoad: string[];
+  missingSideMeasurements: string[];
+  partialSideMeasurements: string[];
+  genericAreaOnlyDimensions: string[];
+  richDetailReady: boolean;
+};
+
+function hasCombinedFourSideText(value: string) {
+  const text = String(value || "").toLowerCase();
+  if (!text.includes("front") || !text.includes("back") || !text.includes("depth"))
+    return false;
+  const measurements =
+    text.match(/\d+(?:\.\d+)?\s*(?:m\b|ft\b|'|feet\b|meter\b|metre\b)/gi) || [];
+  return measurements.length >= 4;
+}
+
+export function assessPlotSheetRows(rows: PlotSheetRow[]): PlotSheetQuality {
+  const missingDimensions: string[] = [];
+  const missingRoad: string[] = [];
+  const missingSideMeasurements: string[] = [];
+  const partialSideMeasurements: string[] = [];
+  const genericAreaOnlyDimensions: string[] = [];
+  let fullDetailCount = 0;
+
+  for (const row of rows) {
+    const dimensions = String(row.dimensions || "").trim();
+    const road = String(row.road || "").trim();
+    if (!dimensions) missingDimensions.push(row.id);
+    if (!road) missingRoad.push(row.id);
+
+    const roleValues = [
+      row.front != null || Boolean(row.frontLabel.trim()),
+      row.back != null || Boolean(row.backLabel.trim()),
+      row.depth != null || Boolean(row.depthLabel.trim()),
+      row.depth2 != null || Boolean(row.depth2Label.trim()),
+    ];
+    const suppliedRoles = roleValues.filter(Boolean).length;
+    const combinedSides = hasCombinedFourSideText(row.sideDimensions);
+    const fullSides = suppliedRoles === 4 || combinedSides;
+
+    if (!fullSides) {
+      if (suppliedRoles > 0) partialSideMeasurements.push(row.id);
+      else missingSideMeasurements.push(row.id);
+    }
+
+    if (
+      /approved\s+(?:plan\s+)?area|sanctioned\s+irregular\s+plot/i.test(dimensions) &&
+      !fullSides
+    ) {
+      genericAreaOnlyDimensions.push(row.id);
+    }
+
+    if (dimensions && road && fullSides) fullDetailCount += 1;
+  }
+
+  return {
+    total: rows.length,
+    fullDetailCount,
+    missingDimensions,
+    missingRoad,
+    missingSideMeasurements,
+    partialSideMeasurements,
+    genericAreaOnlyDimensions,
+    richDetailReady:
+      rows.length > 0 &&
+      fullDetailCount === rows.length &&
+      !genericAreaOnlyDimensions.length,
+  };
 }
