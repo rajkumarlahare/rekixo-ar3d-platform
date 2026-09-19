@@ -2,34 +2,35 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("share builder uses the final customer poster as-is", async () => {
-  const [dashboard, manager, route, css, provisioning] = await Promise.all([
-    readFile(new URL("../app/super-admin-dashboard.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/project-share-manager.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/admin/project-share/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/super-mapper.css", import.meta.url), "utf8"),
-    readFile(new URL("../app/project-provisioning.ts", import.meta.url), "utf8"),
-  ]);
+test("share builder uses global AR3D branding and preserves the original source", async () => {
+  const [dashboard, manager, route, css, provisioning, branding] =
+    await Promise.all([
+      readFile(new URL("../app/super-admin-dashboard.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../app/project-share-manager.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../app/api/admin/project-share/route.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/super-mapper.css", import.meta.url), "utf8"),
+      readFile(new URL("../app/project-provisioning.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/share-branding.ts", import.meta.url), "utf8"),
+    ]);
 
-  // Workspace membership is intentionally tested without freezing the exact tab
-  // union, so adding future workspaces (for example Project Profile) cannot break
-  // an unrelated Share Builder regression.
   assert.match(dashboard, /type WorkspaceTab = [^;]*"share"[^;]*;/);
   assert.ok(dashboard.includes("Share Builder"));
-  assert.ok(manager.includes('const SHARE_TEMPLATE = "original-image-v1"'));
+  assert.ok(branding.includes('SHARE_TEMPLATE = "ar3d-global-brand-v1"'));
   assert.ok(manager.includes("SHARE IMAGE / WHATSAPP POSTER"));
   assert.ok(manager.includes('form.set("file", shareImageFile)'));
-  assert.ok(manager.includes("Save share image"));
+  assert.ok(manager.includes('form.set("sourceFile", shareSourceFile)'));
+  assert.ok(manager.includes("Save branded share image"));
   assert.ok(manager.includes("no crop"));
-  assert.ok(!manager.includes("CANVAS_WIDTH"));
-  assert.ok(!manager.includes("drawCover"));
-  assert.ok(!manager.includes('context.fillText("AR 3D VISION"'));
+  assert.ok(manager.includes("prepareBrandedShareImage"));
+  assert.ok(manager.includes("GLOBAL_SHARE_BRAND_DATA_URL"));
   assert.ok(css.includes("ORIGINAL POSTER"));
   assert.ok(css.includes("object-fit:contain"));
   assert.ok(!css.includes("aspect-ratio:1200/630"));
   assert.ok(route.includes("detectShareImageMime"));
-  assert.ok(route.includes('contentType: detectedMime'));
-  assert.match(provisioning, /shareTemplate:\s*"original-image-v1"/);
+  assert.ok(route.includes('source: "ar3d-branded-derivative"'));
+  assert.ok(route.includes("share/sources/${version}"));
+  assert.ok(provisioning.includes('import { SHARE_TEMPLATE } from "./share-branding"'));
+  assert.match(provisioning, /shareTemplate:\s*SHARE_TEMPLATE/);
 });
 
 test("metadata-only edits still rotate the share URL cache version", async () => {

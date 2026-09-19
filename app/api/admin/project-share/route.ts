@@ -3,10 +3,10 @@ import { requireSuperAdmin, sameOrigin } from "../../../admin-auth";
 import { writeAudit } from "../../../audit";
 import { activeProjectDomain } from "../../../project-domains";
 import { currentProjectLinks } from "../../../project-links";
+import { GLOBAL_SHARE_BRAND, SHARE_TEMPLATE } from "../../../share-branding";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
-const SHARE_TEMPLATE = "original-image-v1";
 const SHARE_KEYS = [
   "projectName",
   "brandName",
@@ -172,6 +172,7 @@ export async function POST(request: Request) {
     const projectId = String(form.get("projectId") || "");
     const kind = String(form.get("kind") || "");
     const file = form.get("file");
+    const sourceFile = form.get("sourceFile");
     const shareTitle = String(form.get("shareTitle") || "").trim();
     const shareDescription = String(form.get("shareDescription") || "").trim();
     const shareTemplate = String(form.get("shareTemplate") || SHARE_TEMPLATE);
@@ -200,18 +201,60 @@ export async function POST(request: Request) {
       file.size > 8 * 1024 * 1024
     )
       return Response.json(
-        { error: "Share image JPG, PNG ya WebP me aur 8 MB se chhoti honi chahiye" },
+        { error: "Branded share image JPG, PNG ya WebP me aur 8 MB se chhoti honi chahiye" },
+        { status: 400 },
+      );
+    if (!(sourceFile instanceof File))
+      return Response.json(
+        { error: "Original share image source required" },
+        { status: 400 },
+      );
+    const sourceDetectedMime = await detectShareImageMime(sourceFile);
+    if (
+      !sourceDetectedMime ||
+      sourceFile.size < 1 ||
+      sourceFile.size > 8 * 1024 * 1024
+    )
+      return Response.json(
+        { error: "Original share image JPG, PNG ya WebP me aur 8 MB se chhoti honi chahiye" },
         { status: 400 },
       );
 
     const version = String(Date.now());
-    const bytes = await file.arrayBuffer();
+    const [bytes, sourceBytes] = await Promise.all([
+      file.arrayBuffer(),
+      sourceFile.arrayBuffer(),
+    ]);
     await Promise.all([
       env.BUCKET.put(`projects/${projectId}/share/card`, bytes, {
         httpMetadata: { contentType: detectedMime },
+        customMetadata: {
+          source: "ar3d-branded-derivative",
+          brandId: GLOBAL_SHARE_BRAND.id,
+          brandVersion: GLOBAL_SHARE_BRAND.version,
+          template: SHARE_TEMPLATE,
+          version,
+        },
       }),
       env.BUCKET.put(`projects/${projectId}/share/cards/${version}`, bytes, {
         httpMetadata: { contentType: detectedMime },
+        customMetadata: {
+          source: "ar3d-branded-derivative",
+          brandId: GLOBAL_SHARE_BRAND.id,
+          brandVersion: GLOBAL_SHARE_BRAND.version,
+          template: SHARE_TEMPLATE,
+          version,
+        },
+      }),
+      env.BUCKET.put(`projects/${projectId}/share/source`, sourceBytes, {
+        httpMetadata: { contentType: sourceDetectedMime },
+        customMetadata: {
+          source: "original-upload",
+          version,
+        },
+      }),
+      env.BUCKET.put(`projects/${projectId}/share/sources/${version}`, sourceBytes, {
+        httpMetadata: { contentType: sourceDetectedMime },
         customMetadata: {
           source: "original-upload",
           version,
@@ -229,9 +272,13 @@ export async function POST(request: Request) {
     await writeAudit(actor, "project.share_card_saved", projectId, null, {
       version,
       size: file.size,
+      sourceSize: sourceFile.size,
       template: SHARE_TEMPLATE,
-      source: "original-upload",
+      source: "ar3d-branded-derivative",
+      sourceMime: sourceDetectedMime,
       mime: detectedMime,
+      brandId: GLOBAL_SHARE_BRAND.id,
+      brandVersion: GLOBAL_SHARE_BRAND.version,
     });
     const state = await shareState(projectId);
     return Response.json({ ok: true, ...state });

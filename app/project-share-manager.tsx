@@ -10,6 +10,8 @@ import {
   Share2,
   Upload,
 } from "lucide-react";
+import { GLOBAL_SHARE_BRAND, SHARE_TEMPLATE } from "./share-branding";
+import { GLOBAL_SHARE_BRAND_DATA_URL } from "./share-branding-logo";
 
 type ShareState = {
   projectId?: string;
@@ -25,7 +27,6 @@ type ShareState = {
   publicUrl?: string;
 };
 
-const SHARE_TEMPLATE = "original-image-v1";
 const MAX_SHARE_IMAGE_BYTES = 8 * 1024 * 1024;
 const SHARE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
@@ -101,6 +102,117 @@ function validateShareImage(file: File) {
     throw new Error("Share image 8 MB se chhoti rakhein");
 }
 
+function canvasBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number,
+) {
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, type, quality),
+  );
+}
+
+async function loadGlobalShareBrandBitmap() {
+  const response = await fetch(GLOBAL_SHARE_BRAND_DATA_URL);
+  if (!response.ok) throw new Error("AR3D branding logo load nahi hua");
+  return createImageBitmap(await response.blob());
+}
+
+async function prepareBrandedShareImage(file: File) {
+  validateShareImage(file);
+  const sourceBitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(
+      1,
+      GLOBAL_SHARE_BRAND.maxOutputDimension /
+        Math.max(sourceBitmap.width, sourceBitmap.height),
+      Math.sqrt(
+        GLOBAL_SHARE_BRAND.maxOutputPixels /
+          (sourceBitmap.width * sourceBitmap.height),
+      ),
+    );
+    const width = Math.max(1, Math.round(sourceBitmap.width * scale));
+    const height = Math.max(1, Math.round(sourceBitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: true });
+    if (!context) throw new Error("Share image process nahi ho payi");
+
+    // No crop: the source keeps its exact aspect ratio and fills the same canvas.
+    context.drawImage(sourceBitmap, 0, 0, width, height);
+
+    const brandBitmap = await loadGlobalShareBrandBitmap();
+    try {
+      const logoCeiling = Math.max(
+        1,
+        Math.min(
+          GLOBAL_SHARE_BRAND.maxLogoPx,
+          Math.round(width * 0.24),
+          Math.round(height * GLOBAL_SHARE_BRAND.heightLimitRatio),
+        ),
+      );
+      const logoWidth = Math.max(
+        1,
+        Math.min(
+          logoCeiling,
+          Math.max(
+            GLOBAL_SHARE_BRAND.minLogoPx,
+            Math.round(width * GLOBAL_SHARE_BRAND.widthRatio),
+          ),
+        ),
+      );
+      const logoHeight = Math.round(
+        logoWidth * (brandBitmap.height / brandBitmap.width),
+      );
+      const bottomMargin = Math.max(
+        10,
+        Math.round(height * GLOBAL_SHARE_BRAND.bottomMarginRatio),
+      );
+      const logoX = Math.round((width - logoWidth) / 2);
+      const logoY = Math.max(0, height - bottomMargin - logoHeight);
+      context.drawImage(
+        brandBitmap,
+        logoX,
+        logoY,
+        logoWidth,
+        logoHeight,
+      );
+    } finally {
+      brandBitmap.close();
+    }
+
+    const preferredType =
+      file.type === "image/png"
+        ? "image/png"
+        : file.type === "image/webp"
+          ? "image/webp"
+          : "image/jpeg";
+    let blob = await canvasBlob(
+      canvas,
+      preferredType,
+      preferredType === "image/png" ? undefined : 0.9,
+    );
+    if (!blob || blob.size > MAX_SHARE_IMAGE_BYTES) {
+      blob = await canvasBlob(canvas, "image/webp", 0.86);
+    }
+    if (!blob || blob.size > MAX_SHARE_IMAGE_BYTES)
+      throw new Error("Branded share image 8 MB ke andar optimize nahi hui");
+
+    const extension =
+      blob.type === "image/png"
+        ? "png"
+        : blob.type === "image/jpeg"
+          ? "jpg"
+          : "webp";
+    return new File([blob], `share-branded.${extension}`, {
+      type: blob.type,
+    });
+  } finally {
+    sourceBitmap.close();
+  }
+}
+
 export default function ProjectShareManager({
   projectId,
   notify,
@@ -111,10 +223,12 @@ export default function ProjectShareManager({
   const [state, setState] = useState<ShareState>({});
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [shareSourceFile, setShareSourceFile] = useState<File | null>(null);
   const [shareImageFile, setShareImageFile] = useState<File | null>(null);
   const [localPreview, setLocalPreview] = useState("");
   const [busy, setBusy] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [brandBusy, setBrandBusy] = useState(false);
 
   async function load() {
     const response = await fetch(
@@ -128,6 +242,7 @@ export default function ProjectShareManager({
   }
 
   useEffect(() => {
+    setShareSourceFile(null);
     setShareImageFile(null);
     load().catch((error) =>
       notify(error instanceof Error ? error.message : "Share profile load nahi hua"),
@@ -216,12 +331,13 @@ export default function ProjectShareManager({
       notify("Title kam se kam 3 aur description 10 characters rakhein");
       return;
     }
-    if (!shareImageFile) {
-      notify("Pehle final share image choose karein");
+    if (!shareSourceFile || !shareImageFile) {
+      notify("Pehle share image choose karke AR3D branding ready hone dein");
       return;
     }
 
     try {
+      validateShareImage(shareSourceFile);
       validateShareImage(shareImageFile);
     } catch (error) {
       notify(error instanceof Error ? error.message : "Share image invalid hai");
@@ -237,9 +353,9 @@ export default function ProjectShareManager({
       form.set("shareTitle", title.trim());
       form.set("shareDescription", description.trim());
 
-      // Important: upload the user's final poster directly.
-      // Do not crop, resize, redraw, overlay a logo, or burn AR3D branding into it.
+      // The uploaded source stays recoverable; only the branded derivative is public.
       form.set("file", shareImageFile);
+      form.set("sourceFile", shareSourceFile);
 
       const data = (await apiJson(
         await fetch("/api/admin/project-share", {
@@ -249,9 +365,10 @@ export default function ProjectShareManager({
       )) as ShareState;
 
       setState((current) => ({ ...current, ...data }));
+      setShareSourceFile(null);
       setShareImageFile(null);
       dispatchShareUpdate(projectId);
-      notify("Original share image save ho gayi");
+      notify("AR3D branded share image save ho gayi");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Share image save nahi hui");
     } finally {
@@ -283,8 +400,9 @@ export default function ProjectShareManager({
         <div>
           <h2>Share & Branding</h2>
           <p>
-            Final customer poster ko as-is use karein. System image ko crop,
-            redesign ya logo-overlay nahi karega.
+            Poster upload karein. System original source ko safe rakhega aur
+            AR 3D Vision Studio branding bottom-center me automatically attach
+            karke share-ready derivative banayega.
           </p>
         </div>
       </div>
@@ -296,7 +414,7 @@ export default function ProjectShareManager({
         </span>
         <span className={state.cardUrl ? "ready" : "warn"}>
           {state.cardUrl ? <CheckCircle2 /> : <ImagePlus />}
-          {state.cardUrl ? "Original share image ready" : "Share image pending"}
+          {state.cardUrl ? "AR3D branded share image ready" : "Share image pending"}
         </span>
         <span className={published ? "ready" : "warn"}>
           {published ? <CheckCircle2 /> : <Share2 />}
@@ -354,36 +472,48 @@ export default function ProjectShareManager({
             <label className="rekixo-cover-picker">
               <ImagePlus />
               <b>
-                {shareImageFile
-                  ? shareImageFile.name
-                  : state.cardUrl
-                    ? "Choose a new image to replace the current poster"
-                    : "Choose final share image"}
+                {brandBusy
+                  ? "AR3D branding prepare ho rahi hai…"
+                  : shareSourceFile
+                    ? shareSourceFile.name
+                    : state.cardUrl
+                      ? "Choose a new image to replace the current poster"
+                      : "Choose final share image"}
               </b>
               <small>
-                JPG / PNG / WebP · max 8 MB · original aspect ratio · no crop
+                JPG / PNG / WebP · max 8 MB · no crop · AR3D bottom-center auto
               </small>
               <input
                 key={
-                  shareImageFile
-                    ? `${shareImageFile.name}-${shareImageFile.lastModified}`
+                  shareSourceFile
+                    ? `${shareSourceFile.name}-${shareSourceFile.lastModified}`
                     : "share-image"
                 }
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] || null;
+                disabled={brandBusy}
+                onChange={async (event) => {
+                  const input = event.currentTarget;
+                  const file = input.files?.[0] || null;
                   if (!file) return;
+                  setBrandBusy(true);
                   try {
                     validateShareImage(file);
-                    setShareImageFile(file);
+                    const branded = await prepareBrandedShareImage(file);
+                    setShareSourceFile(file);
+                    setShareImageFile(branded);
+                    notify("AR3D branding preview ready hai");
                   } catch (error) {
+                    setShareSourceFile(null);
+                    setShareImageFile(null);
                     notify(
                       error instanceof Error
                         ? error.message
-                        : "Share image invalid hai",
+                        : "Share image branding fail hui",
                     );
-                    event.currentTarget.value = "";
+                  } finally {
+                    setBrandBusy(false);
+                    input.value = "";
                   }
                 }}
               />
@@ -397,9 +527,11 @@ export default function ProjectShareManager({
             <button
               className="primary"
               onClick={saveShareImage}
-              disabled={busy || !shareImageFile || !validDetails}
+              disabled={
+                busy || brandBusy || !shareSourceFile || !shareImageFile || !validDetails
+              }
             >
-              <ImagePlus /> {busy ? "Saving…" : "Save share image"}
+              <ImagePlus /> {busy ? "Saving…" : "Save branded share image"}
             </button>
             <button onClick={copyLink} disabled={!canCopyShare}>
               <Copy /> Copy share link
@@ -419,8 +551,7 @@ export default function ProjectShareManager({
               <img src={previewUrl} alt="Share image preview" />
             ) : (
               <div className="rekixo-share-empty">
-                Final poster choose karein. Yahan wahi image bina crop ke dikhai
-                degi.
+                Poster choose karein. Yahan no-crop AR3D branded preview dikhega.
               </div>
             )}
             <div className="rekixo-whatsapp-copy">

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { mergeDomainKind, type DomainKind } from "./domain-utils";
 import { assertDomainAvailable } from "./project-domains";
+import { SHARE_TEMPLATE } from "./share-branding";
 
 type PreparedStatement = ReturnType<typeof env.DB.prepare>;
 
@@ -64,7 +65,7 @@ function defaultProjectSettings(projectName: string) {
     brochureUrl: "",
     shareTitle: projectName,
     shareDescription: `Explore ${projectName} with AR 3D interactive plot visualization.`,
-    shareTemplate: "original-image-v1",
+    shareTemplate: SHARE_TEMPLATE,
   };
 }
 

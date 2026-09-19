@@ -44,6 +44,9 @@ test("share uploads persist immutable versioned R2 snapshots plus canonical fall
   assert.ok(route.includes("share/cards/${version}"));
   assert.ok(route.includes("share/card"));
   assert.ok(route.includes("await file.arrayBuffer()"));
+  assert.ok(route.includes('source: "ar3d-branded-derivative"'));
+  assert.ok(route.includes("share/source"));
+  assert.ok(route.includes("share/sources/${version}"));
   assert.ok(route.includes('source: "original-upload"'));
 });
 

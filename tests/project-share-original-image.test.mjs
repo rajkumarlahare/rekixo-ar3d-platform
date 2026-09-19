@@ -2,63 +2,57 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("server preserves accepted original image MIME instead of forcing JPEG", async () => {
+test("share upload stores branded derivative and immutable original source", async () => {
   const route = await readFile(
     new URL("../app/api/admin/project-share/route.ts", import.meta.url),
     "utf8",
   );
 
-  assert.ok(route.includes('return "image/jpeg"'));
-  assert.ok(route.includes('return "image/png"'));
-  assert.ok(route.includes('return "image/webp"'));
-  assert.ok(route.includes("file.size > 8 * 1024 * 1024"));
-  assert.ok(route.includes("httpMetadata: { contentType: detectedMime }"));
-  assert.ok(!route.includes('file.type !== "image/jpeg"'));
-  assert.ok(!route.includes('contentType: "image/jpeg"'));
+  assert.ok(route.includes('const sourceFile = form.get("sourceFile")'));
+  assert.ok(route.includes("detectShareImageMime(sourceFile)"));
+  assert.ok(route.includes("share/card"));
+  assert.ok(route.includes("share/cards/${version}"));
+  assert.ok(route.includes("share/source"));
+  assert.ok(route.includes("share/sources/${version}"));
+  assert.ok(route.includes('source: "ar3d-branded-derivative"'));
+  assert.ok(route.includes('source: "original-upload"'));
+  assert.ok(route.includes("brandId: GLOBAL_SHARE_BRAND.id"));
+  assert.ok(route.includes("brandVersion: GLOBAL_SHARE_BRAND.version"));
 });
 
-test("share image path never recomposes the poster into a fixed AR3D canvas", async () => {
+test("share builder adds the global AR3D mark at bottom-center without cropping", async () => {
+  const [manager, branding, logo] = await Promise.all([
+    readFile(new URL("../app/project-share-manager.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/share-branding.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/share-branding-logo.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.ok(branding.includes('SHARE_TEMPLATE = "ar3d-global-brand-v1"'));
+  assert.ok(branding.includes('id: "ar3d-vision-studio"'));
+  assert.ok(branding.includes('version: "2026-09-19-v1"'));
+  assert.ok(logo.includes("GLOBAL_SHARE_BRAND_DATA_URL"));
+  assert.ok(manager.includes("prepareBrandedShareImage"));
+  assert.ok(manager.includes("context.drawImage(sourceBitmap, 0, 0, width, height)"));
+  assert.ok(manager.includes("const logoX = Math.round((width - logoWidth) / 2)"));
+  assert.ok(
+    manager.includes(
+      "const logoY = Math.max(0, height - bottomMargin - logoHeight)",
+    ),
+  );
+  assert.ok(manager.includes('form.set("file", shareImageFile)'));
+  assert.ok(manager.includes('form.set("sourceFile", shareSourceFile)'));
+});
+
+test("share builder previews the branded derivative and keeps project logo separate", async () => {
   const manager = await readFile(
     new URL("../app/project-share-manager.tsx", import.meta.url),
     "utf8",
   );
 
-  const start = manager.indexOf("async function saveShareImage()");
-  const end = manager.indexOf("async function copyLink()", start);
-
-  assert.ok(start >= 0, "saveShareImage() missing");
-  assert.ok(end > start, "copyLink() anchor missing");
-
-  const shareUploadFlow = manager.slice(start, end);
-
-  // The share-poster path must upload the user's chosen file directly.
-  assert.ok(shareUploadFlow.includes('form.set("file", shareImageFile)'));
-  assert.ok(shareUploadFlow.includes('form.set("shareTemplate", SHARE_TEMPLATE)'));
-  assert.ok(!shareUploadFlow.includes("canvas"));
-  assert.ok(!shareUploadFlow.includes("toBlob"));
-  assert.ok(!shareUploadFlow.includes("toDataURL"));
-  assert.ok(!shareUploadFlow.includes("drawCover"));
-  assert.ok(!shareUploadFlow.includes("drawContain"));
-  assert.ok(!shareUploadFlow.includes("INTERACTIVE PROJECT PREVIEW"));
-
-  // toBlob is intentionally allowed elsewhere: project-logo optimization remains separate.
-  const logoStart = manager.indexOf("async function prepareProjectLogo");
-  const logoEnd = manager.indexOf("function validateShareImage", logoStart);
-  assert.ok(logoStart >= 0 && logoEnd > logoStart, "logo optimizer anchors missing");
-  const logoFlow = manager.slice(logoStart, logoEnd);
-  assert.ok(logoFlow.includes("canvas.toBlob"));
-});
-
-test("share UI uses natural poster preview and keeps project logo independent", async () => {
-  const [manager, css] = await Promise.all([
-    readFile(new URL("../app/project-share-manager.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/super-mapper.css", import.meta.url), "utf8"),
-  ]);
-
-  assert.ok(manager.includes("SHARE IMAGE / WHATSAPP POSTER"));
-  assert.ok(manager.includes("original aspect ratio · no crop"));
-  assert.ok(manager.includes("Original share image save ho gayi"));
-  assert.ok(manager.includes("Upload / replace logo"));
-  assert.ok(css.includes("object-fit:contain"));
-  assert.ok(!css.includes("aspect-ratio:1200/630"));
+  assert.ok(manager.includes("AR3D bottom-center auto"));
+  assert.ok(manager.includes("AR3D branded share image ready"));
+  assert.ok(manager.includes("Save branded share image"));
+  assert.ok(manager.includes("const previewUrl = localPreview || state.cardUrl ||"));
+  assert.ok(manager.includes("PROJECT LOGO"));
+  assert.ok(manager.includes("objectUrl = URL.createObjectURL(shareImageFile)"));
 });
