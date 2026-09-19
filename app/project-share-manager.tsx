@@ -133,44 +133,57 @@ async function prepareBrandedShareImage(file: File) {
     );
     const width = Math.max(1, Math.round(sourceBitmap.width * scale));
     const height = Math.max(1, Math.round(sourceBitmap.height * scale));
+    const brandBitmap = await loadGlobalShareBrandBitmap();
+    const logoCeiling = Math.max(
+      1,
+      Math.min(
+        GLOBAL_SHARE_BRAND.maxLogoPx,
+        Math.round(width * GLOBAL_SHARE_BRAND.maxWidthRatio),
+        Math.round(height * GLOBAL_SHARE_BRAND.heightLimitRatio),
+      ),
+    );
+    const logoWidth = Math.max(
+      1,
+      Math.min(
+        logoCeiling,
+        Math.max(
+          GLOBAL_SHARE_BRAND.minLogoPx,
+          Math.round(width * GLOBAL_SHARE_BRAND.widthRatio),
+        ),
+      ),
+    );
+    const logoHeight = Math.max(
+      1,
+      Math.round(logoWidth * (brandBitmap.height / brandBitmap.width)),
+    );
+    const footerPadding = Math.max(
+      GLOBAL_SHARE_BRAND.minFooterPaddingPx,
+      Math.round(width * GLOBAL_SHARE_BRAND.footerPaddingRatio),
+    );
+    const footerHeight = Math.max(
+      GLOBAL_SHARE_BRAND.minFooterHeightPx,
+      logoHeight + footerPadding * 2,
+    );
     const canvas = document.createElement("canvas");
     canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d", { alpha: true });
-    if (!context) throw new Error("Share image process nahi ho payi");
+    canvas.height = height + footerHeight;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      brandBitmap.close();
+      throw new Error("Share image process nahi ho payi");
+    }
 
-    // No crop: the source keeps its exact aspect ratio and fills the same canvas.
+    // Source image is never covered or cropped. Branding gets its own footer.
+    context.fillStyle = GLOBAL_SHARE_BRAND.footerBackground;
+    context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(sourceBitmap, 0, 0, width, height);
 
-    const brandBitmap = await loadGlobalShareBrandBitmap();
+    context.fillStyle = GLOBAL_SHARE_BRAND.dividerColor;
+    context.fillRect(0, height, width, GLOBAL_SHARE_BRAND.dividerHeightPx);
+
     try {
-      const logoCeiling = Math.max(
-        1,
-        Math.min(
-          GLOBAL_SHARE_BRAND.maxLogoPx,
-          Math.round(width * 0.24),
-          Math.round(height * GLOBAL_SHARE_BRAND.heightLimitRatio),
-        ),
-      );
-      const logoWidth = Math.max(
-        1,
-        Math.min(
-          logoCeiling,
-          Math.max(
-            GLOBAL_SHARE_BRAND.minLogoPx,
-            Math.round(width * GLOBAL_SHARE_BRAND.widthRatio),
-          ),
-        ),
-      );
-      const logoHeight = Math.round(
-        logoWidth * (brandBitmap.height / brandBitmap.width),
-      );
-      const bottomMargin = Math.max(
-        10,
-        Math.round(height * GLOBAL_SHARE_BRAND.bottomMarginRatio),
-      );
       const logoX = Math.round((width - logoWidth) / 2);
-      const logoY = Math.max(0, height - bottomMargin - logoHeight);
+      const logoY = height + Math.round((footerHeight - logoHeight) / 2);
       context.drawImage(
         brandBitmap,
         logoX,
@@ -401,7 +414,7 @@ export default function ProjectShareManager({
           <h2>Share & Branding</h2>
           <p>
             Poster upload karein. System original source ko safe rakhega aur
-            AR 3D Vision Studio branding bottom-center me automatically attach
+            AR 3D Vision Studio branding ke liye neeche dedicated footer automatically add
             karke share-ready derivative banayega.
           </p>
         </div>
@@ -481,7 +494,7 @@ export default function ProjectShareManager({
                       : "Choose final share image"}
               </b>
               <small>
-                JPG / PNG / WebP · max 8 MB · no crop · AR3D bottom-center auto
+                JPG / PNG / WebP · max 8 MB · no crop · AR3D footer auto
               </small>
               <input
                 key={
@@ -551,7 +564,7 @@ export default function ProjectShareManager({
               <img src={previewUrl} alt="Share image preview" />
             ) : (
               <div className="rekixo-share-empty">
-                Poster choose karein. Yahan no-crop AR3D branded preview dikhega.
+                Poster choose karein. Yahan original image ke neeche AR3D footer wala preview dikhega.
               </div>
             )}
             <div className="rekixo-whatsapp-copy">
