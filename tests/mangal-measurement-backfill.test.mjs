@@ -50,3 +50,9 @@ test("edge measurement V2 receives canonical semantic rows", () => {
   assert.match(sql,/WHEN 'depthB' THEN p\.depth2_edge_index/);
   assert.match(sql,/Mangal Raj Park sanctioned layout · 2026-09-19/);
 });
+
+test("remote D1 migration avoids unauthorized TEMP tables", () => {
+  assert.doesNotMatch(sql,/CREATE TEMP TABLE/i);
+  assert.match(sql,/CREATE TABLE _mangal_target/);
+  assert.match(sql,/DROP TABLE IF EXISTS _mangal_measurement_source/);
+});
