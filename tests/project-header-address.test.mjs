@@ -28,7 +28,7 @@ test("Super Admin Plot Mapper can save a website header address", () => {
 });
 
 test("Super Mapper allows only a validated short address setting", () => {
-  assert.match(route, /"address",\n\]\);/);
+  assert.match(route, /"address",\n\s*"sqmToSqftFactor",\n\]\);/);
   assert.match(route, /if \(key === "address"\)/);
   assert.match(route, /value\.length > 180/);
 });
