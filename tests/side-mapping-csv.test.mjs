@@ -15,7 +15,7 @@ test("completed Tiyansh project explicitly allows Side Mapping CSV", () => {
   const mapper = read("app/plot-mapper.tsx");
   assert.match(
     mapper,
-    /\["sourcePdf", "logo", "roadAccessSheet", "sideMappingSheet"\]\.includes\(kind\)/,
+    /\["sourcePdf", "logo", "measurementSheet", "roadAccessSheet", "sideMappingSheet"\]\.includes\(kind\)/,
   );
 });
 
