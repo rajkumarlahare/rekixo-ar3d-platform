@@ -30,7 +30,7 @@ test("each confirmed polygon is server-read-back verified before draft cleanup a
   assert.match(mapper, /SERVER VERIFIED/);
   const verifyPos = mapper.indexOf("verifyPlotPersistence(saved)");
   const cleanupPos = mapper.indexOf("localStorage.removeItem(mappingDraftKey(projectId, verified.plot.id))");
-  const nextPos = mapper.indexOf("selectNextPlot(verified.plot.id)");
+  const nextPos = mapper.indexOf("selectNextPlot(\n        verified.plot.id,\n        verified.plots,\n      )");
   assert.ok(verifyPos >= 0 && cleanupPos > verifyPos && nextPos > cleanupPos);
   assert.match(api, /await savePlots\(projectId, incoming\)/);
   assert.match(api, /cache-control": "no-store"/);
