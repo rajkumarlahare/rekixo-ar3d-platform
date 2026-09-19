@@ -20,6 +20,28 @@ export const projectDomains = sqliteTable("project_domains", {
 },table=>({projectKindIndex:index("idx_project_domains_project_kind").on(table.projectId,table.kind,table.status)}));
 
 export const plots = sqliteTable("plots", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), id:text("id").notNull(), sqft:real("sqft").notNull(), sqm:real("sqm").notNull(), sqyd:real("sqyd").notNull(), dimensions:text("dimensions").notNull(), road:text("road").notNull(), front:real("front"), depth:real("depth"), back:real("back"), depth2:real("depth2"), dimensionUnit:text("dimension_unit"), frontEdgeIndex:integer("front_edge_index"), depthEdgeIndex:integer("depth_edge_index"), backEdgeIndex:integer("back_edge_index"), depth2EdgeIndex:integer("depth2_edge_index"), frontLabel:text("front_label"), depthLabel:text("depth_label"), backLabel:text("back_label"), depth2Label:text("depth2_label"), sideDimensions:text("side_dimensions"), edgeSemantics:text("edge_semantics"), polygon:text("polygon").notNull().default(""), status:text("status").notNull().default("available"), notes:text("notes").notNull().default(""), featured:integer("featured",{mode:"boolean"}).notNull().default(false), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
+export const plotEdgeMeasurements = sqliteTable("plot_edge_measurements", {
+  projectId:text("project_id").notNull().references(()=>projects.id),
+  plotId:text("plot_id").notNull(),
+  role:text("role").notNull(),
+  segmentIndex:integer("segment_index").notNull().default(0),
+  edgeIndex:integer("edge_index"),
+  pointCount:integer("point_count"),
+  length:real("length"),
+  unit:text("unit"),
+  rawLabel:text("raw_label"),
+  roadFrontage:integer("road_frontage",{mode:"boolean"}).notNull().default(false),
+  roadAccess:text("road_access"),
+  sourceRef:text("source_ref"),
+  sourceRawText:text("source_raw_text"),
+  confidence:text("confidence").notNull().default("high"),
+  verified:integer("verified",{mode:"boolean"}).notNull().default(false),
+  updatedAt:text("updated_at").notNull()
+},table=>({
+  pk:primaryKey({columns:[table.projectId,table.plotId,table.role,table.segmentIndex]}),
+  projectPlotIndex:index("idx_plot_edge_measurements_project_plot").on(table.projectId,table.plotId)
+}));
+
 export const settings = sqliteTable("settings", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), key:text("key").notNull(), value:text("value").notNull(), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.key]})}));
 export const plotPricing = sqliteTable("plot_pricing", {
   projectId:text("project_id").notNull().references(()=>projects.id),
