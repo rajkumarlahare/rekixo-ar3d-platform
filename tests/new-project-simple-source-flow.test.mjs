@@ -9,7 +9,9 @@ test("Plot Mapper presents one normal onboarding path and moves correction sourc
   assert.match(mapper, /Normal new-project flow/);
   assert.match(mapper, /Masterplan → verified Plot Data → AI measurement manifest when needed → front-first boundaries → quality check → preview → publish/);
   assert.match(mapper, /2\. Verified Plot Data/);
-  assert.match(mapper, /authoritative area \+ road \+ side sizes; Front Direction legacy\/optional/);\n  assert.match(mapper, /AI Measurement Manifest/);\n  assert.match(mapper, /Download AI Measurement Manifest template/);
+  assert.match(mapper, /authoritative area \+ road \+ side sizes; Front Direction legacy\/optional/);
+  assert.match(mapper, /AI Measurement Manifest/);
+  assert.match(mapper, /Download AI Measurement Manifest template/);
   assert.match(mapper, /Advanced \/ corrections/);
   assert.match(mapper, /Road Access correction CSV/);
   assert.match(mapper, /Side Mapping correction CSV/);
