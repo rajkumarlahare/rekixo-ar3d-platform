@@ -40,7 +40,7 @@ test("Super Admin warns before incomplete rich-detail CSV is imported", () => {
   const mapper = read("app/plot-mapper.tsx");
   assert.match(mapper, /preflightPlotSheet/);
   assert.match(mapper, /plotSheetPreflight/);
-  assert.match(mapper, /Venkatesh jaisa Front \/ Back \/ Depth detail/);
+  assert.match(mapper, /complete Front \/ Back \/ Depth measurement/);
   assert.match(mapper, /Plot Data Quality/);
   assert.match(mapper, /4-side measurements/);
   assert.match(mapper, /Front Direction/);
@@ -68,7 +68,7 @@ test("canonical plot sheet stores Front Direction and auto-applies edge semantic
   assert.match(sheet, /roadfrontdirection/);
   assert.match(route, /plotFrontDirections/);
   assert.match(route, /autoSideMapped/);
-  assert.match(route, /edgeIndexForDisplayDirection/);
+  assert.match(route, /resolveFourSideEdges/);
   assert.match(mapper, /savedPlotFrontDirections/);
   assert.match(mapper, /plotFrontDirections\[id\]/);
   assert.match(mapper, /Normal flow me Front Direction canonical Plot Data/);
