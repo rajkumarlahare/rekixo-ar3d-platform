@@ -132,7 +132,8 @@ function unit(value: unknown, hasNumeric: boolean) {
 
 function confidence(value: unknown): MeasurementConfidence {
   const raw = String(value ?? "").trim().toLowerCase();
-  if (!raw || ["high", "h", "verified"].includes(raw)) return "high";
+  if (!raw) return "medium";
+  if (["high", "h", "verified"].includes(raw)) return "high";
   if (["medium", "med", "m", "review"].includes(raw)) return "medium";
   if (["low", "l", "uncertain"].includes(raw)) return "low";
   const numeric = Number(raw);
@@ -171,7 +172,7 @@ function normalizeRow(input: Record<string, unknown>): PlotMeasurementSheetRow |
   const sourceRef = cleanText(input.sourceRef, 240);
   const sourceRawText = cleanText(input.sourceRawText, 1200);
   const sourceConfidence = confidence(input.confidence);
-  const sourceVerified = verified(input.verified, sourceConfidence === "high");
+  const sourceVerified = verified(input.verified, false);
 
   const hasAnyMeasurement =
     hasNumeric ||
