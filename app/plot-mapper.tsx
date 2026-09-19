@@ -2864,6 +2864,11 @@ export default function PlotMapper({
           <span className={mappedPlots.length && !unmappedPlots.length ? "done" : ""}><b>5</b> Publish</span>
         </div>
 
+        <div className="mapper-normal-flow">
+          <b>Normal new-project flow</b>
+          <span>Masterplan → one verified Plot Data file → map boundaries → quality check → preview → publish</span>
+        </div>
+
         <div className="mapper-source-grid">
           <label className={`mapper-upload-card ${hasMasterplan ? "ready" : ""}`}>
             <span><ImagePlus /></span>
@@ -2889,16 +2894,12 @@ export default function PlotMapper({
             />
           </label>
 
-          <label className={`mapper-upload-card ${hasCad ? "ready" : ""}`}>
+          <label className={`mapper-upload-card mapper-canonical-data ${hasPlotSheet ? "ready" : ""}`}>
             <span><FileText /></span>
-            <div><b>{hasCad ? "CAD source saved" : "Advanced · DWG / DXF"}</b><small>{settings.sourceCadName || "Optional assistant — normal mapping ke liye जरूरी नहीं"}</small></div>
-            {hasCad && <CheckCircle2 className="mapper-ready-icon" />}
-            <input type="file" accept=".dwg,.dxf,application/acad,application/dxf,application/octet-stream" disabled={busy || completedProject} onChange={(event) => event.target.files?.[0] && upload(event.target.files[0], "sourceCad")} />
-          </label>
-
-          <label className={`mapper-upload-card ${hasPlotSheet ? "ready" : ""}`}>
-            <span><FileText /></span>
-            <div><b>{hasPlotSheet ? `Plot inventory · ${plots.length}` : "2. Plot details sheet"}</b><small>{settings.plotSheetName || "ONE canonical CSV/JSON: ID, area, road, 4-side sizes, Front Direction"}</small></div>
+            <div>
+              <b>{hasPlotSheet ? `Plot Data · ${plots.length} plots` : "2. Verified Plot Data"}</b>
+              <small>{settings.plotSheetName || "ONE CSV/JSON: area + road + Front/Back/Depth A/Depth B + Front Direction"}</small>
+            </div>
             {hasPlotSheet && <CheckCircle2 className="mapper-ready-icon" />}
             <input
               type="file"
@@ -2913,47 +2914,68 @@ export default function PlotMapper({
             />
           </label>
 
-          <label className={`mapper-upload-card ${hasRoadAccessSheet ? "ready" : ""}`}>
-            <span><FileText /></span>
-            <div>
-              <b>{hasRoadAccessSheet ? `Road Access · ${settings.roadAccessSheetCount || "saved"}` : "Road Access CSV"}</b>
-              <small>{settings.roadAccessSheetName || "Advanced correction only · Plot No + Road Access"}</small>
-            </div>
-            {hasRoadAccessSheet && <CheckCircle2 className="mapper-ready-icon" />}
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              disabled={busy}
-              onChange={(event) =>
-                event.target.files?.[0] && upload(event.target.files[0], "roadAccessSheet")
-              }
-            />
-          </label>
-
-          <label className={`mapper-upload-card ${hasSideMappingSheet ? "ready" : ""}`}>
-            <span><Target /></span>
-            <div>
-              <b>{hasSideMappingSheet ? `Side Mapping · ${settings.sideMappingSheetCount || "saved"}` : "Side Mapping CSV"}</b>
-              <small>{settings.sideMappingSheetName || "Advanced correction only · normal flow me Front Direction main CSV me रखें"}</small>
-            </div>
-            {hasSideMappingSheet && <CheckCircle2 className="mapper-ready-icon" />}
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              disabled={busy}
-              onChange={(event) =>
-                event.target.files?.[0] && upload(event.target.files[0], "sideMappingSheet")
-              }
-            />
-          </label>
-
           <label className={`mapper-upload-card ${hasPdf ? "ready" : ""}`}>
             <span><FileText /></span>
-            <div><b>{hasPdf ? "Technical PDF saved" : "3. PDF reference"}</b><small>{settings.sourcePdfName || "Original sanctioned/technical sheet"}</small></div>
+            <div>
+              <b>{hasPdf ? "Technical PDF saved" : "3. Technical PDF reference"}</b>
+              <small>{settings.sourcePdfName || "Original sanctioned/technical sheet · reference only"}</small>
+            </div>
             {hasPdf && <CheckCircle2 className="mapper-ready-icon" />}
             <input type="file" accept="application/pdf,.pdf" disabled={busy} onChange={(event) => event.target.files?.[0] && upload(event.target.files[0], "sourcePdf")} />
           </label>
         </div>
+
+        <details className="mapper-advanced-sources">
+          <summary>
+            <span>
+              <b>Advanced / corrections</b>
+              <small>Normal project me zaroori nahi — CAD assistant ya later field correction ke liye.</small>
+            </span>
+            <em>{[hasCad, hasRoadAccessSheet, hasSideMappingSheet].filter(Boolean).length}/3 saved</em>
+          </summary>
+          <div className="mapper-source-grid">
+            <label className={`mapper-upload-card ${hasCad ? "ready" : ""}`}>
+              <span><FileText /></span>
+              <div><b>{hasCad ? "CAD source saved" : "DWG / DXF"}</b><small>{settings.sourceCadName || "Optional geometry assistant"}</small></div>
+              {hasCad && <CheckCircle2 className="mapper-ready-icon" />}
+              <input type="file" accept=".dwg,.dxf,application/acad,application/dxf,application/octet-stream" disabled={busy || completedProject} onChange={(event) => event.target.files?.[0] && upload(event.target.files[0], "sourceCad")} />
+            </label>
+
+            <label className={`mapper-upload-card ${hasRoadAccessSheet ? "ready" : ""}`}>
+              <span><FileText /></span>
+              <div>
+                <b>{hasRoadAccessSheet ? `Road correction · ${settings.roadAccessSheetCount || "saved"}` : "Road Access correction CSV"}</b>
+                <small>{settings.roadAccessSheetName || "Only road field update; inventory/status/geometry untouched"}</small>
+              </div>
+              {hasRoadAccessSheet && <CheckCircle2 className="mapper-ready-icon" />}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={busy}
+                onChange={(event) =>
+                  event.target.files?.[0] && upload(event.target.files[0], "roadAccessSheet")
+                }
+              />
+            </label>
+
+            <label className={`mapper-upload-card ${hasSideMappingSheet ? "ready" : ""}`}>
+              <span><Target /></span>
+              <div>
+                <b>{hasSideMappingSheet ? `Side correction · ${settings.sideMappingSheetCount || "saved"}` : "Side Mapping correction CSV"}</b>
+                <small>{settings.sideMappingSheetName || "Normal flow me Front Direction canonical Plot Data me hi रखें"}</small>
+              </div>
+              {hasSideMappingSheet && <CheckCircle2 className="mapper-ready-icon" />}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={busy}
+                onChange={(event) =>
+                  event.target.files?.[0] && upload(event.target.files[0], "sideMappingSheet")
+                }
+              />
+            </label>
+          </div>
+        </details>
 
         <ProjectPricingSource
           key={`pricing:${projectId}`}

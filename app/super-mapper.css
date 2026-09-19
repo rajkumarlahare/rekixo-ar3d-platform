@@ -92,3 +92,61 @@
   .mapper-data-quality-head strong{justify-self:start}
   .mapper-data-quality-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* REKIXO_NEW_PROJECT_SIMPLE_SOURCE_FLOW_V1 */
+.mapper-normal-flow{
+  margin:12px 0 14px;
+  display:flex;
+  align-items:center;
+  gap:10px 14px;
+  flex-wrap:wrap;
+  padding:11px 13px;
+  border:1px solid rgba(99,102,241,.28);
+  border-radius:12px;
+  background:rgba(49,46,129,.12);
+}
+.mapper-normal-flow b{color:#c7d2fe;font-size:12px}
+.mapper-normal-flow span{color:#94a3b8;font-size:11px;line-height:1.4}
+.mapper-upload-card.mapper-canonical-data{
+  border-color:rgba(99,102,241,.42);
+  background:linear-gradient(145deg,rgba(49,46,129,.17),rgba(8,18,33,.88));
+}
+.mapper-advanced-sources{
+  margin-top:12px;
+  border:1px solid rgba(148,163,184,.16);
+  border-radius:14px;
+  background:rgba(8,18,33,.52);
+  overflow:hidden;
+}
+.mapper-advanced-sources>summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:13px 14px;
+  cursor:pointer;
+}
+.mapper-advanced-sources>summary::-webkit-details-marker{display:none}
+.mapper-advanced-sources>summary>span{display:grid;gap:3px;min-width:0}
+.mapper-advanced-sources>summary b{color:#dbe5f5;font-size:12px}
+.mapper-advanced-sources>summary small{color:#71819a;font-size:10px;line-height:1.4}
+.mapper-advanced-sources>summary em{
+  flex:none;
+  color:#8493aa;
+  font-size:10px;
+  font-style:normal;
+  font-weight:800;
+}
+.mapper-advanced-sources[open]>summary{
+  border-bottom:1px solid rgba(148,163,184,.13);
+}
+.mapper-advanced-sources>.mapper-source-grid{
+  padding:12px;
+  margin:0;
+}
+@media(max-width:700px){
+  .mapper-normal-flow{display:grid}
+  .mapper-advanced-sources>summary{align-items:flex-start}
+}
