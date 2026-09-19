@@ -3128,6 +3128,47 @@ export default function PlotMapper({
           </div>
         </div>
 
+        <div className="mapper-header-address-card">
+          <div className="mapper-header-address-copy">
+            <b>Area conversion policy</b>
+            <small>
+              Sq.M → Sq.Ft project-specific factor. Standard default 10.7639; Mangal Raj Park uses 10.76.
+              Sq.Yd standard metric conversion se independent derive hota hai.
+            </small>
+          </div>
+          <div className="mapper-header-address-controls">
+            <input
+              type="number"
+              min="9"
+              max="12"
+              step="0.000001"
+              value={areaFactorText}
+              disabled={busy}
+              aria-label="Square meter to square feet factor"
+              onChange={(event) => setAreaFactorText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void saveAreaFactor();
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={
+                busy ||
+                Math.abs(
+                  normalizeSqmToSqftFactor(areaFactorText) -
+                    normalizeSqmToSqftFactor(settings.sqmToSqftFactor),
+                ) < 1e-9
+              }
+              onClick={() => void saveAreaFactor()}
+            >
+              <Save /> Save factor
+            </button>
+          </div>
+        </div>
+
         <div className="mapper-source-actions">
           <button type="button" className="primary" onClick={downloadPlotSheetTemplate}>
             <FileText /> Download verified Plot Data template
