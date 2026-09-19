@@ -749,6 +749,202 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, name: file.name, count: updates.length });
     }
 
+    if (kind === "measurementSheet") {
+      const sourceText = await file.text();
+      let rows;
+      try {
+        rows = parsePlotMeasurementSheetText(sourceText, file.name);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Measurement sheet parse nahi hui" },
+          { status: 400 },
+        );
+      }
+      if (!rows.length)
+        return Response.json({ error: "Measurement sheet me valid rows nahi mili" }, { status: 400 });
+      if (rows.length > 2000)
+        return Response.json(
+          { error: "Ek measurement sheet me adhiktam 2000 rows rakhein" },
+          { status: 400 },
+        );
+
+      const plotRows = await env.DB.prepare(
+        "SELECT id,polygon,road,edge_semantics AS edgeSemantics,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=?",
+      )
+        .bind(projectId)
+        .all<{
+          id: string;
+          polygon: string | null;
+          road: string | null;
+          edgeSemantics: string | null;
+          frontEdgeIndex: number | null;
+          backEdgeIndex: number | null;
+          depthEdgeIndex: number | null;
+          depth2EdgeIndex: number | null;
+        }>();
+      const byId = new Map(plotRows.results.map((item) => [item.id, item]));
+      const unknown = rows.filter((row) => !byId.has(row.id)).map((row) => row.id);
+      if (unknown.length) {
+        return Response.json(
+          {
+            error:
+              "Measurement sheet me unknown Plot ID mile: " +
+              unknown.slice(0, 12).join(", ") +
+              (unknown.length > 12 ? "..." : ""),
+          },
+          { status: 400 },
+        );
+      }
+
+      const plotUpdates = rows.map((row) =>
+        env.DB.prepare(
+          "UPDATE plots SET front=COALESCE(?,front),back=COALESCE(?,back),depth=COALESCE(?,depth),depth2=COALESCE(?,depth2),dimension_unit=CASE WHEN ?<>'' THEN ? ELSE dimension_unit END,front_label=CASE WHEN ?<>'' THEN ? ELSE front_label END,back_label=CASE WHEN ?<>'' THEN ? ELSE back_label END,depth_label=CASE WHEN ?<>'' THEN ? ELSE depth_label END,depth2_label=CASE WHEN ?<>'' THEN ? ELSE depth2_label END,side_dimensions=CASE WHEN ?<>'' THEN ? ELSE side_dimensions END,road=CASE WHEN ?<>'' THEN ? ELSE road END,updated_at=? WHERE project_id=? AND id=?",
+        ).bind(
+          row.front,
+          row.back,
+          row.depth,
+          row.depth2,
+          row.dimensionUnit,
+          row.dimensionUnit,
+          row.frontLabel,
+          row.frontLabel,
+          row.backLabel,
+          row.backLabel,
+          row.depthLabel,
+          row.depthLabel,
+          row.depth2Label,
+          row.depth2Label,
+          row.sideDimensions,
+          row.sideDimensions,
+          row.road,
+          row.road,
+          now,
+          projectId,
+          row.id,
+        ),
+      );
+      for (let index = 0; index < plotUpdates.length; index += 80) {
+        await env.DB.batch(plotUpdates.slice(index, index + 80));
+      }
+
+      const edgeWrites: ReturnType<typeof env.DB.prepare>[] = [];
+      for (const row of rows) {
+        const stored = byId.get(row.id)!;
+        let pointCount = 0;
+        try {
+          const polygon = JSON.parse(stored.polygon || "[]");
+          pointCount = Array.isArray(polygon) ? polygon.length : 0;
+        } catch {
+          pointCount = 0;
+        }
+        const parsedSemantics = parsePlotSideSemantics(
+          stored.edgeSemantics,
+          pointCount >= 3 ? pointCount : undefined,
+        );
+        const edgeFor = (role: "front" | "back" | "depthA" | "depthB") => {
+          const semantic = parsedSemantics?.roles[role]?.[0];
+          if (Number.isInteger(semantic)) return semantic as number;
+          const fallback =
+            role === "front"
+              ? stored.frontEdgeIndex
+              : role === "back"
+                ? stored.backEdgeIndex
+                : role === "depthA"
+                  ? stored.depthEdgeIndex
+                  : stored.depth2EdgeIndex;
+          return Number.isInteger(fallback) ? Number(fallback) : null;
+        };
+        const roleRows = [
+          ["front", row.front, row.frontLabel],
+          ["back", row.back, row.backLabel],
+          ["depthA", row.depth, row.depthLabel],
+          ["depthB", row.depth2, row.depth2Label],
+        ] as const;
+        for (const [role, length, label] of roleRows) {
+          if (length == null && !label) continue;
+          const rawLabel =
+            label || (length != null && row.dimensionUnit ? `${length} ${row.dimensionUnit}` : "");
+          edgeWrites.push(
+            env.DB.prepare(
+              "INSERT INTO plot_edge_measurements (project_id,plot_id,role,segment_index,edge_index,point_count,length,unit,raw_label,road_frontage,road_access,source_ref,source_raw_text,confidence,verified,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,plot_id,role,segment_index) DO UPDATE SET edge_index=excluded.edge_index,point_count=excluded.point_count,length=COALESCE(excluded.length,length),unit=CASE WHEN excluded.unit<>'' THEN excluded.unit ELSE unit END,raw_label=CASE WHEN excluded.raw_label<>'' THEN excluded.raw_label ELSE raw_label END,road_frontage=excluded.road_frontage,road_access=CASE WHEN excluded.road_access<>'' THEN excluded.road_access ELSE road_access END,source_ref=CASE WHEN excluded.source_ref<>'' THEN excluded.source_ref ELSE source_ref END,source_raw_text=CASE WHEN excluded.source_raw_text<>'' THEN excluded.source_raw_text ELSE source_raw_text END,confidence=excluded.confidence,verified=excluded.verified,updated_at=excluded.updated_at",
+            ).bind(
+              projectId,
+              row.id,
+              role,
+              0,
+              edgeFor(role),
+              pointCount >= 3 ? pointCount : null,
+              length,
+              row.dimensionUnit,
+              rawLabel,
+              role === "front" ? 1 : 0,
+              row.road || stored.road || "",
+              row.sourceRef || file.name,
+              row.sourceRawText,
+              row.confidence,
+              row.verified ? 1 : 0,
+              now,
+            ),
+          );
+        }
+      }
+      for (let index = 0; index < edgeWrites.length; index += 80) {
+        await env.DB.batch(edgeWrites.slice(index, index + 80));
+      }
+
+      const fullSidesCount = rows.filter((row) =>
+        [
+          row.front != null || Boolean(row.frontLabel),
+          row.back != null || Boolean(row.backLabel),
+          row.depth != null || Boolean(row.depthLabel),
+          row.depth2 != null || Boolean(row.depth2Label),
+        ].every(Boolean),
+      ).length;
+      const reviewCount = rows.filter(
+        (row) => !row.verified || row.confidence !== "high",
+      ).length;
+      const verifiedCount = rows.length - reviewCount;
+
+      await env.BUCKET.put(objectKey, sourceText, {
+        httpMetadata: {
+          contentType: file.name.toLowerCase().endsWith(".json")
+            ? "application/json"
+            : "text/csv; charset=utf-8",
+        },
+      });
+      await Promise.all([
+        writeSetting(projectId, "measurementSheetName", file.name.slice(0, 240), now),
+        writeSetting(projectId, "measurementSheetCount", String(rows.length), now),
+        writeSetting(projectId, "measurementSheetFullSidesCount", String(fullSidesCount), now),
+        writeSetting(projectId, "measurementSheetVerifiedCount", String(verifiedCount), now),
+        writeSetting(projectId, "measurementSheetReviewCount", String(reviewCount), now),
+      ]);
+      await writeAudit(actor, "mapper.measurementSheet_imported", projectId, null, {
+        filename: file.name,
+        count: rows.length,
+        fullSidesCount,
+        verifiedCount,
+        reviewCount,
+        updatedFields: [
+          "front",
+          "back",
+          "depth",
+          "depth2",
+          "dimension_unit",
+          "exact_labels",
+          "plot_edge_measurements",
+        ],
+      });
+      return Response.json({
+        ok: true,
+        name: file.name,
+        count: rows.length,
+        fullSidesCount,
+        verifiedCount,
+        reviewCount,
+      });
+    }
+
     if (kind === "roadAccessSheet") {
       let rows;
       const sourceText = await file.text();
