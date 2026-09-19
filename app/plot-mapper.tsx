@@ -2530,56 +2530,22 @@ export default function PlotMapper({
       depth2EdgeValue === null &&
       points.length >= 4
     ) {
+      const frontFirst = shape === "quad" ? frontFirstFourSideEdges(points.length) : null;
       const storedDirection = plotFrontDirections[id];
-      if (storedDirection) {
-        const displayRotation = normalizeQuarterTurn(settings.publicRotation);
-        const opposite: Record<EdgeDirection, EdgeDirection> = {
-          top: "bottom",
-          right: "left",
-          bottom: "top",
-          left: "right",
-        };
-        const depthDirections: Record<
-          EdgeDirection,
-          [EdgeDirection, EdgeDirection]
-        > = {
-          top: ["right", "left"],
-          right: ["bottom", "top"],
-          bottom: ["left", "right"],
-          left: ["top", "bottom"],
-        };
-        const autoFront = edgeIndexForDisplayDirection(
-          points,
-          storedDirection,
-          displayRotation,
-        );
-        const autoBack = edgeIndexForDisplayDirection(
-          points,
-          opposite[storedDirection],
-          displayRotation,
-        );
-        const [depthADirection, depthBDirection] =
-          depthDirections[storedDirection];
-        const autoDepthA = edgeIndexForDisplayDirection(
-          points,
-          depthADirection,
-          displayRotation,
-        );
-        const autoDepthB = edgeIndexForDisplayDirection(
-          points,
-          depthBDirection,
-          displayRotation,
-        );
-        const autoEdges = [autoFront, autoBack, autoDepthA, autoDepthB];
-        if (
-          autoEdges.every((value) => value !== null) &&
-          new Set(autoEdges).size === 4
-        ) {
-          edgeValue = autoFront;
-          backEdgeValue = autoBack;
-          depthEdgeValue = autoDepthA;
-          depth2EdgeValue = autoDepthB;
-        }
+      const resolved =
+        frontFirst ||
+        (storedDirection
+          ? resolveFourSideEdges(
+              points,
+              storedDirection,
+              normalizeQuarterTurn(settings.publicRotation),
+            )
+          : null);
+      if (resolved) {
+        edgeValue = resolved.front;
+        backEdgeValue = resolved.back;
+        depthEdgeValue = resolved.depthA;
+        depth2EdgeValue = resolved.depthB;
       }
     }
     if (frontValue !== null && (!Number.isFinite(frontValue) || frontValue <= 0))
@@ -2644,10 +2610,14 @@ export default function PlotMapper({
       id,
       sqft: area,
       sqm: area > 0
-        ? unchangedInventoryArea ? Number(existing?.sqm || area / 10.7639) : area / 10.7639
+        ? unchangedInventoryArea
+          ? Number(existing?.sqm || sqftToSqm(area, sqmToSqftFactor))
+          : sqftToSqm(area, sqmToSqftFactor)
         : Number(existing?.sqm || 0),
       sqyd: area > 0
-        ? unchangedInventoryArea ? Number(existing?.sqyd || area / 9) : area / 9
+        ? unchangedInventoryArea
+          ? Number(existing?.sqyd || sqmToSqyd(sqftToSqm(area, sqmToSqftFactor)))
+          : sqmToSqyd(sqftToSqm(area, sqmToSqftFactor))
         : Number(existing?.sqyd || 0),
       dimensions: dimensions.trim() || existing?.dimensions || "",
       road: road.trim() || existing?.road || "",
