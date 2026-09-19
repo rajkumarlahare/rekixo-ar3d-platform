@@ -71,5 +71,5 @@ test("canonical plot sheet stores Front Direction and auto-applies edge semantic
   assert.match(route, /edgeIndexForDisplayDirection/);
   assert.match(mapper, /savedPlotFrontDirections/);
   assert.match(mapper, /plotFrontDirections\[id\]/);
-  assert.match(mapper, /normal flow me Front Direction main CSV/);
+  assert.match(mapper, /Normal flow me Front Direction canonical Plot Data/);
 });
