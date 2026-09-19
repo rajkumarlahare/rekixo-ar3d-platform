@@ -2,12 +2,11 @@ import { env } from "cloudflare:workers";
 import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
 import { writeAudit } from "../../audit";
 import {
-  edgeIndexForDisplayDirection,
   type EdgeDirection,
   type QuarterTurn,
 } from "../../plot-edge-semantics";
-import { serializePlotSideSemantics } from "../../plot-side-semantics";
 import { parseSideMappingSheetText } from "../../side-mapping-sheet";
+import { resolveFourSideEdges } from "../../plot-side-resolver";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
@@ -79,47 +78,6 @@ function parsePolygon(value: string | null) {
   } catch {
     return null;
   }
-}
-
-function resolveSideEdges(
-  polygon: [number, number][],
-  frontDirection: EdgeDirection,
-  rotation: QuarterTurn,
-) {
-  const opposite: Record<EdgeDirection, EdgeDirection> = {
-    top: "bottom",
-    right: "left",
-    bottom: "top",
-    left: "right",
-  };
-  const depthDirections: Record<EdgeDirection, [EdgeDirection, EdgeDirection]> = {
-    top: ["right", "left"],
-    right: ["bottom", "top"],
-    bottom: ["left", "right"],
-    left: ["top", "bottom"],
-  };
-
-  const backDirection = opposite[frontDirection];
-  const [depthADirection, depthBDirection] = depthDirections[frontDirection];
-  const front = edgeIndexForDisplayDirection(polygon, frontDirection, rotation);
-  const back = edgeIndexForDisplayDirection(polygon, backDirection, rotation);
-  const depthA = edgeIndexForDisplayDirection(polygon, depthADirection, rotation);
-  const depthB = edgeIndexForDisplayDirection(polygon, depthBDirection, rotation);
-  const selected = [front, back, depthA, depthB];
-
-  if (selected.some((edge) => edge == null) || new Set(selected).size !== 4) return null;
-  return {
-    front: front!,
-    back: back!,
-    depthA: depthA!,
-    depthB: depthB!,
-    edgeSemantics: serializePlotSideSemantics(polygon.length, {
-      front: [front!],
-      back: [back!],
-      depthA: [depthA!],
-      depthB: [depthB!],
-    }),
-  };
 }
 
 export async function GET(request: Request) {
@@ -223,11 +181,12 @@ export async function POST(request: Request) {
 
   const updates: Array<{
     id: string;
+    pointCount: number;
     front: number;
     back: number;
     depthA: number;
     depthB: number;
-    edgeSemantics: string | null;
+    edgeSemantics: string;
   }> = [];
   const pendingIds: string[] = [];
 
@@ -238,12 +197,12 @@ export async function POST(request: Request) {
       pendingIds.push(row.id);
       continue;
     }
-    const resolved = resolveSideEdges(polygon, row.front, rotation);
+    const resolved = resolveFourSideEdges(polygon, row.front, rotation);
     if (!resolved) {
       pendingIds.push(row.id);
       continue;
     }
-    updates.push({ id: row.id, ...resolved });
+    updates.push({ id: row.id, pointCount: polygon.length, ...resolved });
   }
 
   for (let index = 0; index < updates.length; index += 80) {
@@ -264,6 +223,22 @@ export async function POST(request: Request) {
         ),
       ),
     );
+  }
+
+  const bindingWrites = updates.flatMap((row) =>
+    ([
+      ["front", row.front],
+      ["back", row.back],
+      ["depthA", row.depthA],
+      ["depthB", row.depthB],
+    ] as const).map(([role, edge]) =>
+      env.DB.prepare(
+        "UPDATE plot_edge_measurements SET edge_index=?,point_count=?,updated_at=? WHERE project_id=? AND plot_id=? AND role=?",
+      ).bind(edge, row.pointCount, now, projectId, row.id, role),
+    ),
+  );
+  for (let index = 0; index < bindingWrites.length; index += 80) {
+    await env.DB.batch(bindingWrites.slice(index, index + 80));
   }
 
   const directions = Object.fromEntries(rows.map((row) => [row.id, row.front]));
