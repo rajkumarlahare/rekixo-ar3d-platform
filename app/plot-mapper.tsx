@@ -719,6 +719,7 @@ export default function PlotMapper({
   const pendingHandleRef = useRef<PendingHandleFrame | null>(null);
   const draggingPointRef = useRef<number | null>(null);
   const pointsRef = useRef<MapperPoint[]>([]);
+  const frontFirstPendingRef = useRef(false);
   const loupeRef = useRef<HTMLDivElement | null>(null);
   const metadataRepairRef = useRef(false);
 
@@ -726,6 +727,19 @@ export default function PlotMapper({
   useEffect(() => {
     pointsRef.current = points;
   }, [points]);
+
+  useEffect(() => {
+    if (!frontFirstPendingRef.current || shape !== "quad" || points.length !== 4) return;
+    frontFirstPendingRef.current = false;
+    const resolved = frontFirstFourSideEdges(4);
+    if (!resolved) return;
+    setFrontEdgeIndex(String(resolved.front));
+    setBackEdgeIndex(String(resolved.back));
+    setDepthEdgeIndex(String(resolved.depthA));
+    setDepth2EdgeIndex(String(resolved.depthB));
+    notify("Front-first mapping applied: pehli tapped boundary = road-facing Front");
+  }, [points.length, shape]);
+
 
   useLayoutEffect(() => {
     zoomRef.current = zoom;
@@ -1440,6 +1454,7 @@ export default function PlotMapper({
     setDepth2EdgeIndex("");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
+    frontFirstPendingRef.current = false;
     setToolMode("select");
     try {
       window.localStorage.removeItem(mappingDraftKey(projectId, plotId));
@@ -2243,7 +2258,10 @@ export default function PlotMapper({
       if (shape === "quad") {
         if (current.length >= 4) return [snapped];
         const next = [...current, snapped];
-        if (next.length === 4) setManualPhase("details");
+        if (next.length === 4) {
+          frontFirstPendingRef.current = true;
+          setManualPhase("details");
+        }
         return next;
       }
       return current.length < 80 ? [...current, snapped] : current;
