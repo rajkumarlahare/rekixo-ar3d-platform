@@ -1489,8 +1489,22 @@ export default function PlotMapper({
       [...inventoryPlots].reverse().find((plot) => plot.id !== plotId && parsePolygon(plot).length >= 3);
     if (!source) return notify("Clone करने के लिए पहले कोई mapped plot चाहिए");
     const polygon = parsePolygon(source);
+    const semantics = parsePlotSideSemantics(source.edgeSemantics, polygon.length);
+    const roleEdge = (role: PlotSideRole, fallback: number | null | undefined) => {
+      const semantic = semantics?.roles[role]?.[0];
+      return Number.isInteger(semantic)
+        ? String(semantic)
+        : Number.isInteger(fallback)
+          ? String(fallback)
+          : "";
+    };
     setPoints(polygon.map(([x, y]) => [x, y] as MapperPoint));
     setShape(polygon.length === 4 ? "quad" : "polygon");
+    setFrontEdgeIndex(roleEdge("front", source.frontEdgeIndex));
+    setBackEdgeIndex(roleEdge("back", source.backEdgeIndex));
+    setDepthEdgeIndex(roleEdge("depthA", source.depthEdgeIndex));
+    setDepth2EdgeIndex(roleEdge("depthB", source.depth2EdgeIndex));
+    frontFirstPendingRef.current = false;
     setManualPhase("details");
     setEditingId("");
     setToolMode("select");
