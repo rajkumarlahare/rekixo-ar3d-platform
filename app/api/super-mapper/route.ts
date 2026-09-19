@@ -1302,7 +1302,16 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     try {
       for (const [key, raw] of entries) {
-        await writeSetting(projectId, key, validatedSetting(key, raw), now);
+        const validated = validatedSetting(key, raw);
+        await writeSetting(projectId, key, validated, now);
+        if (key === "sqmToSqftFactor") {
+          const factor = normalizeSqmToSqftFactor(validated);
+          await env.DB.prepare(
+            "UPDATE plots SET sqft=ROUND(sqm * ?, 3),updated_at=? WHERE project_id=? AND sqm>0",
+          )
+            .bind(factor, now, projectId)
+            .run();
+        }
       }
     } catch (error) {
       return Response.json(
