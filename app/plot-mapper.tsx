@@ -786,6 +786,30 @@ export default function PlotMapper({
     }
   }
 
+  async function saveAreaFactor() {
+    const parsed = Number(areaFactorText);
+    if (!Number.isFinite(parsed) || parsed < 9 || parsed > 12) {
+      notify("Sq.M → Sq.Ft factor 9 aur 12 ke beech valid number rakhein");
+      return;
+    }
+    const normalized = String(Number(parsed.toFixed(6)));
+    setBusy(true);
+    try {
+      await persistMapperSettings({ sqmToSqftFactor: normalized });
+      setAreaFactorText(normalized);
+      notify(`Area conversion policy saved: 1 Sq.M = ${normalized} Sq.Ft`);
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Area conversion policy save nahi hui",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
   async function reload() {
     setSettingsReady(false);
     const response = await fetch(`/api/super-mapper?projectId=${encodeURIComponent(projectId)}`, {
