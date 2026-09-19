@@ -2975,6 +2975,14 @@ export default function PlotMapper({
               />
             </label>
           </div>
+          <div className="mapper-advanced-template-actions">
+            <button type="button" onClick={downloadRoadAccessTemplate}>
+              <FileText /> Road Access correction template
+            </button>
+            <button type="button" onClick={downloadSideMappingTemplate}>
+              <Target /> Side Mapping correction template
+            </button>
+          </div>
         </details>
 
         <ProjectPricingSource
@@ -3030,10 +3038,12 @@ export default function PlotMapper({
         </div>
 
         <div className="mapper-source-actions">
-          <button type="button" onClick={downloadPlotSheetTemplate}><FileText /> Download Plot CSV template</button>
-          <button type="button" onClick={downloadRoadAccessTemplate}><FileText /> Download Road Access CSV template</button>
-          <button type="button" onClick={downloadSideMappingTemplate}><Target /> Download Side Mapping CSV template</button>
-          <small>Normal new-project flow: ek canonical Plot CSV use karein. Road Access aur Side Mapping CSV sirf later corrections ke liye hain; geometry, pricing aur status untouched rehte hain.</small>
+          <button type="button" className="primary" onClick={downloadPlotSheetTemplate}>
+            <FileText /> Download verified Plot Data template
+          </button>
+          <small>
+            New project ke liye bas isi canonical template ko fill/import karein. Correction templates Advanced section ke andar hain.
+          </small>
         </div>
 
         <div className="mapper-source-meta">

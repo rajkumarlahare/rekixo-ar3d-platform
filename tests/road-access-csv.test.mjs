@@ -8,8 +8,8 @@ test("Road Access CSV is a separate source and does not replace plot inventory",
   const mapper = read("app/plot-mapper.tsx");
   assert.match(mapper, /roadAccessSheetName/);
   assert.match(mapper, /upload\(event\.target\.files\[0\], "roadAccessSheet"\)/);
-  assert.match(mapper, /Download Road Access CSV template/);
-  assert.match(mapper, /Plot inventory/);
+  assert.match(mapper, /Road Access correction template/);
+  assert.match(mapper, /Verified Plot Data/);
 });
 
 test("completed Tiyansh project allows Road Access CSV without unlocking mapper", () => {

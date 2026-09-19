@@ -12,7 +12,7 @@ test("Plot Mapper presents one normal onboarding path and moves correction sourc
   assert.match(mapper, /ONE CSV\/JSON: area \+ road \+ Front\/Back\/Depth A\/Depth B \+ Front Direction/);
   assert.match(mapper, /Advanced \/ corrections/);
   assert.match(mapper, /Road Access correction CSV/);
-  assert.match(mapper, /Side Mapping correction CSV/);
+  assert.match(mapper, /Side Mapping correction CSV/);\n  assert.match(mapper, /Download verified Plot Data template/);\n  assert.match(mapper, /Road Access correction template/);\n  assert.match(mapper, /Side Mapping correction template/);
 });
 
 test("advanced correction importers remain present and isolated", () => {

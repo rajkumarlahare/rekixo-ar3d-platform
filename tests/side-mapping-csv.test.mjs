@@ -8,7 +8,7 @@ test("Side Mapping CSV is isolated from inventory", () => {
   const mapper = read("app/plot-mapper.tsx");
   assert.match(mapper, /sideMappingSheetName/);
   assert.match(mapper, /upload\(event\.target\.files\[0\], "sideMappingSheet"\)/);
-  assert.match(mapper, /Download Side Mapping CSV template/);
+  assert.match(mapper, /Side Mapping correction template/);
 });
 
 test("completed Tiyansh project explicitly allows Side Mapping CSV", () => {
