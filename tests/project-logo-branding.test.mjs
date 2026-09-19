@@ -13,7 +13,7 @@ test("Super Admin mapper supports lightweight replaceable project logos", () => 
   assert.match(mapper, /async function prepareProjectLogo\(file: File\)/);
   assert.match(mapper, /maxSide = 512/);
   assert.match(mapper, /blob\.size <= 180 \* 1024/);
-  assert.match(mapper, /"plotSheet" \| "roadAccessSheet" \| "sideMappingSheet" \| "logo"/);
+  assert.match(mapper, /"plotSheet" \| "measurementSheet" \| "roadAccessSheet" \| "sideMappingSheet" \| "logo"/);
   assert.match(mapper, /upload\(event\.target\.files\[0\], "logo"\)/);
   assert.match(mapper, /Project logo ready · tap to replace/);
 });
