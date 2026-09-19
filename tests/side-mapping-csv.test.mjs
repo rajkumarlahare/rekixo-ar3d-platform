@@ -23,7 +23,7 @@ test("Side Mapping backend updates only semantic edge columns", () => {
   const route = read("app/api/super-mapper/route.ts");
   assert.match(route, /kind === "sideMappingSheet"/);
   assert.match(route, /parseSideMappingSheetText/);
-  assert.match(route, /edgeIndexForDisplayDirection/);
+  assert.match(route, /resolveFourSideEdges/);
   assert.match(route, /UPDATE plots SET front_edge_index=\?,back_edge_index=\?,depth_edge_index=\?,depth2_edge_index=\?,edge_semantics=\?,updated_at=\?/);
 });
 
