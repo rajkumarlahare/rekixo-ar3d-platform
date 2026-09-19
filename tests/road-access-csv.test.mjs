@@ -16,7 +16,7 @@ test("completed Tiyansh project allows Road Access CSV without unlocking mapper"
   const mapper = read("app/plot-mapper.tsx");
   assert.match(
     mapper,
-    /\["sourcePdf", "logo", "roadAccessSheet", "sideMappingSheet"\]\.includes\(kind\)/,
+    /\["sourcePdf", "logo", "measurementSheet", "roadAccessSheet", "sideMappingSheet"\]\.includes\(kind\)/,
   );
 });
 
