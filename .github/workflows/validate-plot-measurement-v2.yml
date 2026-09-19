@@ -1,0 +1,48 @@
+name: Validate Plot Measurement V2
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Source syntax
+        run: npm run verify:source
+
+      - name: Build
+        run: npm run build
+
+      - name: Full regression suite
+        run: node --test tests/*.test.mjs
+
+      - name: Diff whitespace safety
+        run: git diff --check origin/main...HEAD
+
+      - name: Measurement V2 contract
+        run: |
+          grep -q "CREATE TABLE IF NOT EXISTS plot_edge_measurements" drizzle/0023_rekixo_plot_measurement_v2.sql
+          grep -q "sqmToSqftFactor" app/api/super-mapper/route.ts
+          grep -q "frontFirstFourSideEdges" app/plot-mapper.tsx
+          grep -q "REKIXO_PUBLIC_EDGE_DIMENSIONS_V9" public/project/index.html
+          grep -q "v=61" app/page.tsx
