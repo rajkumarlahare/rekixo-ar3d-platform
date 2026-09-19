@@ -44,6 +44,15 @@ import {
   type EdgeDirection,
 } from "./plot-edge-semantics";
 import {
+  normalizeSqmToSqftFactor,
+  sqftToSqm,
+  sqmToSqyd,
+} from "./area-policy";
+import {
+  frontFirstFourSideEdges,
+  resolveFourSideEdges,
+} from "./plot-side-resolver";
+import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
   setPlotSideEdge,
@@ -88,6 +97,12 @@ type MapperSettings = {
   roadAccessSheetCount?: string;
   sideMappingSheetName?: string;
   sideMappingSheetCount?: string;
+  measurementSheetName?: string;
+  measurementSheetCount?: string;
+  measurementSheetFullSidesCount?: string;
+  measurementSheetVerifiedCount?: string;
+  measurementSheetReviewCount?: string;
+  sqmToSqftFactor?: string;
   mapWidth?: string;
   mapHeight?: string;
   masterplanOriginalWidth?: string;
@@ -645,6 +660,7 @@ export default function PlotMapper({
   const [naturalImageSize, setNaturalImageSize] = useState<{ width: number; height: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [headerAddress, setHeaderAddress] = useState("");
+  const [areaFactorText, setAreaFactorText] = useState("10.7639");
   const [settingsReady, setSettingsReady] = useState(false);
   const [lastVerifiedId, setLastVerifiedId] = useState("");
   const [zoom, setZoom] = useState(1);
@@ -703,6 +719,7 @@ export default function PlotMapper({
   const pendingHandleRef = useRef<PendingHandleFrame | null>(null);
   const draggingPointRef = useRef<number | null>(null);
   const pointsRef = useRef<MapperPoint[]>([]);
+  const frontFirstPendingRef = useRef(false);
   const loupeRef = useRef<HTMLDivElement | null>(null);
   const metadataRepairRef = useRef(false);
 
@@ -710,6 +727,34 @@ export default function PlotMapper({
   useEffect(() => {
     pointsRef.current = points;
   }, [points]);
+
+  useEffect(() => {
+    if (!frontFirstPendingRef.current || shape !== "quad" || points.length !== 4) return;
+    frontFirstPendingRef.current = false;
+    if (
+      [frontEdgeIndex, backEdgeIndex, depthEdgeIndex, depth2EdgeIndex].some(
+        (value) => value.trim() !== "",
+      )
+    ) {
+      return;
+    }
+    const resolved = frontFirstFourSideEdges(4);
+    if (!resolved) return;
+    setFrontEdgeIndex(String(resolved.front));
+    setBackEdgeIndex(String(resolved.back));
+    setDepthEdgeIndex(String(resolved.depthA));
+    setDepth2EdgeIndex(String(resolved.depthB));
+    notify("Front-first mapping applied: pehli tapped boundary = road-facing Front");
+  }, [
+    backEdgeIndex,
+    depth2EdgeIndex,
+    depthEdgeIndex,
+    frontEdgeIndex,
+    notify,
+    points.length,
+    shape,
+  ]);
+
 
   useLayoutEffect(() => {
     zoomRef.current = zoom;
@@ -770,6 +815,30 @@ export default function PlotMapper({
     }
   }
 
+  async function saveAreaFactor() {
+    const parsed = Number(areaFactorText);
+    if (!Number.isFinite(parsed) || parsed < 9 || parsed > 12) {
+      notify("Sq.M → Sq.Ft factor 9 aur 12 ke beech valid number rakhein");
+      return;
+    }
+    const normalized = String(Number(parsed.toFixed(6)));
+    setBusy(true);
+    try {
+      await persistMapperSettings({ sqmToSqftFactor: normalized });
+      setAreaFactorText(normalized);
+      notify(`Area conversion policy saved: 1 Sq.M = ${normalized} Sq.Ft`);
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Area conversion policy save nahi hui",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+
   async function reload() {
     setSettingsReady(false);
     const response = await fetch(`/api/super-mapper?projectId=${encodeURIComponent(projectId)}`, {
@@ -781,6 +850,7 @@ export default function PlotMapper({
     setPlots(nextPlots);
     setSettings(nextSettings);
     setHeaderAddress(String(nextSettings.address || ""));
+    setAreaFactorText(String(normalizeSqmToSqftFactor(nextSettings.sqmToSqftFactor)));
     // Plot polygons always stay in canonical source-image coordinates.
     // publicRotation only controls the shared Super Admin/public presentation angle.
     setSettingsReady(true);
@@ -1003,6 +1073,8 @@ export default function PlotMapper({
   const hasPlotSheet = Boolean(settings.plotSheetName) || plots.length > 0;
   const hasRoadAccessSheet = Boolean(settings.roadAccessSheetName);
   const hasSideMappingSheet = Boolean(settings.sideMappingSheetName);
+  const hasMeasurementSheet = Boolean(settings.measurementSheetName);
+  const sqmToSqftFactor = normalizeSqmToSqftFactor(settings.sqmToSqftFactor);
   const hasPdf = Boolean(settings.sourcePdfName);
   const hasLogo = Boolean(settings.logoName);
   const logoUrl = hasLogo
@@ -1397,6 +1469,7 @@ export default function PlotMapper({
     setDepth2EdgeIndex("");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
+    frontFirstPendingRef.current = false;
     setToolMode("select");
     try {
       window.localStorage.removeItem(mappingDraftKey(projectId, plotId));
@@ -1431,8 +1504,22 @@ export default function PlotMapper({
       [...inventoryPlots].reverse().find((plot) => plot.id !== plotId && parsePolygon(plot).length >= 3);
     if (!source) return notify("Clone करने के लिए पहले कोई mapped plot चाहिए");
     const polygon = parsePolygon(source);
+    const semantics = parsePlotSideSemantics(source.edgeSemantics, polygon.length);
+    const roleEdge = (role: PlotSideRole, fallback: number | null | undefined) => {
+      const semantic = semantics?.roles[role]?.[0];
+      return Number.isInteger(semantic)
+        ? String(semantic)
+        : Number.isInteger(fallback)
+          ? String(fallback)
+          : "";
+    };
     setPoints(polygon.map(([x, y]) => [x, y] as MapperPoint));
     setShape(polygon.length === 4 ? "quad" : "polygon");
+    setFrontEdgeIndex(roleEdge("front", source.frontEdgeIndex));
+    setBackEdgeIndex(roleEdge("back", source.backEdgeIndex));
+    setDepthEdgeIndex(roleEdge("depthA", source.depthEdgeIndex));
+    setDepth2EdgeIndex(roleEdge("depthB", source.depth2EdgeIndex));
+    frontFirstPendingRef.current = false;
     setManualPhase("details");
     setEditingId("");
     setToolMode("select");
@@ -1443,12 +1530,25 @@ export default function PlotMapper({
   function downloadPlotSheetTemplate() {
     const text = [
       "Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Direction,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
-      "1,1162.08,108,129.12,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,right,,,,,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan",
+      "1,,108,,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,,,,,,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan; Front Direction optional because front-first mapper binds edges",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = "rekixo-plot-sheet-template.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function downloadMeasurementTemplate() {
+    const text = [
+      "Plot No,Front,Back,Depth A,Depth B,Measurement Unit,Front Label,Back Label,Depth A Label,Depth B Label,Road Access,Side Measurements,Source Ref,Confidence,Verified,Raw Source Text",
+      "1,12,10,9,9.5,m,12 m,10 m,9 m,9.5 m,12.000 M WIDE ROAD,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Sanctioned plan page 1,high,true,Verified from source drawing",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rekixo-ai-measurement-manifest.csv";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
@@ -1518,16 +1618,12 @@ export default function PlotMapper({
           quality.genericAreaOnlyDimensions.length
             ? `Generic approved-area text without sides: ${quality.genericAreaOnlyDimensions.length}`
             : "",
-          quality.missingFrontDirection.length
-            ? `Front Direction missing: ${quality.missingFrontDirection.length}`
-            : "",
         ].filter(Boolean);
 
         const examples = [
           ...quality.missingSideMeasurements,
           ...quality.partialSideMeasurements,
           ...quality.genericAreaOnlyDimensions,
-          ...quality.missingFrontDirection,
         ].filter((id, index, list) => list.indexOf(id) === index).slice(0, 12);
 
         const proceed = window.confirm(
@@ -1538,7 +1634,7 @@ export default function PlotMapper({
             ...problemLines.map((line) => "• " + line),
             examples.length ? `Affected examples: ${examples.join(", ")}` : "",
             "",
-            "Aise import karne par Venkatesh jaisa Front / Back / Depth detail sab plots me nahi dikhega.",
+            "Aise import karne par complete Front / Back / Depth measurement sab plots me nahi dikhega.",
             "Phir bhi import karna hai?",
           ]
             .filter(Boolean)
@@ -1565,9 +1661,9 @@ export default function PlotMapper({
 
   async function upload(
     file: File,
-    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "roadAccessSheet" | "sideMappingSheet" | "logo",
+    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "measurementSheet" | "roadAccessSheet" | "sideMappingSheet" | "logo",
   ) {
-    if (completedProject && !["sourcePdf", "logo", "roadAccessSheet", "sideMappingSheet"].includes(kind)) {
+    if (completedProject && !["sourcePdf", "logo", "measurementSheet", "roadAccessSheet", "sideMappingSheet"].includes(kind)) {
       notify("Tiyansh completed project locked है");
       return;
     }
@@ -1656,6 +1752,10 @@ export default function PlotMapper({
           quality
             ? `${Number(result.count || 0)} plots imported · full details ${quality.fullDetailCount}/${quality.total}${autoSideMapped ? ` · ${autoSideMapped} side maps auto-applied` : ""}`
             : String(Number(result.count || 0)) + " plot records import हुए",
+        );
+      } else if (kind === "measurementSheet") {
+        notify(
+          `${Number(result.count || 0)} measurement rows imported · full sides ${Number(result.fullSidesCount || 0)} · verified ${Number(result.verifiedCount || 0)} · review ${Number(result.reviewCount || 0)}`,
         );
       } else if (kind === "roadAccessSheet") {
         notify(String(Number(result.count || 0)) + " plots ka Road Access update hua — बाकी data untouched");
@@ -2200,7 +2300,10 @@ export default function PlotMapper({
       if (shape === "quad") {
         if (current.length >= 4) return [snapped];
         const next = [...current, snapped];
-        if (next.length === 4) setManualPhase("details");
+        if (next.length === 4) {
+          frontFirstPendingRef.current = true;
+          setManualPhase("details");
+        }
         return next;
       }
       return current.length < 80 ? [...current, snapped] : current;
@@ -2455,56 +2558,22 @@ export default function PlotMapper({
       depth2EdgeValue === null &&
       points.length >= 4
     ) {
+      const frontFirst = shape === "quad" ? frontFirstFourSideEdges(points.length) : null;
       const storedDirection = plotFrontDirections[id];
-      if (storedDirection) {
-        const displayRotation = normalizeQuarterTurn(settings.publicRotation);
-        const opposite: Record<EdgeDirection, EdgeDirection> = {
-          top: "bottom",
-          right: "left",
-          bottom: "top",
-          left: "right",
-        };
-        const depthDirections: Record<
-          EdgeDirection,
-          [EdgeDirection, EdgeDirection]
-        > = {
-          top: ["right", "left"],
-          right: ["bottom", "top"],
-          bottom: ["left", "right"],
-          left: ["top", "bottom"],
-        };
-        const autoFront = edgeIndexForDisplayDirection(
-          points,
-          storedDirection,
-          displayRotation,
-        );
-        const autoBack = edgeIndexForDisplayDirection(
-          points,
-          opposite[storedDirection],
-          displayRotation,
-        );
-        const [depthADirection, depthBDirection] =
-          depthDirections[storedDirection];
-        const autoDepthA = edgeIndexForDisplayDirection(
-          points,
-          depthADirection,
-          displayRotation,
-        );
-        const autoDepthB = edgeIndexForDisplayDirection(
-          points,
-          depthBDirection,
-          displayRotation,
-        );
-        const autoEdges = [autoFront, autoBack, autoDepthA, autoDepthB];
-        if (
-          autoEdges.every((value) => value !== null) &&
-          new Set(autoEdges).size === 4
-        ) {
-          edgeValue = autoFront;
-          backEdgeValue = autoBack;
-          depthEdgeValue = autoDepthA;
-          depth2EdgeValue = autoDepthB;
-        }
+      const resolved =
+        frontFirst ||
+        (storedDirection
+          ? resolveFourSideEdges(
+              points,
+              storedDirection,
+              normalizeQuarterTurn(settings.publicRotation),
+            )
+          : null);
+      if (resolved) {
+        edgeValue = resolved.front;
+        backEdgeValue = resolved.back;
+        depthEdgeValue = resolved.depthA;
+        depth2EdgeValue = resolved.depthB;
       }
     }
     if (frontValue !== null && (!Number.isFinite(frontValue) || frontValue <= 0))
@@ -2569,10 +2638,14 @@ export default function PlotMapper({
       id,
       sqft: area,
       sqm: area > 0
-        ? unchangedInventoryArea ? Number(existing?.sqm || area / 10.7639) : area / 10.7639
+        ? unchangedInventoryArea
+          ? Number(existing?.sqm || sqftToSqm(area, sqmToSqftFactor))
+          : sqftToSqm(area, sqmToSqftFactor)
         : Number(existing?.sqm || 0),
       sqyd: area > 0
-        ? unchangedInventoryArea ? Number(existing?.sqyd || area / 9) : area / 9
+        ? unchangedInventoryArea
+          ? Number(existing?.sqyd || sqmToSqyd(sqftToSqm(area, sqmToSqftFactor)))
+          : sqmToSqyd(sqftToSqm(area, sqmToSqftFactor))
         : Number(existing?.sqyd || 0),
       dimensions: dimensions.trim() || existing?.dimensions || "",
       road: road.trim() || existing?.road || "",
@@ -2882,7 +2955,7 @@ export default function PlotMapper({
 
         <div className="mapper-normal-flow">
           <b>Normal new-project flow</b>
-          <span>Masterplan → one verified Plot Data file → map boundaries → quality check → preview → publish</span>
+          <span>Masterplan → verified Plot Data → AI measurement manifest when needed → front-first boundaries → quality check → preview → publish</span>
         </div>
 
         <div className="mapper-source-grid">
@@ -2914,7 +2987,7 @@ export default function PlotMapper({
             <span><FileText /></span>
             <div>
               <b>{hasPlotSheet ? `Plot Data · ${plots.length} plots` : "2. Verified Plot Data"}</b>
-              <small>{settings.plotSheetName || "ONE CSV/JSON: area + road + Front/Back/Depth A/Depth B + Front Direction"}</small>
+              <small>{settings.plotSheetName || "CSV/JSON: authoritative area + road + side sizes; Front Direction legacy/optional"}</small>
             </div>
             {hasPlotSheet && <CheckCircle2 className="mapper-ready-icon" />}
             <input
@@ -2930,10 +3003,27 @@ export default function PlotMapper({
             />
           </label>
 
+          <label className={`mapper-upload-card ${hasMeasurementSheet ? "ready" : ""}`}>
+            <span><Target /></span>
+            <div>
+              <b>{hasMeasurementSheet ? `AI measurements · ${settings.measurementSheetCount || "saved"}` : "3. AI Measurement Manifest"}</b>
+              <small>{settings.measurementSheetName || "CSV/JSON backfill: Front/Back/Depth + source ref + confidence; geometry/status untouched"}</small>
+            </div>
+            {hasMeasurementSheet && <CheckCircle2 className="mapper-ready-icon" />}
+            <input
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              disabled={busy}
+              onChange={(event) =>
+                event.target.files?.[0] && upload(event.target.files[0], "measurementSheet")
+              }
+            />
+          </label>
+
           <label className={`mapper-upload-card ${hasPdf ? "ready" : ""}`}>
             <span><FileText /></span>
             <div>
-              <b>{hasPdf ? "Technical PDF saved" : "3. Technical PDF reference"}</b>
+              <b>{hasPdf ? "Technical PDF saved" : "4. Technical PDF reference"}</b>
               <small>{settings.sourcePdfName || "Original sanctioned/technical sheet · reference only"}</small>
             </div>
             {hasPdf && <CheckCircle2 className="mapper-ready-icon" />}
@@ -3053,9 +3143,53 @@ export default function PlotMapper({
           </div>
         </div>
 
+        <div className="mapper-header-address-card">
+          <div className="mapper-header-address-copy">
+            <b>Area conversion policy</b>
+            <small>
+              Sq.M → Sq.Ft project-specific factor. Standard default 10.7639; Mangal Raj Park uses 10.76.
+              Sq.Yd standard metric conversion se independent derive hota hai.
+            </small>
+          </div>
+          <div className="mapper-header-address-controls">
+            <input
+              type="number"
+              min="9"
+              max="12"
+              step="0.000001"
+              value={areaFactorText}
+              disabled={busy}
+              aria-label="Square meter to square feet factor"
+              onChange={(event) => setAreaFactorText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void saveAreaFactor();
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={
+                busy ||
+                Math.abs(
+                  normalizeSqmToSqftFactor(areaFactorText) -
+                    normalizeSqmToSqftFactor(settings.sqmToSqftFactor),
+                ) < 1e-9
+              }
+              onClick={() => void saveAreaFactor()}
+            >
+              <Save /> Save factor
+            </button>
+          </div>
+        </div>
+
         <div className="mapper-source-actions">
           <button type="button" className="primary" onClick={downloadPlotSheetTemplate}>
             <FileText /> Download verified Plot Data template
+          </button>
+          <button type="button" onClick={downloadMeasurementTemplate}>
+            <Target /> Download AI Measurement Manifest template
           </button>
           <small>
             New project ke liye bas isi canonical template ko fill/import karein. Correction templates Advanced section ke andar hain.
@@ -3092,8 +3226,10 @@ export default function PlotMapper({
               <span>Dimensions <b>{plotQuality.dimensionsComplete}/{plotQuality.total}</b></span>
               <span>Road Access <b>{plotQuality.roadComplete}/{plotQuality.total}</b></span>
               <span>4-side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
-              <span>Front Direction <b>{plotQuality.frontDirectionsComplete}/{plotQuality.total}</b></span>
+              <span>Front / side binding <b>{plotQuality.frontDirectionsComplete}/{plotQuality.total}</b></span>
               <span>Mapped side semantics <b>{plotQuality.mappedSemanticsComplete}/{plotQuality.total}</b></span>
+              {hasMeasurementSheet && <span>Source verified <b>{settings.measurementSheetVerifiedCount || "0"}/{settings.measurementSheetCount || "0"}</b></span>}
+              {hasMeasurementSheet && <span>Source review <b>{settings.measurementSheetReviewCount || "0"}</b></span>}
             </div>
             {!plotQuality.richDetailReady && (
               <p>
@@ -3629,7 +3765,7 @@ export default function PlotMapper({
 
           {manualPhase === "select" ? <>
             <div className="mapper-mode">
-              <button className={shape === "quad" ? "active" : ""} onClick={() => { setShape("quad"); setPoints([]); }}>Perspective plot · 4 corners</button>
+              <button className={shape === "quad" ? "active" : ""} onClick={() => { setShape("quad"); setPoints([]); }}>Front-first plot · 4 corners</button>
               <button className={shape === "polygon" ? "active" : ""} onClick={() => { setShape("polygon"); setPoints([]); }}>Irregular · corner taps</button>
             </div>
             <div className="mapper-actions compact">
@@ -3641,7 +3777,7 @@ export default function PlotMapper({
               <button onClick={clonePreviousShape}><Copy />Clone previous</button>
               {shape === "polygon" && <button className="primary" disabled={points.length < 3} onClick={() => setManualPhase("details")}><CheckCircle2 />Boundary complete</button>}
             </div>
-            <small className="mapper-help">पहले PAN में plot को बड़ा zoom करें → SELECT करें → clockwise corners tap करें. Existing plot vertex/edge auto-snap होगा. Numbered handle drag करके pixel-level correction करें.</small>
+            <small className="mapper-help">4-corner plot: Tap 1 + Tap 2 road-facing Front boundary ke dono endpoints par karein, phir same direction me clockwise baki 2 corners tap karein. Rekixo automatically Front → Depth A → Back → Depth B bind karega. Existing vertex/edge auto-snap hota hai.</small>
           </> : <>
             <div className="mapper-fields guided-fields">
               <label><span>Plot number</span><input value={plotId} readOnly={Boolean(currentPlot)} onChange={(event) => setPlotId(event.target.value)} /></label>
@@ -3665,7 +3801,7 @@ export default function PlotMapper({
               }}>Dimensions → Front/Depth</button>
               <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
             </div>
-            <small className="mapper-help">Irregular plot: masterplan par boundary edge tap karein, phir Assign plot sides module me Front / Back / Depth A / Depth B choose karein. Front hamesha road-facing boundary hai. Measurements plot sheet/fields se aati hain; edge role visual selection se save hota hai.</small>
+            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular/corner-road exception me Assign plot sides module se Front / Back / Depth A / Depth B verify/correct karein. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
             <div className="mapper-actions">
               <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
               <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>

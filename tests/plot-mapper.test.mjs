@@ -18,7 +18,8 @@ test("auto CAD mapper is owner-only, project-native and keeps precise manual fal
     ]);
 
   assert.match(mapper, /Rekixo Plot Mapper/);
-  assert.match(mapper, /Perspective plot · 4 corners/);
+  assert.match(mapper, /Front-first plot · 4 corners/);
+  assert.match(mapper, /road-facing Front boundary/);
   assert.match(mapper, /Main masterplan image/);
   assert.match(mapper, /toolMode/);
   assert.match(mapper, /"pan" \| "select"/);

@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import { DatabaseSync } from 'node:sqlite';
 
 const html=fs.readFileSync('public/project/index.html','utf8');
-const source=html.slice(html.indexOf('  function validPlotSideEdge('),
+const source=html.slice(html.indexOf('  function plotEdgeMeasurementRows('),
   html.indexOf('  function syncFrontDepthFacts('));
 const ctx=vm.createContext({cleanDimensionLabel:v=>String(v||'').trim()});
 vm.runInContext(source,ctx);

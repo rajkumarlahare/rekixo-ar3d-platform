@@ -1388,13 +1388,27 @@ rekixoStartPublicBoot();
       depth2,
     }
   }
+  function plotEdgeMeasurementRows(p,role){
+    return (Array.isArray(p.edgeMeasurements)?p.edgeMeasurements:[])
+      .filter(row=>row&&row.role===role)
+      .sort((a,b)=>Number(a.segmentIndex||0)-Number(b.segmentIndex||0))
+  }
+  function edgeMeasurementText(row){
+    if(!row)return '';
+    return cleanDimensionLabel(row.rawLabel)||plotLengthText(row.length,row.unit)
+  }
+  function plotEdgeMeasurementValue(p,role,edge){
+    const rows=plotEdgeMeasurementRows(p,role);
+    const exact=rows.find(row=>validPlotSideEdge(row.edgeIndex,p.points.length)===edge);
+    return edgeMeasurementText(exact||rows[0])
+  }
   function plotSemanticDimensions(p){
     const sides=cleanDimensionLabel(p.sideDimensions);
     const parsedSides=parseSideDimensionFacts(sides);
-    const front=cleanDimensionLabel(p.frontLabel)||plotLengthText(p.front,p.dimensionUnit)||parsedSides.front;
-    const depth=cleanDimensionLabel(p.depthLabel)||plotLengthText(p.depth,p.dimensionUnit)||parsedSides.depth;
-    const back=cleanDimensionLabel(p.backLabel)||plotLengthText(p.back,p.dimensionUnit)||parsedSides.back;
-    const depth2=cleanDimensionLabel(p.depth2Label)||plotLengthText(p.depth2,p.dimensionUnit)||parsedSides.depth2;
+    const front=plotEdgeMeasurementValue(p,'front',validPlotSideEdge(p.frontEdgeIndex,p.points.length))||cleanDimensionLabel(p.frontLabel)||plotLengthText(p.front,p.dimensionUnit)||parsedSides.front;
+    const depth=plotEdgeMeasurementValue(p,'depthA',validPlotSideEdge(p.depthEdgeIndex,p.points.length))||cleanDimensionLabel(p.depthLabel)||plotLengthText(p.depth,p.dimensionUnit)||parsedSides.depth;
+    const back=plotEdgeMeasurementValue(p,'back',validPlotSideEdge(p.backEdgeIndex,p.points.length))||cleanDimensionLabel(p.backLabel)||plotLengthText(p.back,p.dimensionUnit)||parsedSides.back;
+    const depth2=plotEdgeMeasurementValue(p,'depthB',validPlotSideEdge(p.depth2EdgeIndex,p.points.length))||cleanDimensionLabel(p.depth2Label)||plotLengthText(p.depth2,p.dimensionUnit)||parsedSides.depth2;
     const edge=validPlotSideEdge(p.frontEdgeIndex,p.points.length);
     return{front,depth,back,depth2,sides,edge}
   }
@@ -1425,6 +1439,13 @@ rekixoStartPublicBoot();
         if(parsed.front.length)return parsed
       }catch(_){return null}
     }
+    const measuredRoles={
+      front:plotEdgeMeasurementRows(p,'front').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
+      back:plotEdgeMeasurementRows(p,'back').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
+      depthA:plotEdgeMeasurementRows(p,'depthA').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
+      depthB:plotEdgeMeasurementRows(p,'depthB').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
+    };
+    if(measuredRoles.front.length&&distinctRoles(measuredRoles))return measuredRoles;
     const front=validEdge(p.frontEdgeIndex),back=validEdge(p.backEdgeIndex),
       depthA=validEdge(p.depthEdgeIndex),depthB=validEdge(p.depth2EdgeIndex);
     // Missing indices are not edge zero.
@@ -1489,7 +1510,7 @@ rekixoStartPublicBoot();
     }
     legend.hidden=!legend.children.length
   }
-  // REKIXO_PUBLIC_EDGE_DIMENSIONS_V8
+  // REKIXO_PUBLIC_EDGE_DIMENSIONS_V9
   function renderSemanticDiagramEdges(p,scaledPoints,cx,cy){
     const semantics=plotSideSemantics(p),group=q('#semanticEdgeLabels');
     if(!group)return false;
@@ -1537,7 +1558,8 @@ rekixoStartPublicBoot();
         text.setAttribute('stroke','#081225');
         text.setAttribute('stroke-width','3');
         text.setAttribute('stroke-linejoin','round');
-        text.textContent=title+(value?' · '+value:'');
+        const edgeValue=plotEdgeMeasurementValue(p,role,edge)||value;
+        text.textContent=title+(edgeValue?' · '+edgeValue:'');
         group.appendChild(text);
         rendered++
       }

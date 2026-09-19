@@ -46,7 +46,8 @@ test("public project API strips internal plot notes", async () => {
   const route = await source("../app/api/public-data/route.ts");
   assert.match(route, /const \{ notes, \.\.\.publicPlot \} = plot/);
   assert.match(route, /void notes/);
-  assert.match(route, /return publicPlot/);
+  assert.match(route, /\.\.\.publicPlot/);
+  assert.match(route, /edgeMeasurements/);
 });
 
 test("mandatory password change reuses resilient auth UI and project identity", async () => {

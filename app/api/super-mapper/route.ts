@@ -3,8 +3,11 @@ import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
 import { writeAudit } from "../../audit";
 import { parseCadGeometry } from "../../cad-import";
 import { cleanPlotId, type HomographyPair } from "../../mapper-geometry";
-import { edgeIndexForDisplayDirection, type EdgeDirection } from "../../plot-edge-semantics";
+import { type EdgeDirection } from "../../plot-edge-semantics";
 import { assessPlotSheetRows, parsePlotSheetText } from "../../plot-sheet";
+import { normalizeSqmToSqftFactor } from "../../area-policy";
+import { parsePlotMeasurementSheetText } from "../../measurement-sheet";
+import { resolveFourSideEdges } from "../../plot-side-resolver";
 import { parseRoadAccessSheetText } from "../../road-access-sheet";
 import { parseSideMappingSheetText } from "../../side-mapping-sheet";
 import {
@@ -41,6 +44,7 @@ const SETTINGS_WHITELIST = new Set([
   "cadReviewCount",
   "publicRotation",
   "address",
+  "sqmToSqftFactor",
 ]);
 
 async function projectExists(projectId: string) {
@@ -249,6 +253,47 @@ async function deleteSettings(projectId: string, keys: string[]) {
   );
 }
 
+async function projectSqmToSqftFactor(projectId: string) {
+  const row = await env.DB.prepare(
+    "SELECT value FROM settings WHERE project_id=? AND key='sqmToSqftFactor' LIMIT 1",
+  )
+    .bind(projectId)
+    .first<{ value: string }>();
+  return normalizeSqmToSqftFactor(row?.value);
+}
+
+type EdgeBinding = {
+  id: string;
+  pointCount: number;
+  front: number;
+  back: number;
+  depthA: number;
+  depthB: number;
+};
+
+async function syncMeasurementBindings(
+  projectId: string,
+  bindings: EdgeBinding[],
+  now: string,
+) {
+  if (!bindings.length) return;
+  const statements = bindings.flatMap((binding) =>
+    ([
+      ["front", binding.front],
+      ["back", binding.back],
+      ["depthA", binding.depthA],
+      ["depthB", binding.depthB],
+    ] as const).map(([role, edge]) =>
+      env.DB.prepare(
+        "UPDATE plot_edge_measurements SET edge_index=?,point_count=?,updated_at=? WHERE project_id=? AND plot_id=? AND role=?",
+      ).bind(edge, binding.pointCount, now, projectId, binding.id, role),
+    ),
+  );
+  for (let index = 0; index < statements.length; index += 80) {
+    await env.DB.batch(statements.slice(index, index + 80));
+  }
+}
+
 function validCalibrationPair(value: unknown): value is HomographyPair {
   if (!value || typeof value !== "object") return false;
   const pair = value as HomographyPair;
@@ -276,6 +321,12 @@ function validatedSetting(key: string, raw: unknown) {
     if (!Number.isInteger(number) || number < 0 || number > 3)
       throw new Error("publicRotation invalid hai");
     return String(number);
+  }
+  if (key === "sqmToSqftFactor") {
+    const number = Number(raw);
+    if (!Number.isFinite(number) || number < 9 || number > 12)
+      throw new Error("Sq.M to Sq.Ft factor 9 aur 12 ke beech hona chahiye");
+    return String(Number(number.toFixed(6)));
   }
   if (["cadMatchedCount", "cadReviewCount"].includes(key)) {
     const number = Number(raw);
@@ -365,6 +416,31 @@ async function savePlots(
       ),
     );
   }
+  const bindings: EdgeBinding[] = [];
+  for (const plot of saved) {
+    if (!plot.polygon || !plot.edgeSemantics) continue;
+    try {
+      const polygon = JSON.parse(plot.polygon) as unknown[];
+      if (!Array.isArray(polygon) || polygon.length < 4) continue;
+      const semantics = parsePlotSideSemantics(plot.edgeSemantics, polygon.length);
+      const front = semantics?.roles.front?.[0];
+      const back = semantics?.roles.back?.[0];
+      const depthA = semantics?.roles.depthA?.[0];
+      const depthB = semantics?.roles.depthB?.[0];
+      if (![front, back, depthA, depthB].every(Number.isInteger)) continue;
+      bindings.push({
+        id: plot.id,
+        pointCount: polygon.length,
+        front: Number(front),
+        back: Number(back),
+        depthA: Number(depthA),
+        depthB: Number(depthB),
+      });
+    } catch {
+      // Binding metadata must never block the canonical plot save.
+    }
+  }
+  await syncMeasurementBindings(projectId, bindings, now);
   return saved;
 }
 
@@ -438,11 +514,12 @@ export async function POST(request: Request) {
       (kind === "sourceCad" && ["dwg", "dxf"].includes(extension)) ||
       (kind === "plotSheet" && ["csv", "json"].includes(extension)) ||
       (kind === "plotSheetPreflight" && ["csv", "json"].includes(extension)) ||
+      (kind === "measurementSheet" && ["csv", "json"].includes(extension)) ||
       (kind === "roadAccessSheet" && extension === "csv") ||
       (kind === "sideMappingSheet" && extension === "csv");
     if (!valid)
       return Response.json(
-        { error: "Image, PDF, DWG/DXF, plot CSV/JSON या Road Access CSV सही format में चुनें" },
+        { error: "Image, PDF, DWG/DXF, plot/measurement CSV/JSON ya correction CSV sahi format me choose karein" },
         { status: 400 },
       );
 
@@ -453,6 +530,7 @@ export async function POST(request: Request) {
       sourceCad: 25 * 1024 * 1024,
       plotSheet: 3 * 1024 * 1024,
       plotSheetPreflight: 3 * 1024 * 1024,
+      measurementSheet: 2 * 1024 * 1024,
       roadAccessSheet: 1 * 1024 * 1024,
       sideMappingSheet: 1 * 1024 * 1024,
     };
@@ -655,19 +733,6 @@ export async function POST(request: Request) {
       const rotation =
         rawRotation === 1 || rawRotation === 2 || rawRotation === 3 ? rawRotation : 0;
 
-      const opposite: Record<EdgeDirection, EdgeDirection> = {
-        top: "bottom",
-        right: "left",
-        bottom: "top",
-        left: "right",
-      };
-      const depthDirections: Record<EdgeDirection, [EdgeDirection, EdgeDirection]> = {
-        top: ["right", "left"],
-        right: ["bottom", "top"],
-        bottom: ["left", "right"],
-        left: ["top", "bottom"],
-      };
-
       const updates = rows.map((row) => {
         const stored = byId.get(row.id)!;
         let polygon: [number, number][];
@@ -679,24 +744,10 @@ export async function POST(request: Request) {
         if (!Array.isArray(polygon) || polygon.length < 4)
           throw new Error(`Plot ${row.id}: kam se kam 4-corner polygon chahiye`);
 
-        const backDirection = opposite[row.front];
-        const [depthADirection, depthBDirection] = depthDirections[row.front];
-        const front = edgeIndexForDisplayDirection(polygon, row.front, rotation);
-        const back = edgeIndexForDisplayDirection(polygon, backDirection, rotation);
-        const depthA = edgeIndexForDisplayDirection(polygon, depthADirection, rotation);
-        const depthB = edgeIndexForDisplayDirection(polygon, depthBDirection, rotation);
-        const selected = [front, back, depthA, depthB];
-
-        if (selected.some((edge) => edge == null) || new Set(selected).size !== 4)
+        const resolved = resolveFourSideEdges(polygon, row.front, rotation);
+        if (!resolved)
           throw new Error(`Plot ${row.id}: 4 distinct side edges resolve nahi hui`);
-
-        const edgeSemantics = serializePlotSideSemantics(polygon.length, {
-          front: [front!],
-          back: [back!],
-          depthA: [depthA!],
-          depthB: [depthB!],
-        });
-        return { id: row.id, front: front!, back: back!, depthA: depthA!, depthB: depthB!, edgeSemantics };
+        return { id: row.id, pointCount: polygon.length, ...resolved };
       });
 
       await env.DB.batch(
@@ -706,6 +757,7 @@ export async function POST(request: Request) {
           ).bind(row.front, row.back, row.depthA, row.depthB, row.edgeSemantics, now, projectId, row.id),
         ),
       );
+      await syncMeasurementBindings(projectId, updates, now);
 
       await env.BUCKET.put(objectKey, sourceText, {
         httpMetadata: { contentType: "text/csv; charset=utf-8" },
@@ -720,6 +772,202 @@ export async function POST(request: Request) {
         updatedFields: ["front_edge_index", "back_edge_index", "depth_edge_index", "depth2_edge_index", "edge_semantics"],
       });
       return Response.json({ ok: true, name: file.name, count: updates.length });
+    }
+
+    if (kind === "measurementSheet") {
+      const sourceText = await file.text();
+      let rows;
+      try {
+        rows = parsePlotMeasurementSheetText(sourceText, file.name);
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Measurement sheet parse nahi hui" },
+          { status: 400 },
+        );
+      }
+      if (!rows.length)
+        return Response.json({ error: "Measurement sheet me valid rows nahi mili" }, { status: 400 });
+      if (rows.length > 2000)
+        return Response.json(
+          { error: "Ek measurement sheet me adhiktam 2000 rows rakhein" },
+          { status: 400 },
+        );
+
+      const plotRows = await env.DB.prepare(
+        "SELECT id,polygon,road,edge_semantics AS edgeSemantics,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=?",
+      )
+        .bind(projectId)
+        .all<{
+          id: string;
+          polygon: string | null;
+          road: string | null;
+          edgeSemantics: string | null;
+          frontEdgeIndex: number | null;
+          backEdgeIndex: number | null;
+          depthEdgeIndex: number | null;
+          depth2EdgeIndex: number | null;
+        }>();
+      const byId = new Map(plotRows.results.map((item) => [item.id, item]));
+      const unknown = rows.filter((row) => !byId.has(row.id)).map((row) => row.id);
+      if (unknown.length) {
+        return Response.json(
+          {
+            error:
+              "Measurement sheet me unknown Plot ID mile: " +
+              unknown.slice(0, 12).join(", ") +
+              (unknown.length > 12 ? "..." : ""),
+          },
+          { status: 400 },
+        );
+      }
+
+      const plotUpdates = rows.map((row) =>
+        env.DB.prepare(
+          "UPDATE plots SET front=COALESCE(?,front),back=COALESCE(?,back),depth=COALESCE(?,depth),depth2=COALESCE(?,depth2),dimension_unit=CASE WHEN ?<>'' THEN ? ELSE dimension_unit END,front_label=CASE WHEN ?<>'' THEN ? ELSE front_label END,back_label=CASE WHEN ?<>'' THEN ? ELSE back_label END,depth_label=CASE WHEN ?<>'' THEN ? ELSE depth_label END,depth2_label=CASE WHEN ?<>'' THEN ? ELSE depth2_label END,side_dimensions=CASE WHEN ?<>'' THEN ? ELSE side_dimensions END,road=CASE WHEN ?<>'' THEN ? ELSE road END,updated_at=? WHERE project_id=? AND id=?",
+        ).bind(
+          row.front,
+          row.back,
+          row.depth,
+          row.depth2,
+          row.dimensionUnit,
+          row.dimensionUnit,
+          row.frontLabel,
+          row.frontLabel,
+          row.backLabel,
+          row.backLabel,
+          row.depthLabel,
+          row.depthLabel,
+          row.depth2Label,
+          row.depth2Label,
+          row.sideDimensions,
+          row.sideDimensions,
+          row.road,
+          row.road,
+          now,
+          projectId,
+          row.id,
+        ),
+      );
+      for (let index = 0; index < plotUpdates.length; index += 80) {
+        await env.DB.batch(plotUpdates.slice(index, index + 80));
+      }
+
+      const edgeWrites: ReturnType<typeof env.DB.prepare>[] = [];
+      for (const row of rows) {
+        const stored = byId.get(row.id)!;
+        let pointCount = 0;
+        try {
+          const polygon = JSON.parse(stored.polygon || "[]");
+          pointCount = Array.isArray(polygon) ? polygon.length : 0;
+        } catch {
+          pointCount = 0;
+        }
+        const parsedSemantics = parsePlotSideSemantics(
+          stored.edgeSemantics,
+          pointCount >= 3 ? pointCount : undefined,
+        );
+        const edgeFor = (role: "front" | "back" | "depthA" | "depthB") => {
+          const semantic = parsedSemantics?.roles[role]?.[0];
+          if (Number.isInteger(semantic)) return semantic as number;
+          const fallback =
+            role === "front"
+              ? stored.frontEdgeIndex
+              : role === "back"
+                ? stored.backEdgeIndex
+                : role === "depthA"
+                  ? stored.depthEdgeIndex
+                  : stored.depth2EdgeIndex;
+          return Number.isInteger(fallback) ? Number(fallback) : null;
+        };
+        const roleRows = [
+          ["front", row.front, row.frontLabel],
+          ["back", row.back, row.backLabel],
+          ["depthA", row.depth, row.depthLabel],
+          ["depthB", row.depth2, row.depth2Label],
+        ] as const;
+        for (const [role, length, label] of roleRows) {
+          if (length == null && !label) continue;
+          const rawLabel =
+            label || (length != null && row.dimensionUnit ? `${length} ${row.dimensionUnit}` : "");
+          edgeWrites.push(
+            env.DB.prepare(
+              "INSERT INTO plot_edge_measurements (project_id,plot_id,role,segment_index,edge_index,point_count,length,unit,raw_label,road_frontage,road_access,source_ref,source_raw_text,confidence,verified,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,plot_id,role,segment_index) DO UPDATE SET edge_index=excluded.edge_index,point_count=excluded.point_count,length=COALESCE(excluded.length,length),unit=CASE WHEN excluded.unit<>'' THEN excluded.unit ELSE unit END,raw_label=CASE WHEN excluded.raw_label<>'' THEN excluded.raw_label ELSE raw_label END,road_frontage=excluded.road_frontage,road_access=CASE WHEN excluded.road_access<>'' THEN excluded.road_access ELSE road_access END,source_ref=CASE WHEN excluded.source_ref<>'' THEN excluded.source_ref ELSE source_ref END,source_raw_text=CASE WHEN excluded.source_raw_text<>'' THEN excluded.source_raw_text ELSE source_raw_text END,confidence=excluded.confidence,verified=excluded.verified,updated_at=excluded.updated_at",
+            ).bind(
+              projectId,
+              row.id,
+              role,
+              0,
+              edgeFor(role),
+              pointCount >= 3 ? pointCount : null,
+              length,
+              row.dimensionUnit,
+              rawLabel,
+              role === "front" ? 1 : 0,
+              row.road || stored.road || "",
+              row.sourceRef || file.name,
+              row.sourceRawText,
+              row.confidence,
+              row.verified ? 1 : 0,
+              now,
+            ),
+          );
+        }
+      }
+      for (let index = 0; index < edgeWrites.length; index += 80) {
+        await env.DB.batch(edgeWrites.slice(index, index + 80));
+      }
+
+      const fullSidesCount = rows.filter((row) =>
+        [
+          row.front != null || Boolean(row.frontLabel),
+          row.back != null || Boolean(row.backLabel),
+          row.depth != null || Boolean(row.depthLabel),
+          row.depth2 != null || Boolean(row.depth2Label),
+        ].every(Boolean),
+      ).length;
+      const reviewCount = rows.filter(
+        (row) => !row.verified || row.confidence !== "high",
+      ).length;
+      const verifiedCount = rows.length - reviewCount;
+
+      await env.BUCKET.put(objectKey, sourceText, {
+        httpMetadata: {
+          contentType: file.name.toLowerCase().endsWith(".json")
+            ? "application/json"
+            : "text/csv; charset=utf-8",
+        },
+      });
+      await Promise.all([
+        writeSetting(projectId, "measurementSheetName", file.name.slice(0, 240), now),
+        writeSetting(projectId, "measurementSheetCount", String(rows.length), now),
+        writeSetting(projectId, "measurementSheetFullSidesCount", String(fullSidesCount), now),
+        writeSetting(projectId, "measurementSheetVerifiedCount", String(verifiedCount), now),
+        writeSetting(projectId, "measurementSheetReviewCount", String(reviewCount), now),
+      ]);
+      await writeAudit(actor, "mapper.measurementSheet_imported", projectId, null, {
+        filename: file.name,
+        count: rows.length,
+        fullSidesCount,
+        verifiedCount,
+        reviewCount,
+        updatedFields: [
+          "front",
+          "back",
+          "depth",
+          "depth2",
+          "dimension_unit",
+          "exact_labels",
+          "plot_edge_measurements",
+        ],
+      });
+      return Response.json({
+        ok: true,
+        name: file.name,
+        count: rows.length,
+        fullSidesCount,
+        verifiedCount,
+        reviewCount,
+      });
     }
 
     if (kind === "roadAccessSheet") {
@@ -792,7 +1040,9 @@ export async function POST(request: Request) {
     if (kind === "plotSheetPreflight") {
       let rows;
       try {
-        rows = parsePlotSheetText(await file.text(), file.name);
+        rows = parsePlotSheetText(await file.text(), file.name, {
+          sqmToSqftFactor: await projectSqmToSqftFactor(projectId),
+        });
       } catch (error) {
         return Response.json(
           { error: error instanceof Error ? error.message : "Plot sheet preflight parse nahi hui" },
@@ -830,7 +1080,9 @@ export async function POST(request: Request) {
     if (kind === "plotSheet") {
       let rows;
       try {
-        rows = parsePlotSheetText(await file.text(), file.name);
+        rows = parsePlotSheetText(await file.text(), file.name, {
+          sqmToSqftFactor: await projectSqmToSqftFactor(projectId),
+        });
       } catch (error) {
         return Response.json(
           { error: error instanceof Error ? error.message : "Plot sheet parse nahi hui" },
@@ -910,29 +1162,7 @@ export async function POST(request: Request) {
             ? rawRotation
             : 0;
         const mappedById = new Map(mappedRows.results.map((item) => [item.id, item]));
-        const opposite: Record<EdgeDirection, EdgeDirection> = {
-          top: "bottom",
-          right: "left",
-          bottom: "top",
-          left: "right",
-        };
-        const depthDirections: Record<
-          EdgeDirection,
-          [EdgeDirection, EdgeDirection]
-        > = {
-          top: ["right", "left"],
-          right: ["bottom", "top"],
-          bottom: ["left", "right"],
-          left: ["top", "bottom"],
-        };
-        const semanticUpdates: Array<{
-          id: string;
-          front: number;
-          back: number;
-          depthA: number;
-          depthB: number;
-          edgeSemantics: string;
-        }> = [];
+        const semanticUpdates: Array<EdgeBinding & { edgeSemantics: string }> = [];
 
         for (const row of directionRows) {
           const stored = mappedById.get(row.id);
@@ -944,46 +1174,16 @@ export async function POST(request: Request) {
             continue;
           }
           if (!Array.isArray(polygon) || polygon.length < 4) continue;
-
-          const front = edgeIndexForDisplayDirection(
+          const resolved = resolveFourSideEdges(
             polygon,
             row.frontDirection as EdgeDirection,
             rotation,
           );
-          const back = edgeIndexForDisplayDirection(
-            polygon,
-            opposite[row.frontDirection as EdgeDirection],
-            rotation,
-          );
-          const [depthADirection, depthBDirection] =
-            depthDirections[row.frontDirection as EdgeDirection];
-          const depthA = edgeIndexForDisplayDirection(
-            polygon,
-            depthADirection,
-            rotation,
-          );
-          const depthB = edgeIndexForDisplayDirection(
-            polygon,
-            depthBDirection,
-            rotation,
-          );
-          const selected = [front, back, depthA, depthB];
-          if (selected.some((edge) => edge == null) || new Set(selected).size !== 4)
-            continue;
-          const edgeSemantics = serializePlotSideSemantics(polygon.length, {
-            front: [front!],
-            back: [back!],
-            depthA: [depthA!],
-            depthB: [depthB!],
-          });
-          if (!edgeSemantics) continue;
+          if (!resolved) continue;
           semanticUpdates.push({
             id: row.id,
-            front: front!,
-            back: back!,
-            depthA: depthA!,
-            depthB: depthB!,
-            edgeSemantics,
+            pointCount: polygon.length,
+            ...resolved,
           });
         }
 
@@ -1004,6 +1204,7 @@ export async function POST(request: Request) {
               ),
             ),
           );
+          await syncMeasurementBindings(projectId, semanticUpdates, now);
           autoSideMapped = semanticUpdates.length;
         }
       }
@@ -1101,7 +1302,16 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     try {
       for (const [key, raw] of entries) {
-        await writeSetting(projectId, key, validatedSetting(key, raw), now);
+        const validated = validatedSetting(key, raw);
+        await writeSetting(projectId, key, validated, now);
+        if (key === "sqmToSqftFactor") {
+          const factor = normalizeSqmToSqftFactor(validated);
+          await env.DB.prepare(
+            "UPDATE plots SET sqft=ROUND(sqm * ?, 3),updated_at=? WHERE project_id=? AND sqm>0",
+          )
+            .bind(factor, now, projectId)
+            .run();
+        }
       }
     } catch (error) {
       return Response.json(

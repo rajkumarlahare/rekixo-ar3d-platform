@@ -1,5 +1,5 @@
 import { getDb } from "../../../db";
-import { gallery, plotPricing, plots, settings } from "../../../db/schema";
+import { gallery, plotEdgeMeasurements, plotPricing, plots, settings } from "../../../db/schema";
 import { desc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getAdminSession } from "../../admin-auth";
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const [project, plotRows, settingRows, galleryRows, adminDomain] =
+    const [project, plotRows, edgeMeasurementRows, settingRows, galleryRows, adminDomain] =
       await Promise.all([
         env.DB.prepare(
           "SELECT name,slug,public_status AS publicStatus,published_at AS publishedAt,publish_version AS publishVersion,admin_host AS adminHost FROM projects WHERE id=? AND status='active' LIMIT 1",
@@ -83,6 +83,10 @@ export async function GET(request: Request) {
             adminHost: string | null;
           }>(),
         db.select().from(plots).where(eq(plots.projectId, projectId)),
+        db
+          .select()
+          .from(plotEdgeMeasurements)
+          .where(eq(plotEdgeMeasurements.projectId, projectId)),
         db.select().from(settings).where(eq(settings.projectId, projectId)),
         db
           .select({ id: gallery.id, caption: gallery.caption, filename: gallery.filename })
@@ -115,6 +119,12 @@ export async function GET(request: Request) {
           .where(eq(plotPricing.projectId, projectId))
       : [];
     const pricingByPlot = new Map(pricingRows.map((item) => [item.plotId, item]));
+    const edgeMeasurementsByPlot = new Map<string, typeof edgeMeasurementRows>();
+    for (const item of edgeMeasurementRows) {
+      const list = edgeMeasurementsByPlot.get(item.plotId) || [];
+      list.push(item);
+      edgeMeasurementsByPlot.set(item.plotId, list);
+    }
 
     return Response.json(
       {
@@ -129,17 +139,34 @@ export async function GET(request: Request) {
         plots: plotRows.map((plot) => {
           const { notes, ...publicPlot } = plot;
           void notes;
+          const edgeMeasurements = (edgeMeasurementsByPlot.get(plot.id) || []).map(
+            (item) => ({
+              role: item.role,
+              segmentIndex: item.segmentIndex,
+              edgeIndex: item.edgeIndex,
+              pointCount: item.pointCount,
+              length: item.length,
+              unit: item.unit,
+              rawLabel: item.rawLabel,
+              roadFrontage: item.roadFrontage,
+              roadAccess: item.roadAccess,
+            }),
+          );
           const price = pricingEnabled ? pricingByPlot.get(plot.id) : null;
-          if (!price) return publicPlot;
           return {
             ...publicPlot,
-            pricing: {
-              type: price.pricingType,
-              unit: price.unit,
-              rate: price.rate,
-              fixedPrice: price.fixedPrice,
-              currency: price.currency,
-            },
+            ...(edgeMeasurements.length ? { edgeMeasurements } : {}),
+            ...(price
+              ? {
+                  pricing: {
+                    type: price.pricingType,
+                    unit: price.unit,
+                    rate: price.rate,
+                    fixedPrice: price.fixedPrice,
+                    currency: price.currency,
+                  },
+                }
+              : {}),
           };
         }),
         settings: effectivePublicSettings,
