@@ -104,6 +104,7 @@ type MapperSettings = {
   logoName?: string;
   logoVersion?: string;
   address?: string;
+  plotFrontDirections?: string;
 };
 
 type AutoMatch = {
@@ -122,6 +123,7 @@ type PlotSheetQualitySummary = {
   missingSideMeasurements: string[];
   partialSideMeasurements: string[];
   genericAreaOnlyDimensions: string[];
+  missingFrontDirection: string[];
   richDetailReady: boolean;
 };
 
@@ -131,6 +133,7 @@ type CurrentPlotQuality = {
   roadComplete: number;
   fourSidesComplete: number;
   mappedSemanticsComplete: number;
+  frontDirectionsComplete: number;
   genericAreaOnly: number;
   richDetailReady: boolean;
 };
@@ -244,12 +247,32 @@ function plotHasFourSideSemantics(plot: Plot) {
   );
 }
 
-function currentPlotQuality(plots: Plot[]): CurrentPlotQuality {
+function savedPlotFrontDirections(value: unknown) {
+  const output: Record<string, EdgeDirection> = {};
+  try {
+    const parsed = JSON.parse(String(value || "{}"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return output;
+    for (const [id, direction] of Object.entries(parsed)) {
+      if (["top", "right", "bottom", "left"].includes(String(direction))) {
+        output[cleanPlotId(id)] = String(direction) as EdgeDirection;
+      }
+    }
+  } catch {
+    // Corrupt optional metadata must never break the mapper.
+  }
+  return output;
+}
+
+function currentPlotQuality(
+  plots: Plot[],
+  frontDirections: Record<string, EdgeDirection>,
+): CurrentPlotQuality {
   const total = plots.length;
   let dimensionsComplete = 0;
   let roadComplete = 0;
   let fourSidesComplete = 0;
   let mappedSemanticsComplete = 0;
+  let frontDirectionsComplete = 0;
   let genericAreaOnly = 0;
 
   for (const plot of plots) {
@@ -258,7 +281,9 @@ function currentPlotQuality(plots: Plot[]): CurrentPlotQuality {
     if (String(plot.road || "").trim()) roadComplete += 1;
     const sidesComplete = plotHasFourSideMeasurements(plot);
     if (sidesComplete) fourSidesComplete += 1;
-    if (plotHasFourSideSemantics(plot)) mappedSemanticsComplete += 1;
+    const semanticsComplete = plotHasFourSideSemantics(plot);
+    if (semanticsComplete) mappedSemanticsComplete += 1;
+    if (frontDirections[plot.id] || semanticsComplete) frontDirectionsComplete += 1;
     if (
       /approved\s+(?:plan\s+)?area|sanctioned\s+irregular\s+plot/i.test(dimensions) &&
       !sidesComplete
@@ -273,12 +298,14 @@ function currentPlotQuality(plots: Plot[]): CurrentPlotQuality {
     roadComplete,
     fourSidesComplete,
     mappedSemanticsComplete,
+    frontDirectionsComplete,
     genericAreaOnly,
     richDetailReady:
       total > 0 &&
       dimensionsComplete === total &&
       roadComplete === total &&
       fourSidesComplete === total &&
+      frontDirectionsComplete === total &&
       genericAreaOnly === 0,
   };
 }
@@ -951,7 +978,14 @@ export default function PlotMapper({
   }, [completedProject, manualPhase, plotId, points, projectId, shape]);
 
   const mappedPlots = useMemo(() => plots.filter((plot) => parsePolygon(plot).length >= 3), [plots]);
-  const plotQuality = useMemo(() => currentPlotQuality(plots), [plots]);
+  const plotFrontDirections = useMemo(
+    () => savedPlotFrontDirections(settings.plotFrontDirections),
+    [settings.plotFrontDirections],
+  );
+  const plotQuality = useMemo(
+    () => currentPlotQuality(plots, plotFrontDirections),
+    [plots, plotFrontDirections],
+  );
   const inventoryPlots = useMemo(() => [...plots].sort(plotSort), [plots]);
   const unmappedPlots = useMemo(
     () => inventoryPlots.filter((plot) => parsePolygon(plot).length < 3),
@@ -1397,8 +1431,8 @@ export default function PlotMapper({
 
   function downloadPlotSheetTemplate() {
     const text = [
-      "Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
-      "1,1162.08,108,129.12,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,1,3,2,4,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan",
+      "Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Direction,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
+      "1,1162.08,108,129.12,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,right,,,,,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -1473,12 +1507,16 @@ export default function PlotMapper({
           quality.genericAreaOnlyDimensions.length
             ? `Generic approved-area text without sides: ${quality.genericAreaOnlyDimensions.length}`
             : "",
+          quality.missingFrontDirection.length
+            ? `Front Direction missing: ${quality.missingFrontDirection.length}`
+            : "",
         ].filter(Boolean);
 
         const examples = [
           ...quality.missingSideMeasurements,
           ...quality.partialSideMeasurements,
           ...quality.genericAreaOnlyDimensions,
+          ...quality.missingFrontDirection,
         ].filter((id, index, list) => list.indexOf(id) === index).slice(0, 12);
 
         const proceed = window.confirm(
@@ -1602,9 +1640,10 @@ export default function PlotMapper({
         notify(String((result.cadGeometry as CadGeometry | undefined)?.candidates.length || 0) + " CAD boundaries मिलीं");
       } else if (kind === "plotSheet") {
         const quality = (result.quality || null) as PlotSheetQualitySummary | null;
+        const autoSideMapped = Number(result.autoSideMapped || 0);
         notify(
           quality
-            ? `${Number(result.count || 0)} plots imported · full details ${quality.fullDetailCount}/${quality.total}`
+            ? `${Number(result.count || 0)} plots imported · full details ${quality.fullDetailCount}/${quality.total}${autoSideMapped ? ` · ${autoSideMapped} side maps auto-applied` : ""}`
             : String(Number(result.count || 0)) + " plot records import हुए",
         );
       } else if (kind === "roadAccessSheet") {
@@ -2393,10 +2432,70 @@ export default function PlotMapper({
     const backValue = back.trim() ? Number(back) : null;
     const depthValue = depth.trim() ? Number(depth) : null;
     const depth2Value = depth2.trim() ? Number(depth2) : null;
-    const edgeValue = frontEdgeIndex.trim() ? Number(frontEdgeIndex) : null;
-    const depthEdgeValue = depthEdgeIndex.trim() ? Number(depthEdgeIndex) : null;
-    const backEdgeValue = backEdgeIndex.trim() ? Number(backEdgeIndex) : null;
-    const depth2EdgeValue = depth2EdgeIndex.trim() ? Number(depth2EdgeIndex) : null;
+    let edgeValue = frontEdgeIndex.trim() ? Number(frontEdgeIndex) : null;
+    let depthEdgeValue = depthEdgeIndex.trim() ? Number(depthEdgeIndex) : null;
+    let backEdgeValue = backEdgeIndex.trim() ? Number(backEdgeIndex) : null;
+    let depth2EdgeValue = depth2EdgeIndex.trim() ? Number(depth2EdgeIndex) : null;
+
+    if (
+      edgeValue === null &&
+      backEdgeValue === null &&
+      depthEdgeValue === null &&
+      depth2EdgeValue === null &&
+      points.length >= 4
+    ) {
+      const storedDirection = plotFrontDirections[id];
+      if (storedDirection) {
+        const displayRotation = normalizeQuarterTurn(settings.publicRotation);
+        const opposite: Record<EdgeDirection, EdgeDirection> = {
+          top: "bottom",
+          right: "left",
+          bottom: "top",
+          left: "right",
+        };
+        const depthDirections: Record<
+          EdgeDirection,
+          [EdgeDirection, EdgeDirection]
+        > = {
+          top: ["right", "left"],
+          right: ["bottom", "top"],
+          bottom: ["left", "right"],
+          left: ["top", "bottom"],
+        };
+        const autoFront = edgeIndexForDisplayDirection(
+          points,
+          storedDirection,
+          displayRotation,
+        );
+        const autoBack = edgeIndexForDisplayDirection(
+          points,
+          opposite[storedDirection],
+          displayRotation,
+        );
+        const [depthADirection, depthBDirection] =
+          depthDirections[storedDirection];
+        const autoDepthA = edgeIndexForDisplayDirection(
+          points,
+          depthADirection,
+          displayRotation,
+        );
+        const autoDepthB = edgeIndexForDisplayDirection(
+          points,
+          depthBDirection,
+          displayRotation,
+        );
+        const autoEdges = [autoFront, autoBack, autoDepthA, autoDepthB];
+        if (
+          autoEdges.every((value) => value !== null) &&
+          new Set(autoEdges).size === 4
+        ) {
+          edgeValue = autoFront;
+          backEdgeValue = autoBack;
+          depthEdgeValue = autoDepthA;
+          depth2EdgeValue = autoDepthB;
+        }
+      }
+    }
     if (frontValue !== null && (!Number.isFinite(frontValue) || frontValue <= 0))
       return notify("Front positive number hona chahiye");
     if (backValue !== null && (!Number.isFinite(backValue) || backValue <= 0))
@@ -2799,7 +2898,7 @@ export default function PlotMapper({
 
           <label className={`mapper-upload-card ${hasPlotSheet ? "ready" : ""}`}>
             <span><FileText /></span>
-            <div><b>{hasPlotSheet ? `Plot inventory · ${plots.length}` : "2. Plot details sheet"}</b><small>{settings.plotSheetName || "CSV/JSON: ID, sqft/sqm, dimensions, facing"}</small></div>
+            <div><b>{hasPlotSheet ? `Plot inventory · ${plots.length}` : "2. Plot details sheet"}</b><small>{settings.plotSheetName || "ONE canonical CSV/JSON: ID, area, road, 4-side sizes, Front Direction"}</small></div>
             {hasPlotSheet && <CheckCircle2 className="mapper-ready-icon" />}
             <input
               type="file"
@@ -2818,7 +2917,7 @@ export default function PlotMapper({
             <span><FileText /></span>
             <div>
               <b>{hasRoadAccessSheet ? `Road Access · ${settings.roadAccessSheetCount || "saved"}` : "Road Access CSV"}</b>
-              <small>{settings.roadAccessSheetName || "Separate CSV: Plot No, Road Access · only road field updates"}</small>
+              <small>{settings.roadAccessSheetName || "Advanced correction only · Plot No + Road Access"}</small>
             </div>
             {hasRoadAccessSheet && <CheckCircle2 className="mapper-ready-icon" />}
             <input
@@ -2835,7 +2934,7 @@ export default function PlotMapper({
             <span><Target /></span>
             <div>
               <b>{hasSideMappingSheet ? `Side Mapping · ${settings.sideMappingSheetCount || "saved"}` : "Side Mapping CSV"}</b>
-              <small>{settings.sideMappingSheetName || "Plot No + road-facing Front Direction · only edge semantics update"}</small>
+              <small>{settings.sideMappingSheetName || "Advanced correction only · normal flow me Front Direction main CSV me रखें"}</small>
             </div>
             {hasSideMappingSheet && <CheckCircle2 className="mapper-ready-icon" />}
             <input
@@ -2912,7 +3011,7 @@ export default function PlotMapper({
           <button type="button" onClick={downloadPlotSheetTemplate}><FileText /> Download Plot CSV template</button>
           <button type="button" onClick={downloadRoadAccessTemplate}><FileText /> Download Road Access CSV template</button>
           <button type="button" onClick={downloadSideMappingTemplate}><Target /> Download Side Mapping CSV template</button>
-          <small>Road Access aur Side Mapping isolated updates hain; Plot Inventory, measurements, geometry, pricing aur status untouched rehte hain.</small>
+          <small>Normal new-project flow: ek canonical Plot CSV use karein. Road Access aur Side Mapping CSV sirf later corrections ke liye hain; geometry, pricing aur status untouched rehte hain.</small>
         </div>
 
         <div className="mapper-source-meta">
@@ -2945,6 +3044,7 @@ export default function PlotMapper({
               <span>Dimensions <b>{plotQuality.dimensionsComplete}/{plotQuality.total}</b></span>
               <span>Road Access <b>{plotQuality.roadComplete}/{plotQuality.total}</b></span>
               <span>4-side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
+              <span>Front Direction <b>{plotQuality.frontDirectionsComplete}/{plotQuality.total}</b></span>
               <span>Mapped side semantics <b>{plotQuality.mappedSemanticsComplete}/{plotQuality.total}</b></span>
             </div>
             {!plotQuality.richDetailReady && (

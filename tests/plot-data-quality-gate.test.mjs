@@ -20,6 +20,7 @@ test("plot sheet exposes a rich-detail quality report", () => {
   assert.match(source, /missingSideMeasurements/);
   assert.match(source, /partialSideMeasurements/);
   assert.match(source, /genericAreaOnlyDimensions/);
+  assert.match(source, /missingFrontDirection/);
   assert.match(source, /richDetailReady/);
 });
 
@@ -42,6 +43,8 @@ test("Super Admin warns before incomplete rich-detail CSV is imported", () => {
   assert.match(mapper, /Venkatesh jaisa Front \/ Back \/ Depth detail/);
   assert.match(mapper, /Plot Data Quality/);
   assert.match(mapper, /4-side measurements/);
+  assert.match(mapper, /Front Direction/);
+  assert.match(mapper, /plotFrontDirections/);
   assert.match(mapper, /RICH DETAILS READY/);
 });
 
@@ -49,7 +52,24 @@ test("canonical plot CSV template carries complete plot-detail columns", () => {
   const mapper = read("app/plot-mapper.tsx");
   assert.match(
     mapper,
-    /Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit/,
+    /Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Direction/,
   );
   assert.match(mapper, /Side Dimensions,Notes/);
+});
+
+
+test("canonical plot sheet stores Front Direction and auto-applies edge semantics", () => {
+  const [sheet, route, mapper] = [
+    read("app/plot-sheet.ts"),
+    read("app/api/super-mapper/route.ts"),
+    read("app/plot-mapper.tsx"),
+  ];
+  assert.match(sheet, /frontDirection: EdgeDirection/);
+  assert.match(sheet, /roadfrontdirection/);
+  assert.match(route, /plotFrontDirections/);
+  assert.match(route, /autoSideMapped/);
+  assert.match(route, /edgeIndexForDisplayDirection/);
+  assert.match(mapper, /savedPlotFrontDirections/);
+  assert.match(mapper, /plotFrontDirections\[id\]/);
+  assert.match(mapper, /normal flow me Front Direction main CSV/);
 });

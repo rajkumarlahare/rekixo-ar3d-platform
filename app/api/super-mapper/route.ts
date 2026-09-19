@@ -817,6 +817,7 @@ export async function POST(request: Request) {
         missingSideMeasurements: quality.missingSideMeasurements.length,
         partialSideMeasurements: quality.partialSideMeasurements.length,
         genericAreaOnlyDimensions: quality.genericAreaOnlyDimensions.length,
+        missingFrontDirection: quality.missingFrontDirection.length,
       });
       return Response.json({
         ok: true,
@@ -852,6 +853,161 @@ export async function POST(request: Request) {
         rows.map((row) => ({ ...row, polygon: "", status: "available", featured: false })),
         true,
       );
+
+      // Normal new-project flow uses ONE canonical plot sheet. Front Direction
+      // is stored even before polygons exist, then automatically converted to
+      // canonical Front/Back/Depth A/Depth B edge semantics as soon as geometry
+      // is available. Separate Side Mapping CSV remains an advanced correction tool.
+      const directionRows = rows.filter((row) => row.frontDirection);
+      let autoSideMapped = 0;
+      if (directionRows.length) {
+        const existingDirectionSetting = await env.DB.prepare(
+          "SELECT value FROM settings WHERE project_id=? AND key='plotFrontDirections' LIMIT 1",
+        )
+          .bind(projectId)
+          .first<{ value: string }>();
+        let existingDirections: Record<string, EdgeDirection> = {};
+        try {
+          const parsed = JSON.parse(existingDirectionSetting?.value || "{}");
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            existingDirections = Object.fromEntries(
+              Object.entries(parsed).filter((entry): entry is [string, EdgeDirection] =>
+                ["top", "right", "bottom", "left"].includes(String(entry[1])),
+              ),
+            );
+          }
+        } catch {
+          existingDirections = {};
+        }
+        const mergedDirections: Record<string, EdgeDirection> = {
+          ...existingDirections,
+        };
+        for (const row of directionRows) {
+          mergedDirections[row.id] = row.frontDirection as EdgeDirection;
+        }
+        await writeSetting(
+          projectId,
+          "plotFrontDirections",
+          JSON.stringify(mergedDirections),
+          now,
+        );
+
+        const [rotationRow, mappedRows] = await Promise.all([
+          env.DB.prepare(
+            "SELECT value FROM settings WHERE project_id=? AND key='publicRotation' LIMIT 1",
+          )
+            .bind(projectId)
+            .first<{ value: string }>(),
+          env.DB.prepare(
+            "SELECT id,polygon FROM plots WHERE project_id=? AND TRIM(COALESCE(polygon,''))<>''",
+          )
+            .bind(projectId)
+            .all<{ id: string; polygon: string }>(),
+        ]);
+        const rawRotation = Number(rotationRow?.value || 0);
+        const rotation =
+          rawRotation === 1 || rawRotation === 2 || rawRotation === 3
+            ? rawRotation
+            : 0;
+        const mappedById = new Map(mappedRows.results.map((item) => [item.id, item]));
+        const opposite: Record<EdgeDirection, EdgeDirection> = {
+          top: "bottom",
+          right: "left",
+          bottom: "top",
+          left: "right",
+        };
+        const depthDirections: Record<
+          EdgeDirection,
+          [EdgeDirection, EdgeDirection]
+        > = {
+          top: ["right", "left"],
+          right: ["bottom", "top"],
+          bottom: ["left", "right"],
+          left: ["top", "bottom"],
+        };
+        const semanticUpdates: Array<{
+          id: string;
+          front: number;
+          back: number;
+          depthA: number;
+          depthB: number;
+          edgeSemantics: string;
+        }> = [];
+
+        for (const row of directionRows) {
+          const stored = mappedById.get(row.id);
+          if (!stored) continue;
+          let polygon: [number, number][];
+          try {
+            polygon = JSON.parse(stored.polygon || "[]");
+          } catch {
+            continue;
+          }
+          if (!Array.isArray(polygon) || polygon.length < 4) continue;
+
+          const front = edgeIndexForDisplayDirection(
+            polygon,
+            row.frontDirection as EdgeDirection,
+            rotation,
+          );
+          const back = edgeIndexForDisplayDirection(
+            polygon,
+            opposite[row.frontDirection as EdgeDirection],
+            rotation,
+          );
+          const [depthADirection, depthBDirection] =
+            depthDirections[row.frontDirection as EdgeDirection];
+          const depthA = edgeIndexForDisplayDirection(
+            polygon,
+            depthADirection,
+            rotation,
+          );
+          const depthB = edgeIndexForDisplayDirection(
+            polygon,
+            depthBDirection,
+            rotation,
+          );
+          const selected = [front, back, depthA, depthB];
+          if (selected.some((edge) => edge == null) || new Set(selected).size !== 4)
+            continue;
+          const edgeSemantics = serializePlotSideSemantics(polygon.length, {
+            front: [front!],
+            back: [back!],
+            depthA: [depthA!],
+            depthB: [depthB!],
+          });
+          if (!edgeSemantics) continue;
+          semanticUpdates.push({
+            id: row.id,
+            front: front!,
+            back: back!,
+            depthA: depthA!,
+            depthB: depthB!,
+            edgeSemantics,
+          });
+        }
+
+        if (semanticUpdates.length) {
+          await env.DB.batch(
+            semanticUpdates.map((row) =>
+              env.DB.prepare(
+                "UPDATE plots SET front_edge_index=?,back_edge_index=?,depth_edge_index=?,depth2_edge_index=?,edge_semantics=?,updated_at=? WHERE project_id=? AND id=?",
+              ).bind(
+                row.front,
+                row.back,
+                row.depthA,
+                row.depthB,
+                row.edgeSemantics,
+                now,
+                projectId,
+                row.id,
+              ),
+            ),
+          );
+          autoSideMapped = semanticUpdates.length;
+        }
+      }
+
       await writeSetting(projectId, "plotSheetCount", String(saved.length), now);
       await writeAudit(actor, "mapper.plotSheet_imported", projectId, null, {
         filename: file.name,
@@ -862,6 +1018,8 @@ export async function POST(request: Request) {
         missingRoad: quality.missingRoad.length,
         missingSideMeasurements: quality.missingSideMeasurements.length,
         partialSideMeasurements: quality.partialSideMeasurements.length,
+        missingFrontDirection: quality.missingFrontDirection.length,
+        autoSideMapped,
       });
       return Response.json({
         ok: true,
@@ -869,6 +1027,7 @@ export async function POST(request: Request) {
         count: saved.length,
         plots: saved,
         quality,
+        autoSideMapped,
       });
     }
 

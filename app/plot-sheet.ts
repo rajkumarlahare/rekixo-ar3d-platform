@@ -1,4 +1,5 @@
 import { cleanPlotId } from "./mapper-geometry";
+import type { EdgeDirection } from "./plot-edge-semantics";
 
 export type PlotSheetRow = {
   id: string;
@@ -21,6 +22,7 @@ export type PlotSheetRow = {
   backLabel: string;
   depth2Label: string;
   sideDimensions: string;
+  frontDirection: EdgeDirection | "";
   notes: string;
 };
 
@@ -72,6 +74,7 @@ const aliases: Record<string, string[]> = {
   backLabel: ["backlabel", "rearlabell", "reardisplay", "backdisplay"],
   depth2Label: ["depth2label", "depthblabel", "seconddepthlabel"],
   sideDimensions: ["sidedimensions", "sidemeasurements", "sidelabels", "pdfsides"],
+  frontDirection: ["frontdirection", "roadfrontdirection", "frontside", "roadfrontside"],
   notes: ["notes", "note", "remarks", "remark"],
 };
 
@@ -201,6 +204,19 @@ function dimensionUnit(value: unknown, dimensions: string, hasMeasurement: boole
   );
 }
 
+function frontDirection(value: unknown) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return "" as const;
+  if (["top", "up", "upar", "north", "n", "↑"].includes(raw)) return "top" as const;
+  if (["right", "east", "e", "→"].includes(raw)) return "right" as const;
+  if (["bottom", "down", "neeche", "south", "s", "↓"].includes(raw))
+    return "bottom" as const;
+  if (["left", "west", "w", "←"].includes(raw)) return "left" as const;
+  throw new Error(
+    "Front Direction top/right/bottom/left me se hona chahiye",
+  );
+}
+
 function edgeIndex(value: unknown, label: string) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
@@ -271,6 +287,7 @@ function normalizeRow(input: Record<string, unknown>): PlotSheetRow | null {
     backLabel: cleanDimensionText(input.backLabel, 160),
     depth2Label: cleanDimensionText(input.depth2Label, 160),
     sideDimensions: cleanDimensionText(input.sideDimensions, 500),
+    frontDirection: frontDirection(input.frontDirection),
     notes: String(input.notes || "").trim().slice(0, 2000),
   };
 }
@@ -318,6 +335,7 @@ export function parsePlotSheetText(text: string, filename: string) {
     backLabel: columnFor(headers, "backLabel"),
     depth2Label: columnFor(headers, "depth2Label"),
     sideDimensions: columnFor(headers, "sideDimensions"),
+    frontDirection: columnFor(headers, "frontDirection"),
     notes: columnFor(headers, "notes"),
   };
   if (indexes.id < 0 || (indexes.sqft < 0 && indexes.sqm < 0 && indexes.sqyd < 0)) {
@@ -350,6 +368,7 @@ export function parsePlotSheetText(text: string, filename: string) {
           backLabel: value(row, indexes.backLabel),
           depth2Label: value(row, indexes.depth2Label),
           sideDimensions: value(row, indexes.sideDimensions),
+          frontDirection: value(row, indexes.frontDirection),
           notes: value(row, indexes.notes),
         }),
       )
@@ -366,6 +385,7 @@ export type PlotSheetQuality = {
   missingSideMeasurements: string[];
   partialSideMeasurements: string[];
   genericAreaOnlyDimensions: string[];
+  missingFrontDirection: string[];
   richDetailReady: boolean;
 };
 
@@ -384,6 +404,7 @@ export function assessPlotSheetRows(rows: PlotSheetRow[]): PlotSheetQuality {
   const missingSideMeasurements: string[] = [];
   const partialSideMeasurements: string[] = [];
   const genericAreaOnlyDimensions: string[] = [];
+  const missingFrontDirection: string[] = [];
   let fullDetailCount = 0;
 
   for (const row of rows) {
@@ -391,6 +412,14 @@ export function assessPlotSheetRows(rows: PlotSheetRow[]): PlotSheetQuality {
     const road = String(row.road || "").trim();
     if (!dimensions) missingDimensions.push(row.id);
     if (!road) missingRoad.push(row.id);
+    const hasExplicitEdgeMap = [
+      row.frontEdgeIndex,
+      row.backEdgeIndex,
+      row.depthEdgeIndex,
+      row.depth2EdgeIndex,
+    ].every((value) => value !== null);
+    const hasFrontMapping = Boolean(row.frontDirection) || hasExplicitEdgeMap;
+    if (!hasFrontMapping) missingFrontDirection.push(row.id);
 
     const roleValues = [
       row.front != null || Boolean(row.frontLabel.trim()),
@@ -414,7 +443,8 @@ export function assessPlotSheetRows(rows: PlotSheetRow[]): PlotSheetQuality {
       genericAreaOnlyDimensions.push(row.id);
     }
 
-    if (dimensions && road && fullSides) fullDetailCount += 1;
+    if (dimensions && road && fullSides && hasFrontMapping)
+      fullDetailCount += 1;
   }
 
   return {
@@ -425,9 +455,11 @@ export function assessPlotSheetRows(rows: PlotSheetRow[]): PlotSheetQuality {
     missingSideMeasurements,
     partialSideMeasurements,
     genericAreaOnlyDimensions,
+    missingFrontDirection,
     richDetailReady:
       rows.length > 0 &&
       fullDetailCount === rows.length &&
-      !genericAreaOnlyDimensions.length,
+      !genericAreaOnlyDimensions.length &&
+      !missingFrontDirection.length,
   };
 }
