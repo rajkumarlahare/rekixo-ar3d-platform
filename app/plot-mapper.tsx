@@ -1603,16 +1603,12 @@ export default function PlotMapper({
           quality.genericAreaOnlyDimensions.length
             ? `Generic approved-area text without sides: ${quality.genericAreaOnlyDimensions.length}`
             : "",
-          quality.missingFrontDirection.length
-            ? `Front Direction missing: ${quality.missingFrontDirection.length}`
-            : "",
         ].filter(Boolean);
 
         const examples = [
           ...quality.missingSideMeasurements,
           ...quality.partialSideMeasurements,
           ...quality.genericAreaOnlyDimensions,
-          ...quality.missingFrontDirection,
         ].filter((id, index, list) => list.indexOf(id) === index).slice(0, 12);
 
         const proceed = window.confirm(
@@ -1623,7 +1619,7 @@ export default function PlotMapper({
             ...problemLines.map((line) => "• " + line),
             examples.length ? `Affected examples: ${examples.join(", ")}` : "",
             "",
-            "Aise import karne par Venkatesh jaisa Front / Back / Depth detail sab plots me nahi dikhega.",
+            "Aise import karne par complete Front / Back / Depth measurement sab plots me nahi dikhega.",
             "Phir bhi import karna hai?",
           ]
             .filter(Boolean)
@@ -1650,9 +1646,9 @@ export default function PlotMapper({
 
   async function upload(
     file: File,
-    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "roadAccessSheet" | "sideMappingSheet" | "logo",
+    kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "measurementSheet" | "roadAccessSheet" | "sideMappingSheet" | "logo",
   ) {
-    if (completedProject && !["sourcePdf", "logo", "roadAccessSheet", "sideMappingSheet"].includes(kind)) {
+    if (completedProject && !["sourcePdf", "logo", "measurementSheet", "roadAccessSheet", "sideMappingSheet"].includes(kind)) {
       notify("Tiyansh completed project locked है");
       return;
     }
@@ -1741,6 +1737,10 @@ export default function PlotMapper({
           quality
             ? `${Number(result.count || 0)} plots imported · full details ${quality.fullDetailCount}/${quality.total}${autoSideMapped ? ` · ${autoSideMapped} side maps auto-applied` : ""}`
             : String(Number(result.count || 0)) + " plot records import हुए",
+        );
+      } else if (kind === "measurementSheet") {
+        notify(
+          `${Number(result.count || 0)} measurement rows imported · full sides ${Number(result.fullSidesCount || 0)} · verified ${Number(result.verifiedCount || 0)} · review ${Number(result.reviewCount || 0)}`,
         );
       } else if (kind === "roadAccessSheet") {
         notify(String(Number(result.count || 0)) + " plots ka Road Access update hua — बाकी data untouched");
