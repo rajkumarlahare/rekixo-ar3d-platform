@@ -1515,12 +1515,25 @@ export default function PlotMapper({
   function downloadPlotSheetTemplate() {
     const text = [
       "Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Direction,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
-      "1,1162.08,108,129.12,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,right,,,,,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan",
+      "1,,108,,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,,,,,,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan; Front Direction optional because front-first mapper binds edges",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
     link.download = "rekixo-plot-sheet-template.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function downloadMeasurementTemplate() {
+    const text = [
+      "Plot No,Front,Back,Depth A,Depth B,Measurement Unit,Front Label,Back Label,Depth A Label,Depth B Label,Road Access,Side Measurements,Source Ref,Confidence,Verified,Raw Source Text",
+      "1,12,10,9,9.5,m,12 m,10 m,9 m,9.5 m,12.000 M WIDE ROAD,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Sanctioned plan page 1,high,true,Verified from source drawing",
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "rekixo-ai-measurement-manifest.csv";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
