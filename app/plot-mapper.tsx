@@ -44,6 +44,15 @@ import {
   type EdgeDirection,
 } from "./plot-edge-semantics";
 import {
+  normalizeSqmToSqftFactor,
+  sqftToSqm,
+  sqmToSqyd,
+} from "./area-policy";
+import {
+  frontFirstFourSideEdges,
+  resolveFourSideEdges,
+} from "./plot-side-resolver";
+import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
   setPlotSideEdge,
@@ -88,6 +97,12 @@ type MapperSettings = {
   roadAccessSheetCount?: string;
   sideMappingSheetName?: string;
   sideMappingSheetCount?: string;
+  measurementSheetName?: string;
+  measurementSheetCount?: string;
+  measurementSheetFullSidesCount?: string;
+  measurementSheetVerifiedCount?: string;
+  measurementSheetReviewCount?: string;
+  sqmToSqftFactor?: string;
   mapWidth?: string;
   mapHeight?: string;
   masterplanOriginalWidth?: string;
@@ -645,6 +660,7 @@ export default function PlotMapper({
   const [naturalImageSize, setNaturalImageSize] = useState<{ width: number; height: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [headerAddress, setHeaderAddress] = useState("");
+  const [areaFactorText, setAreaFactorText] = useState("10.7639");
   const [settingsReady, setSettingsReady] = useState(false);
   const [lastVerifiedId, setLastVerifiedId] = useState("");
   const [zoom, setZoom] = useState(1);
@@ -781,6 +797,7 @@ export default function PlotMapper({
     setPlots(nextPlots);
     setSettings(nextSettings);
     setHeaderAddress(String(nextSettings.address || ""));
+    setAreaFactorText(String(normalizeSqmToSqftFactor(nextSettings.sqmToSqftFactor)));
     // Plot polygons always stay in canonical source-image coordinates.
     // publicRotation only controls the shared Super Admin/public presentation angle.
     setSettingsReady(true);
