@@ -118,6 +118,109 @@ async function loadGlobalShareBrandBitmap() {
   return createImageBitmap(await response.blob());
 }
 
+function footerAverageColor(bitmap: ImageBitmap) {
+  const sampleWidth = 24;
+  const sampleHeight = 12;
+  const sourceSampleHeight = Math.max(
+    1,
+    Math.round(bitmap.height * GLOBAL_SHARE_BRAND.footerSampleRatio),
+  );
+  const sampleCanvas = document.createElement("canvas");
+  sampleCanvas.width = sampleWidth;
+  sampleCanvas.height = sampleHeight;
+  const sampleContext = sampleCanvas.getContext("2d", {
+    alpha: true,
+    willReadFrequently: true,
+  });
+  if (!sampleContext) return GLOBAL_SHARE_BRAND.footerFallbackBackground;
+
+  sampleContext.drawImage(
+    bitmap,
+    0,
+    bitmap.height - sourceSampleHeight,
+    bitmap.width,
+    sourceSampleHeight,
+    0,
+    0,
+    sampleWidth,
+    sampleHeight,
+  );
+
+  try {
+    const pixels = sampleContext.getImageData(
+      0,
+      0,
+      sampleWidth,
+      sampleHeight,
+    ).data;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let weight = 0;
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const alpha = pixels[index + 3] / 255;
+      if (alpha < 0.08) continue;
+      red += pixels[index] * alpha;
+      green += pixels[index + 1] * alpha;
+      blue += pixels[index + 2] * alpha;
+      weight += alpha;
+    }
+
+    if (!weight) return GLOBAL_SHARE_BRAND.footerFallbackBackground;
+    return `rgb(${Math.round(red / weight)}, ${Math.round(
+      green / weight,
+    )}, ${Math.round(blue / weight)})`;
+  } catch {
+    return GLOBAL_SHARE_BRAND.footerFallbackBackground;
+  }
+}
+
+function drawImageDerivedFooter(
+  context: CanvasRenderingContext2D,
+  sourceBitmap: ImageBitmap,
+  width: number,
+  imageHeight: number,
+  footerHeight: number,
+) {
+  const sourceSampleHeight = Math.max(
+    1,
+    Math.round(sourceBitmap.height * GLOBAL_SHARE_BRAND.footerSampleRatio),
+  );
+  const blurPx = Math.max(
+    GLOBAL_SHARE_BRAND.minFooterBlurPx,
+    Math.round(width * GLOBAL_SHARE_BRAND.footerBlurRatio),
+  );
+  const overscan = Math.max(blurPx * 2, 12);
+
+  context.fillStyle = footerAverageColor(sourceBitmap);
+  context.fillRect(0, imageHeight, width, footerHeight);
+
+  context.save();
+  context.beginPath();
+  context.rect(0, imageHeight, width, footerHeight);
+  context.clip();
+  context.filter = `blur(${blurPx}px) saturate(${GLOBAL_SHARE_BRAND.footerSaturation})`;
+  context.globalAlpha = GLOBAL_SHARE_BRAND.footerImageOpacity;
+  context.drawImage(
+    sourceBitmap,
+    0,
+    sourceBitmap.height - sourceSampleHeight,
+    sourceBitmap.width,
+    sourceSampleHeight,
+    -overscan,
+    imageHeight - overscan,
+    width + overscan * 2,
+    footerHeight + overscan * 2,
+  );
+  context.restore();
+
+  // A very light neutral veil keeps the global mark readable without turning
+  // the footer into a fixed white strip.
+  context.fillStyle = `rgba(255, 255, 255, ${GLOBAL_SHARE_BRAND.footerVeilOpacity})`;
+  context.fillRect(0, imageHeight, width, footerHeight);
+}
+
 async function prepareBrandedShareImage(file: File) {
   validateShareImage(file);
   const sourceBitmap = await createImageBitmap(file);
@@ -173,10 +276,11 @@ async function prepareBrandedShareImage(file: File) {
       throw new Error("Share image process nahi ho payi");
     }
 
-    // Source image is never covered or cropped. Branding gets its own footer.
-    context.fillStyle = GLOBAL_SHARE_BRAND.footerBackground;
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    // Source image is never covered or cropped. Branding gets its own footer,
+    // whose background is derived from the customer's image instead of a
+    // fixed color strip.
     context.drawImage(sourceBitmap, 0, 0, width, height);
+    drawImageDerivedFooter(context, sourceBitmap, width, height, footerHeight);
 
     context.fillStyle = GLOBAL_SHARE_BRAND.dividerColor;
     context.fillRect(0, height, width, GLOBAL_SHARE_BRAND.dividerHeightPx);

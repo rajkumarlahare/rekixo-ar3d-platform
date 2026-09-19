@@ -1,8 +1,8 @@
-export const SHARE_TEMPLATE = "ar3d-global-brand-footer-v3";
+export const SHARE_TEMPLATE = "ar3d-global-brand-footer-v4";
 
 export const GLOBAL_SHARE_BRAND = {
   id: "ar3d-vision-studio",
-  version: "2026-09-19-footer-v3",
+  version: "2026-09-19-footer-v4",
   mime: "image/webp",
   widthRatio: 0.20,
   maxWidthRatio: 0.30,
@@ -12,7 +12,13 @@ export const GLOBAL_SHARE_BRAND = {
   footerPaddingRatio: 0.02,
   minFooterPaddingPx: 18,
   minFooterHeightPx: 92,
-  footerBackground: "#ffffff",
+  footerSampleRatio: 0.14,
+  footerBlurRatio: 0.012,
+  minFooterBlurPx: 8,
+  footerSaturation: 0.88,
+  footerImageOpacity: 0.94,
+  footerVeilOpacity: 0.06,
+  footerFallbackBackground: "#111827",
   dividerColor: "rgba(15, 23, 42, 0.10)",
   dividerHeightPx: 1,
   maxOutputDimension: 2560,

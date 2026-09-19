@@ -27,9 +27,9 @@ test("share builder adds a dedicated AR3D footer without cropping or covering th
     readFile(new URL("../app/share-branding-logo.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.ok(branding.includes('SHARE_TEMPLATE = "ar3d-global-brand-footer-v3"'));
+  assert.ok(branding.includes('SHARE_TEMPLATE = "ar3d-global-brand-footer-v4"'));
   assert.ok(branding.includes('id: "ar3d-vision-studio"'));
-  assert.ok(branding.includes('version: "2026-09-19-footer-v3"'));
+  assert.ok(branding.includes('version: "2026-09-19-footer-v4"'));
   assert.ok(logo.includes("GLOBAL_SHARE_BRAND_DATA_URL"));
   assert.ok(manager.includes("prepareBrandedShareImage"));
   assert.ok(manager.includes("context.drawImage(sourceBitmap, 0, 0, width, height)"));
@@ -42,6 +42,12 @@ test("share builder adds a dedicated AR3D footer without cropping or covering th
     ),
   );
   assert.ok(manager.includes("Source image is never covered or cropped"));
+  assert.ok(manager.includes("drawImageDerivedFooter"));
+  assert.ok(manager.includes("footerAverageColor"));
+  assert.ok(manager.includes("sourceBitmap.height - sourceSampleHeight"));
+  assert.ok(manager.includes("context.filter ="));
+  assert.ok(manager.includes("footerImageOpacity"));
+  assert.ok(!branding.includes('footerBackground: "#ffffff"'));
   assert.ok(manager.includes('form.set("file", shareImageFile)'));
   assert.ok(manager.includes('form.set("sourceFile", shareSourceFile)'));
 });
