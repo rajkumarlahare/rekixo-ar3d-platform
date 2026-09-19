@@ -1044,6 +1044,8 @@ export default function PlotMapper({
   const hasPlotSheet = Boolean(settings.plotSheetName) || plots.length > 0;
   const hasRoadAccessSheet = Boolean(settings.roadAccessSheetName);
   const hasSideMappingSheet = Boolean(settings.sideMappingSheetName);
+  const hasMeasurementSheet = Boolean(settings.measurementSheetName);
+  const sqmToSqftFactor = normalizeSqmToSqftFactor(settings.sqmToSqftFactor);
   const hasPdf = Boolean(settings.sourcePdfName);
   const hasLogo = Boolean(settings.logoName);
   const logoUrl = hasLogo
