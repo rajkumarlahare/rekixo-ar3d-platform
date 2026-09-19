@@ -1,122 +1,196 @@
 # Rekixo New Project Workflow — Production Contract
 
 Date: 2026-09-19
+Revision: Plot Measurement V2
 
-This is the canonical workflow for every new customer plot project. It replaces older instructions that normalized all projects to the Tiyansh 1200×2133 plane.
+This is the canonical workflow for present and future customer plot projects.
 
-## Core rule
+## Core rules
 
-Each project keeps its own masterplan dimensions. Plot polygons are stored as normalized 0..1 coordinates, so source resolution can change without changing geometry. Tiyansh is a locked reference project, not a coordinate template.
+- Every project keeps its own masterplan dimensions.
+- Plot polygons are stored in normalized 0..1 coordinates.
+- The masterplan image is the visual/mapping surface.
+- Plot metadata comes from verified source data, never visual proportion guesses.
+- Front means the road-facing plot boundary, not screen top/right/bottom/left.
+- Side measurements and side identity are separate data. They are bound only when geometry is known.
+- Existing geometry, Sold/Booked state and pricing must survive metadata correction imports.
 
 ## Normal onboarding path
 
-1. Create the client project and admin.
+1. Create client project and admin.
 2. Complete Project Profile.
-3. Upload the project's high-resolution masterplan image.
+3. Upload the high-resolution masterplan image.
 4. Upload project logo.
-5. Upload **one canonical Plot CSV/JSON** containing the complete verified plot inventory.
-6. Keep the sanctioned/technical PDF as the project reference.
-7. Map plot polygons on the masterplan, or use reviewed CAD assistance when a usable DWG/DXF exists.
-8. Confirm the Plot Data Quality card is complete.
-9. Review authenticated preview.
-10. Configure Share Builder and publish.
+5. Import verified Plot Data CSV/JSON for plot IDs, authoritative area, road and any known dimensions.
+6. When the PDF/image contains side measurements, prepare and upload the AI Measurement Manifest. This may be done immediately or later as a safe backfill.
+7. Keep the sanctioned/technical PDF as the project reference.
+8. Map normal four-corner plots with the Front-first workflow.
+9. Use irregular side assignment only for real exceptions.
+10. Confirm Plot Data Quality and source-review counters.
+11. Review authenticated preview and publish.
 
-## One canonical Plot CSV
+## Area conversion policy
 
-The normal new-project file should contain:
+Sq.M -> Sq.Ft is project-scoped.
+
+- Default: 10.7639.
+- A customer-specific business rule may override the factor without changing other projects.
+- Mangal Raj Park uses 10.76.
+- Sq.Yd is derived independently from the standard metric-to-yard conversion; changing Sq.M -> Sq.Ft must not silently redefine Sq.Yd.
+- Changing the project Sq.M -> Sq.Ft factor intentionally recalculates stored Sq.Ft from authoritative Sq.M for that project only.
+
+## Verified Plot Data
+
+The existing CSV/JSON schema remains backward compatible. It can contain:
 
 - Plot No / ID
 - Sqft and/or Sqm and/or Sqyd
 - Dimensions
 - Road Access
+- Front / Back / Depth A / Depth B
+- Dimension Unit (explicit m or ft)
+- optional legacy Front Direction
+- optional exact labels / Side Dimensions
+- Notes
+
+Front Direction is no longer required for the normal manual workflow. It remains a legacy/correction input for older projects and bulk direction-based repair.
+
+## AI Measurement Manifest
+
+This is the preferred safe bridge from a sanctioned PDF/image to side measurements, especially for an already-mapped project.
+
+It supports:
+
+- Plot No / ID
 - Front
 - Back
 - Depth A
 - Depth B
-- Dimension Unit (explicitly `m` or `ft`)
-- Front Direction (`top`, `right`, `bottom`, or `left` in the published masterplan view)
-- optional exact labels
-- optional Side Dimensions
-- Notes
+- Measurement Unit
+- exact display labels
+- Road Access
+- Side Measurements raw text
+- Source Ref / page
+- Source Raw Text
+- Confidence
+- Verified
 
-The downloadable Super Admin Plot CSV template is the schema reference.
+The importer updates only measurement/road metadata and the additive edge-measurement store. It must not alter polygon geometry, Sold/Booked state, featured state or pricing.
 
-### Why Front Direction is in the main file
+AI should transcribe source facts. It should not invent database edge indices.
 
-The mapper stores the road-facing direction before geometry exists. When a polygon is later mapped, Rekixo resolves Front / Back / Depth A / Depth B edges automatically. If geometry already exists when the CSV is imported, Rekixo applies the edge semantics immediately.
+## Front-first mapper
 
-Separate **Road Access CSV** and **Side Mapping CSV** are correction tools only. They are not required in the normal onboarding path.
+For a normal four-corner plot:
+
+1. Tap the first endpoint of the road-facing Front boundary.
+2. Tap the second endpoint of that same Front boundary.
+3. Continue around the plot in the same clockwise order for the remaining two corners.
+4. Rekixo binds:
+   - edge 0 = Front
+   - edge 1 = Depth A
+   - edge 2 = Back
+   - edge 3 = Depth B
+
+This binding is independent of screen rotation.
+
+Clone Previous preserves the source plot's semantic edge ordering so cloned geometry does not silently reinterpret Front.
+
+For irregular or corner-road plots, use the explicit edge assigner. Do not guess left/right from screen orientation.
+
+## Edge Measurement V2
+
+The `plot_edge_measurements` table is additive and future-proof.
+
+Each measurement may store:
+
+- role
+- segment index
+- actual polygon edge index
+- polygon point count
+- numeric length and unit
+- exact raw label
+- road-frontage flag
+- road access
+- source reference/raw source
+- confidence
+- verification state
+
+The old `front/back/depth/depth2` plot columns remain for backward compatibility. Public rendering prefers V2 edge-specific measurements when available.
+
+This allows future irregular plots where one semantic role can span more than one polygon segment.
+
+## Public customer UI
+
+The plot detail diagram uses the actual saved polygon.
+
+When canonical edge semantics and measurements exist, show the measurement on the corresponding actual edge, for example:
+
+- Front · 9 m
+- Back · 10 m
+- Depth A · 13.2 m
+- Depth B · 13.4 m
+
+Legacy projects still use the safe fallback renderer.
 
 ## Import safety
 
-A Plot CSV is preflighted before it is written.
-
-The parser:
+Plot Data preflight:
 
 - rejects duplicate Plot IDs;
-- requires a plot ID plus at least one area unit;
-- derives missing area units;
-- rejects contradictory supplied Sqft/Sqm/Sqyd values outside the configured tolerance;
-- never silently assumes feet when numeric side measurements have no explicit/inferable unit;
-- validates Front Direction;
-- reports missing Dimensions, Road Access, four-side measurements, and Front Direction;
-- identifies generic area-only rows that would make the customer drawer incomplete.
+- requires Plot ID plus at least one area unit;
+- derives missing area units with the current project conversion policy;
+- rejects contradictory area columns outside tolerance;
+- never silently assumes feet for unitless side measurements;
+- validates optional legacy Front Direction;
+- reports missing Dimensions, Road Access and four-side measurements.
 
-The operator sees the preflight report before import. Imported plot-sheet metadata preserves existing polygon geometry and Booked/Sold status.
+Missing Front Direction is advisory, not a rich-detail blocker, because Front-first mapping creates canonical side semantics from the actual polygon.
 
-## Source-of-truth rules
+Measurement Manifest import:
 
-- **Masterplan image:** visual and mapping surface.
-- **Plot CSV/JSON:** authoritative plot metadata.
-- **DWG/DXF:** optional engineering geometry assistant; never silently publish guessed matches.
-- **PDF:** sanctioned/technical reference. Do not silently OCR-guess unreadable measurements.
-- **D1:** live project/status data.
-- **R2:** source/generated assets.
-
-When a value cannot be read confidently from a sanctioned source, do not invent it. Leave it for review so the preflight/data-quality gate makes the gap visible before publish.
+- rejects unknown/duplicate Plot IDs;
+- requires at least one side measurement/label;
+- validates units;
+- stores source confidence/verification;
+- backfills edge binding when polygon semantics already exist;
+- leaves unresolved geometry binding nullable until mapping.
 
 ## Quality gates
 
-Super Admin shows a Plot Data Quality summary for:
+Super Admin should expose:
 
-- Dimensions
-- Road Access
-- Front/Back/Depth A/Depth B
-- Front Direction
-- mapped side semantics
+- Dimensions complete
+- Road Access complete
+- 4-side measurements complete
+- Front / side binding complete
+- mapped side semantics complete
+- Measurement Manifest verified count
+- Measurement Manifest review count
 
-Publish review also reports plot-detail quality warnings. Publishing with warnings requires an explicit operator confirmation. This avoids discovering missing plot detail only after a customer opens the public site.
+Low-confidence or unverified source rows remain visible for review instead of being silently treated as trusted.
 
-## Geometry and status safety
+## Source-of-truth rules
 
-Plot-sheet re-import must never silently:
+- Masterplan image: mapping/visual surface.
+- Plot Data: authoritative inventory and area/business metadata.
+- AI Measurement Manifest: source-backed side measurements and evidence.
+- DWG/DXF: optional geometry assistant.
+- PDF/image: sanctioned reference source.
+- D1: live structured/status data.
+- R2: source/generated assets.
 
-- delete mapped polygons;
-- reset Sold/Booked state;
-- overwrite pricing;
-- change another project's data.
+Never infer an unreadable side length from image proportions.
 
-All reads and writes remain project-scoped. The same canonical polygon drives 2D click targets and 3D selection.
-
-## AI / manual data preparation rule
-
-When preparing a CSV from a supplied PDF/image:
-
-1. Read the sanctioned reference at full available resolution.
-2. Transcribe plot number, approved area, all printed side lengths, road access, and road-facing direction.
-3. Cross-check area conversions mathematically.
-4. Never infer an unreadable side length from visual proportions.
-5. Run the resulting file through Rekixo preflight before import.
-6. Correct every reported gap that is verifiable from the source.
-7. Use the public preview as a final visual check, not as the first place errors are discovered.
-
-## Regression rule
+## Regression rules
 
 Do not reintroduce:
 
-- hard-coded 1200×2133 dimensions for new projects;
-- silent `ft` defaults;
-- mandatory separate Road Access/Side Mapping files for normal onboarding;
-- direct Plot CSV writes without preflight;
-- guessed PDF measurements;
-- tenant-specific plot metadata hardcodes.
+- a global Mangal-specific 10.76 conversion;
+- mandatory Front Direction for normal four-corner mapping;
+- screen-direction semantics as the definition of Front;
+- AI-generated edge indices before polygon geometry exists;
+- plot-sheet re-import that resets Sold/Booked or polygons;
+- measurement correction that changes status/pricing;
+- tenant UUID hardcodes where project-scoped settings are sufficient;
+- public dimension labels detached from their actual polygon edge.
