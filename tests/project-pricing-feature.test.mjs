@@ -67,7 +67,8 @@ test("public API attaches pricing only when project feature is ON", () => {
   assert.match(publicApi, /pricingEnabled[\s\S]*plotPricing/);
   assert.match(publicApi, /pricing:\s*\{/);
   assert.match(publicApi, /const \{ notes, \.\.\.publicPlot \} = plot/);
-  assert.match(publicApi, /edgeMeasurements/);\n  assert.match(publicApi, /\.\.\.\(price/);
+  assert.match(publicApi, /edgeMeasurements/);
+  assert.match(publicApi, /\.\.\.\(price/);
 });
 
 test("public drawer hides pricing by default and calculates base price from live plot area", () => {
