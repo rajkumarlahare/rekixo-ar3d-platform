@@ -2940,7 +2940,7 @@ export default function PlotMapper({
 
         <div className="mapper-normal-flow">
           <b>Normal new-project flow</b>
-          <span>Masterplan → one verified Plot Data file → map boundaries → quality check → preview → publish</span>
+          <span>Masterplan → verified Plot Data → AI measurement manifest when needed → front-first boundaries → quality check → preview → publish</span>
         </div>
 
         <div className="mapper-source-grid">
@@ -2972,7 +2972,7 @@ export default function PlotMapper({
             <span><FileText /></span>
             <div>
               <b>{hasPlotSheet ? `Plot Data · ${plots.length} plots` : "2. Verified Plot Data"}</b>
-              <small>{settings.plotSheetName || "ONE CSV/JSON: area + road + Front/Back/Depth A/Depth B + Front Direction"}</small>
+              <small>{settings.plotSheetName || "CSV/JSON: authoritative area + road + side sizes; Front Direction legacy/optional"}</small>
             </div>
             {hasPlotSheet && <CheckCircle2 className="mapper-ready-icon" />}
             <input
@@ -2988,10 +2988,27 @@ export default function PlotMapper({
             />
           </label>
 
+          <label className={`mapper-upload-card ${hasMeasurementSheet ? "ready" : ""}`}>
+            <span><Target /></span>
+            <div>
+              <b>{hasMeasurementSheet ? `AI measurements · ${settings.measurementSheetCount || "saved"}` : "3. AI Measurement Manifest"}</b>
+              <small>{settings.measurementSheetName || "CSV/JSON backfill: Front/Back/Depth + source ref + confidence; geometry/status untouched"}</small>
+            </div>
+            {hasMeasurementSheet && <CheckCircle2 className="mapper-ready-icon" />}
+            <input
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              disabled={busy}
+              onChange={(event) =>
+                event.target.files?.[0] && upload(event.target.files[0], "measurementSheet")
+              }
+            />
+          </label>
+
           <label className={`mapper-upload-card ${hasPdf ? "ready" : ""}`}>
             <span><FileText /></span>
             <div>
-              <b>{hasPdf ? "Technical PDF saved" : "3. Technical PDF reference"}</b>
+              <b>{hasPdf ? "Technical PDF saved" : "4. Technical PDF reference"}</b>
               <small>{settings.sourcePdfName || "Original sanctioned/technical sheet · reference only"}</small>
             </div>
             {hasPdf && <CheckCircle2 className="mapper-ready-icon" />}
@@ -3115,6 +3132,9 @@ export default function PlotMapper({
           <button type="button" className="primary" onClick={downloadPlotSheetTemplate}>
             <FileText /> Download verified Plot Data template
           </button>
+          <button type="button" onClick={downloadMeasurementTemplate}>
+            <Target /> Download AI Measurement Manifest template
+          </button>
           <small>
             New project ke liye bas isi canonical template ko fill/import karein. Correction templates Advanced section ke andar hain.
           </small>
@@ -3150,8 +3170,10 @@ export default function PlotMapper({
               <span>Dimensions <b>{plotQuality.dimensionsComplete}/{plotQuality.total}</b></span>
               <span>Road Access <b>{plotQuality.roadComplete}/{plotQuality.total}</b></span>
               <span>4-side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
-              <span>Front Direction <b>{plotQuality.frontDirectionsComplete}/{plotQuality.total}</b></span>
+              <span>Front / side binding <b>{plotQuality.frontDirectionsComplete}/{plotQuality.total}</b></span>
               <span>Mapped side semantics <b>{plotQuality.mappedSemanticsComplete}/{plotQuality.total}</b></span>
+              {hasMeasurementSheet && <span>Source verified <b>{settings.measurementSheetVerifiedCount || "0"}/{settings.measurementSheetCount || "0"}</b></span>}
+              {hasMeasurementSheet && <span>Source review <b>{settings.measurementSheetReviewCount || "0"}</b></span>}
             </div>
             {!plotQuality.richDetailReady && (
               <p>
