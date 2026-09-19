@@ -489,11 +489,12 @@ export async function POST(request: Request) {
       (kind === "sourceCad" && ["dwg", "dxf"].includes(extension)) ||
       (kind === "plotSheet" && ["csv", "json"].includes(extension)) ||
       (kind === "plotSheetPreflight" && ["csv", "json"].includes(extension)) ||
+      (kind === "measurementSheet" && ["csv", "json"].includes(extension)) ||
       (kind === "roadAccessSheet" && extension === "csv") ||
       (kind === "sideMappingSheet" && extension === "csv");
     if (!valid)
       return Response.json(
-        { error: "Image, PDF, DWG/DXF, plot CSV/JSON या Road Access CSV सही format में चुनें" },
+        { error: "Image, PDF, DWG/DXF, plot/measurement CSV/JSON ya correction CSV sahi format me choose karein" },
         { status: 400 },
       );
 
@@ -504,6 +505,7 @@ export async function POST(request: Request) {
       sourceCad: 25 * 1024 * 1024,
       plotSheet: 3 * 1024 * 1024,
       plotSheetPreflight: 3 * 1024 * 1024,
+      measurementSheet: 2 * 1024 * 1024,
       roadAccessSheet: 1 * 1024 * 1024,
       sideMappingSheet: 1 * 1024 * 1024,
     };
@@ -706,19 +708,6 @@ export async function POST(request: Request) {
       const rotation =
         rawRotation === 1 || rawRotation === 2 || rawRotation === 3 ? rawRotation : 0;
 
-      const opposite: Record<EdgeDirection, EdgeDirection> = {
-        top: "bottom",
-        right: "left",
-        bottom: "top",
-        left: "right",
-      };
-      const depthDirections: Record<EdgeDirection, [EdgeDirection, EdgeDirection]> = {
-        top: ["right", "left"],
-        right: ["bottom", "top"],
-        bottom: ["left", "right"],
-        left: ["top", "bottom"],
-      };
-
       const updates = rows.map((row) => {
         const stored = byId.get(row.id)!;
         let polygon: [number, number][];
@@ -730,24 +719,10 @@ export async function POST(request: Request) {
         if (!Array.isArray(polygon) || polygon.length < 4)
           throw new Error(`Plot ${row.id}: kam se kam 4-corner polygon chahiye`);
 
-        const backDirection = opposite[row.front];
-        const [depthADirection, depthBDirection] = depthDirections[row.front];
-        const front = edgeIndexForDisplayDirection(polygon, row.front, rotation);
-        const back = edgeIndexForDisplayDirection(polygon, backDirection, rotation);
-        const depthA = edgeIndexForDisplayDirection(polygon, depthADirection, rotation);
-        const depthB = edgeIndexForDisplayDirection(polygon, depthBDirection, rotation);
-        const selected = [front, back, depthA, depthB];
-
-        if (selected.some((edge) => edge == null) || new Set(selected).size !== 4)
+        const resolved = resolveFourSideEdges(polygon, row.front, rotation);
+        if (!resolved)
           throw new Error(`Plot ${row.id}: 4 distinct side edges resolve nahi hui`);
-
-        const edgeSemantics = serializePlotSideSemantics(polygon.length, {
-          front: [front!],
-          back: [back!],
-          depthA: [depthA!],
-          depthB: [depthB!],
-        });
-        return { id: row.id, front: front!, back: back!, depthA: depthA!, depthB: depthB!, edgeSemantics };
+        return { id: row.id, pointCount: polygon.length, ...resolved };
       });
 
       await env.DB.batch(
@@ -757,6 +732,7 @@ export async function POST(request: Request) {
           ).bind(row.front, row.back, row.depthA, row.depthB, row.edgeSemantics, now, projectId, row.id),
         ),
       );
+      await syncMeasurementBindings(projectId, updates, now);
 
       await env.BUCKET.put(objectKey, sourceText, {
         httpMetadata: { contentType: "text/csv; charset=utf-8" },
@@ -843,7 +819,9 @@ export async function POST(request: Request) {
     if (kind === "plotSheetPreflight") {
       let rows;
       try {
-        rows = parsePlotSheetText(await file.text(), file.name);
+        rows = parsePlotSheetText(await file.text(), file.name, {
+          sqmToSqftFactor: await projectSqmToSqftFactor(projectId),
+        });
       } catch (error) {
         return Response.json(
           { error: error instanceof Error ? error.message : "Plot sheet preflight parse nahi hui" },
@@ -881,7 +859,9 @@ export async function POST(request: Request) {
     if (kind === "plotSheet") {
       let rows;
       try {
-        rows = parsePlotSheetText(await file.text(), file.name);
+        rows = parsePlotSheetText(await file.text(), file.name, {
+          sqmToSqftFactor: await projectSqmToSqftFactor(projectId),
+        });
       } catch (error) {
         return Response.json(
           { error: error instanceof Error ? error.message : "Plot sheet parse nahi hui" },
@@ -961,29 +941,7 @@ export async function POST(request: Request) {
             ? rawRotation
             : 0;
         const mappedById = new Map(mappedRows.results.map((item) => [item.id, item]));
-        const opposite: Record<EdgeDirection, EdgeDirection> = {
-          top: "bottom",
-          right: "left",
-          bottom: "top",
-          left: "right",
-        };
-        const depthDirections: Record<
-          EdgeDirection,
-          [EdgeDirection, EdgeDirection]
-        > = {
-          top: ["right", "left"],
-          right: ["bottom", "top"],
-          bottom: ["left", "right"],
-          left: ["top", "bottom"],
-        };
-        const semanticUpdates: Array<{
-          id: string;
-          front: number;
-          back: number;
-          depthA: number;
-          depthB: number;
-          edgeSemantics: string;
-        }> = [];
+        const semanticUpdates: Array<EdgeBinding & { edgeSemantics: string }> = [];
 
         for (const row of directionRows) {
           const stored = mappedById.get(row.id);
@@ -995,46 +953,16 @@ export async function POST(request: Request) {
             continue;
           }
           if (!Array.isArray(polygon) || polygon.length < 4) continue;
-
-          const front = edgeIndexForDisplayDirection(
+          const resolved = resolveFourSideEdges(
             polygon,
             row.frontDirection as EdgeDirection,
             rotation,
           );
-          const back = edgeIndexForDisplayDirection(
-            polygon,
-            opposite[row.frontDirection as EdgeDirection],
-            rotation,
-          );
-          const [depthADirection, depthBDirection] =
-            depthDirections[row.frontDirection as EdgeDirection];
-          const depthA = edgeIndexForDisplayDirection(
-            polygon,
-            depthADirection,
-            rotation,
-          );
-          const depthB = edgeIndexForDisplayDirection(
-            polygon,
-            depthBDirection,
-            rotation,
-          );
-          const selected = [front, back, depthA, depthB];
-          if (selected.some((edge) => edge == null) || new Set(selected).size !== 4)
-            continue;
-          const edgeSemantics = serializePlotSideSemantics(polygon.length, {
-            front: [front!],
-            back: [back!],
-            depthA: [depthA!],
-            depthB: [depthB!],
-          });
-          if (!edgeSemantics) continue;
+          if (!resolved) continue;
           semanticUpdates.push({
             id: row.id,
-            front: front!,
-            back: back!,
-            depthA: depthA!,
-            depthB: depthB!,
-            edgeSemantics,
+            pointCount: polygon.length,
+            ...resolved,
           });
         }
 
@@ -1055,6 +983,7 @@ export async function POST(request: Request) {
               ),
             ),
           );
+          await syncMeasurementBindings(projectId, semanticUpdates, now);
           autoSideMapped = semanticUpdates.length;
         }
       }
