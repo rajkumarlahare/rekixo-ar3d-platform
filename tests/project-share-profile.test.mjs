@@ -15,7 +15,7 @@ test("share builder uses global AR3D branding and preserves the original source"
 
   assert.match(dashboard, /type WorkspaceTab = [^;]*"share"[^;]*;/);
   assert.ok(dashboard.includes("Share Builder"));
-  assert.ok(branding.includes('SHARE_TEMPLATE = "ar3d-global-brand-footer-v4"'));
+  assert.ok(branding.includes('SHARE_TEMPLATE = "ar3d-global-brand-footer-v5"'));
   assert.ok(manager.includes("SHARE IMAGE / WHATSAPP POSTER"));
   assert.ok(manager.includes('form.set("file", shareImageFile)'));
   assert.ok(manager.includes('form.set("sourceFile", shareSourceFile)'));
@@ -24,7 +24,7 @@ test("share builder uses global AR3D branding and preserves the original source"
   assert.ok(manager.includes("prepareBrandedShareImage"));
   assert.ok(manager.includes("canvas.height = height + footerHeight"));
   assert.ok(manager.includes("drawImageDerivedFooter"));
-  assert.ok(manager.includes("footerAverageColor"));
+  assert.ok(manager.includes("footerCornerColors"));
   assert.ok(manager.includes("AR3D footer auto"));
   assert.ok(manager.includes("GLOBAL_SHARE_BRAND_DATA_URL"));
   assert.ok(css.includes("ORIGINAL POSTER"));

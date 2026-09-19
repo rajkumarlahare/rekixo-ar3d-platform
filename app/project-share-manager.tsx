@@ -118,61 +118,137 @@ async function loadGlobalShareBrandBitmap() {
   return createImageBitmap(await response.blob());
 }
 
-function footerAverageColor(bitmap: ImageBitmap) {
-  const sampleWidth = 24;
-  const sampleHeight = 12;
-  const sourceSampleHeight = Math.max(
-    1,
-    Math.round(bitmap.height * GLOBAL_SHARE_BRAND.footerSampleRatio),
+function clampShareColor(value: number) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function lightenShareColor(
+  color: readonly [number, number, number],
+  amount: number,
+) {
+  return [
+    clampShareColor(color[0] + amount),
+    clampShareColor(color[1] + amount),
+    clampShareColor(color[2] + amount),
+  ] as const;
+}
+
+function shareColorCss(color: readonly [number, number, number]) {
+  return `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+}
+
+function footerCornerColors(bitmap: ImageBitmap) {
+  const sourceSampleWidth = Math.max(
+    GLOBAL_SHARE_BRAND.footerMinSamplePx,
+    Math.round(
+      bitmap.width * GLOBAL_SHARE_BRAND.footerCornerSampleWidthRatio,
+    ),
   );
+  const sourceSampleHeight = Math.max(
+    GLOBAL_SHARE_BRAND.footerMinSamplePx,
+    Math.round(
+      bitmap.height * GLOBAL_SHARE_BRAND.footerCornerSampleHeightRatio,
+    ),
+  );
+  const sourceX = Math.max(0, bitmap.width - sourceSampleWidth);
+  const sourceY = Math.max(0, bitmap.height - sourceSampleHeight);
+  const sampleSize = GLOBAL_SHARE_BRAND.footerAnalysisSizePx;
+
   const sampleCanvas = document.createElement("canvas");
-  sampleCanvas.width = sampleWidth;
-  sampleCanvas.height = sampleHeight;
+  sampleCanvas.width = sampleSize;
+  sampleCanvas.height = sampleSize;
   const sampleContext = sampleCanvas.getContext("2d", {
     alpha: true,
     willReadFrequently: true,
   });
-  if (!sampleContext) return GLOBAL_SHARE_BRAND.footerFallbackBackground;
 
+  if (!sampleContext) {
+    return {
+      base: GLOBAL_SHARE_BRAND.footerFallbackBackground,
+      lift: GLOBAL_SHARE_BRAND.footerFallbackBackground,
+    };
+  }
+
+  // Only the small bottom-right corner is sampled. We never reuse a full
+  // bottom strip, so people, shadows or objects elsewhere cannot leak into
+  // the branding footer.
   sampleContext.drawImage(
     bitmap,
-    0,
-    bitmap.height - sourceSampleHeight,
-    bitmap.width,
+    sourceX,
+    sourceY,
+    sourceSampleWidth,
     sourceSampleHeight,
     0,
     0,
-    sampleWidth,
-    sampleHeight,
+    sampleSize,
+    sampleSize,
   );
 
   try {
     const pixels = sampleContext.getImageData(
       0,
       0,
-      sampleWidth,
-      sampleHeight,
+      sampleSize,
+      sampleSize,
     ).data;
-    let red = 0;
-    let green = 0;
-    let blue = 0;
-    let weight = 0;
+    const visible: Array<[number, number, number, number]> = [];
 
     for (let index = 0; index < pixels.length; index += 4) {
       const alpha = pixels[index + 3] / 255;
       if (alpha < 0.08) continue;
-      red += pixels[index] * alpha;
-      green += pixels[index + 1] * alpha;
-      blue += pixels[index + 2] * alpha;
-      weight += alpha;
+      const red = pixels[index];
+      const green = pixels[index + 1];
+      const blue = pixels[index + 2];
+      const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+      visible.push([red, green, blue, luminance]);
     }
 
-    if (!weight) return GLOBAL_SHARE_BRAND.footerFallbackBackground;
-    return `rgb(${Math.round(red / weight)}, ${Math.round(
-      green / weight,
-    )}, ${Math.round(blue / weight)})`;
+    if (!visible.length) {
+      return {
+        base: GLOBAL_SHARE_BRAND.footerFallbackBackground,
+        lift: GLOBAL_SHARE_BRAND.footerFallbackBackground,
+      };
+    }
+
+    // Trim only luminance extremes so a tiny highlight or deep shadow in the
+    // selected corner cannot dominate the final footer tone.
+    visible.sort((left, right) => left[3] - right[3]);
+    const trim = Math.floor(
+      visible.length * GLOBAL_SHARE_BRAND.footerOutlierTrimRatio,
+    );
+    const stable =
+      trim > 0 && visible.length - trim * 2 >= 8
+        ? visible.slice(trim, visible.length - trim)
+        : visible;
+
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    for (const pixel of stable) {
+      red += pixel[0];
+      green += pixel[1];
+      blue += pixel[2];
+    }
+
+    const baseTuple = [
+      clampShareColor(red / stable.length),
+      clampShareColor(green / stable.length),
+      clampShareColor(blue / stable.length),
+    ] as const;
+    const liftTuple = lightenShareColor(
+      baseTuple,
+      GLOBAL_SHARE_BRAND.footerGradientLift,
+    );
+
+    return {
+      base: shareColorCss(baseTuple),
+      lift: shareColorCss(liftTuple),
+    };
   } catch {
-    return GLOBAL_SHARE_BRAND.footerFallbackBackground;
+    return {
+      base: GLOBAL_SHARE_BRAND.footerFallbackBackground,
+      lift: GLOBAL_SHARE_BRAND.footerFallbackBackground,
+    };
   }
 }
 
@@ -183,41 +259,16 @@ function drawImageDerivedFooter(
   imageHeight: number,
   footerHeight: number,
 ) {
-  const sourceSampleHeight = Math.max(
-    1,
-    Math.round(sourceBitmap.height * GLOBAL_SHARE_BRAND.footerSampleRatio),
-  );
-  const blurPx = Math.max(
-    GLOBAL_SHARE_BRAND.minFooterBlurPx,
-    Math.round(width * GLOBAL_SHARE_BRAND.footerBlurRatio),
-  );
-  const overscan = Math.max(blurPx * 2, 12);
-
-  context.fillStyle = footerAverageColor(sourceBitmap);
-  context.fillRect(0, imageHeight, width, footerHeight);
-
-  context.save();
-  context.beginPath();
-  context.rect(0, imageHeight, width, footerHeight);
-  context.clip();
-  context.filter = `blur(${blurPx}px) saturate(${GLOBAL_SHARE_BRAND.footerSaturation})`;
-  context.globalAlpha = GLOBAL_SHARE_BRAND.footerImageOpacity;
-  context.drawImage(
-    sourceBitmap,
+  const colors = footerCornerColors(sourceBitmap);
+  const gradient = context.createLinearGradient(
     0,
-    sourceBitmap.height - sourceSampleHeight,
-    sourceBitmap.width,
-    sourceSampleHeight,
-    -overscan,
-    imageHeight - overscan,
-    width + overscan * 2,
-    footerHeight + overscan * 2,
+    imageHeight,
+    0,
+    imageHeight + footerHeight,
   );
-  context.restore();
-
-  // A very light neutral veil keeps the global mark readable without turning
-  // the footer into a fixed white strip.
-  context.fillStyle = `rgba(255, 255, 255, ${GLOBAL_SHARE_BRAND.footerVeilOpacity})`;
+  gradient.addColorStop(0, colors.lift);
+  gradient.addColorStop(1, colors.base);
+  context.fillStyle = gradient;
   context.fillRect(0, imageHeight, width, footerHeight);
 }
 
