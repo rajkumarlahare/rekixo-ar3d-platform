@@ -731,6 +731,13 @@ export default function PlotMapper({
   useEffect(() => {
     if (!frontFirstPendingRef.current || shape !== "quad" || points.length !== 4) return;
     frontFirstPendingRef.current = false;
+    if (
+      [frontEdgeIndex, backEdgeIndex, depthEdgeIndex, depth2EdgeIndex].some(
+        (value) => value.trim() !== "",
+      )
+    ) {
+      return;
+    }
     const resolved = frontFirstFourSideEdges(4);
     if (!resolved) return;
     setFrontEdgeIndex(String(resolved.front));
@@ -738,7 +745,15 @@ export default function PlotMapper({
     setDepthEdgeIndex(String(resolved.depthA));
     setDepth2EdgeIndex(String(resolved.depthB));
     notify("Front-first mapping applied: pehli tapped boundary = road-facing Front");
-  }, [points.length, shape]);
+  }, [
+    backEdgeIndex,
+    depth2EdgeIndex,
+    depthEdgeIndex,
+    frontEdgeIndex,
+    notify,
+    points.length,
+    shape,
+  ]);
 
 
   useLayoutEffect(() => {
