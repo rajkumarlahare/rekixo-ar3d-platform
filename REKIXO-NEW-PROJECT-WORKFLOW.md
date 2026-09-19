@@ -39,6 +39,12 @@ Sq.M -> Sq.Ft is project-scoped.
 - Sq.Yd is derived independently from the standard metric-to-yard conversion; changing Sq.M -> Sq.Ft must not silently redefine Sq.Yd.
 - Changing the project Sq.M -> Sq.Ft factor intentionally recalculates stored Sq.Ft from authoritative Sq.M for that project only.
 
+## Compatibility contract
+
+The existing **one canonical Plot CSV/JSON** remains the authoritative inventory/business-data sheet. The optional AI Measurement Manifest is a source-evidence backfill layer; it does not replace the canonical Plot Data file.
+
+Do not invent unreadable dimensions, road-facing sides, or source facts. New projects must keep their own coordinate system; never reintroduce hard-coded 1200×2133 dimensions outside the locked legacy Tiyansh fallback.
+
 ## Verified Plot Data
 
 The existing CSV/JSON schema remains backward compatible. It can contain:
