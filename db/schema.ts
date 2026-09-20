@@ -60,13 +60,19 @@ export const gallery = sqliteTable("gallery", { projectId:text("project_id").not
 export const loginAttempts = sqliteTable("login_attempts", { key:text("key").primaryKey(), attempts:integer("attempts").notNull().default(0), windowStart:integer("window_start").notNull() });
 export const adminUsers = sqliteTable("admin_users", {
   id:text("id").primaryKey(), email:text("email").notNull().unique(), name:text("name").notNull(),
+  loginType:text("login_type").notNull().default("email"),
+  loginId:text("login_id"),
+  mobile:text("mobile"),
   projectId:text("project_id").notNull().references(()=>projects.id),
   role:text("role").notNull().default("client_admin"), passwordHash:text("password_hash").notNull(),
   passwordSalt:text("password_salt").notNull(), status:text("status").notNull().default("active"),
   mustChangePassword:integer("must_change_password",{mode:"boolean"}).notNull().default(true),
   sessionVersion:integer("session_version").notNull().default(1), passwordChangedAt:text("password_changed_at"),
   createdAt:text("created_at").notNull(), updatedAt:text("updated_at").notNull(), lastLoginAt:text("last_login_at")
-});
+},table=>({
+  loginIdIndex:index("idx_admin_users_login_id").on(table.loginId),
+  mobileIndex:index("idx_admin_users_mobile").on(table.mobile)
+}));
 export const projectMemberships = sqliteTable("project_memberships", {
   userId:text("user_id").notNull().references(()=>adminUsers.id),
   projectId:text("project_id").notNull().references(()=>projects.id),
