@@ -13,7 +13,7 @@ export async function POST(request:Request){
   const hash=await hashAdminPassword(password),now=new Date().toISOString(),nextVersion=session.sessionVersion+1;
   await env.DB.batch([
     env.DB.prepare("UPDATE admin_users SET password_hash=?, password_salt=?, must_change_password=0, session_version=?, password_changed_at=?, updated_at=? WHERE id=? AND project_id=?").bind(hash.passwordHash,hash.passwordSalt,nextVersion,now,now,session.id,session.projectId),
-    env.DB.prepare("INSERT INTO audit_logs (id,actor_id,actor_email,action,project_id,target_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(),session.id,session.email,"client.password_changed",session.projectId,session.id,"{}",now)
+    env.DB.prepare("INSERT INTO audit_logs (id,actor_id,actor_email,action,project_id,target_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(),session.id,session.loginId||session.email,"client.password_changed",session.projectId,session.id,"{}",now)
   ]);
   return Response.json({ok:true},{headers:{"set-cookie":await sessionCookie({...session,sessionVersion:nextVersion,mustChangePassword:false,exp:Date.now()+8*60*60*1000}),"cache-control":"no-store"}});
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { Building2, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
+import { Building2, Eye, EyeOff, LockKeyhole, Mail, Phone } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { LOGIN_CRITICAL_CSS } from "./login-critical";
 
 type LoginFormProps = {
   mode: "super" | "client";
+  loginType?: "email" | "mobile" | "mixed";
   projectId?: string;
   projectSlug?: string;
   projectName?: string;
@@ -17,6 +18,7 @@ type LoginFormProps = {
 
 export default function LoginForm({
   mode,
+  loginType = "mixed",
   projectId = "",
   projectSlug = "",
   projectName = "",
@@ -25,12 +27,27 @@ export default function LoginForm({
   backPath = "",
   initialError = "",
 }: LoginFormProps) {
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState(initialError);
   const [busy, setBusy] = useState(false);
   const isSuper = mode === "super";
+  const effectiveLoginType = isSuper ? "email" : loginType;
+  const loginLabel =
+    effectiveLoginType === "mobile"
+      ? "MOBILE NUMBER"
+      : effectiveLoginType === "email"
+        ? "EMAIL ADDRESS"
+        : "EMAIL OR MOBILE NUMBER";
+  const loginPlaceholder =
+    effectiveLoginType === "mobile"
+      ? "9876543210"
+      : effectiveLoginType === "email"
+        ? isSuper
+          ? "owner@rekixo.com"
+          : "client@example.com"
+        : "Email or mobile number";
   const tenantLabel = projectName.trim() || projectSlug.trim() || "Your project";
   const resolvedBackPath =
     backPath || (projectSlug ? `/projects/${encodeURIComponent(projectSlug)}` : "/");
@@ -47,7 +64,7 @@ export default function LoginForm({
       const response = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password, projectId, projectSlug }),
+        body: JSON.stringify({ loginId, password, projectId, projectSlug }),
       });
       const result = await response.json().catch(() => ({ error: "Login failed" }));
       if (response.ok) {
@@ -80,21 +97,22 @@ export default function LoginForm({
             <input type="hidden" name="successPath" value={successPath} />
             <input type="hidden" name="changePasswordPath" value={changePasswordPath} />
             <input type="hidden" name="returnPath" value={resolvedLoginPath} />
-            <label htmlFor="login-email">
-              <span>EMAIL ADDRESS</span>
+            <label htmlFor="login-id">
+              <span>{loginLabel}</span>
               <div className="login-input">
-                <Mail aria-hidden="true" />
+                {effectiveLoginType === "mobile" ? <Phone aria-hidden="true" /> : <Mail aria-hidden="true" />}
                 <input
-                  id="login-email"
-                  name="email"
-                  type="email"
+                  id="login-id"
+                  name="loginId"
+                  type={effectiveLoginType === "email" ? "email" : effectiveLoginType === "mobile" ? "tel" : "text"}
+                  inputMode={effectiveLoginType === "mobile" ? "tel" : effectiveLoginType === "email" ? "email" : "text"}
                   required
                   autoComplete="username"
                   autoCapitalize="none"
                   spellCheck={false}
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder={isSuper ? "owner@rekixo.com" : "client@example.com"}
+                  value={loginId}
+                  onChange={(event) => setLoginId(event.target.value)}
+                  placeholder={loginPlaceholder}
                 />
               </div>
             </label>

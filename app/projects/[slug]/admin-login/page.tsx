@@ -2,12 +2,12 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getAdminSession, panelMode } from "../../../admin-auth";
 import LoginForm from "../../../admin/login/login-form";
-import { isPlatformAccessHost, projectBySlug } from "../../../project-context";
+import { clientLoginModeForProject, isPlatformAccessHost, projectBySlug } from "../../../project-context";
 
 export const dynamic = "force-dynamic";
 
 function loginError(code:string|undefined){
-  if(code==="invalid")return "Email ya password galat hai.";
+  if(code==="invalid")return "Login ID ya password galat hai.";
   if(code==="rate")return "Too many attempts. 15 minutes baad try karein.";
   if(code==="origin")return "Login request reject hua. Page reload karke dobara try karein.";
   return "";
@@ -25,10 +25,12 @@ export default async function ProjectAdminLoginPage({ params, searchParams }: { 
     redirect(`/projects/${encodeURIComponent(project.slug)}/admin`);
   }
   const base = `/projects/${encodeURIComponent(project.slug)}`;
+  const loginType=await clientLoginModeForProject(project.id);
   const query=await searchParams;
   return (
     <LoginForm
       mode="client"
+      loginType={loginType}
       projectId={project.id}
       projectSlug={project.slug}
       projectName={project.name}

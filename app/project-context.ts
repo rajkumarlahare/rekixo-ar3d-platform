@@ -4,6 +4,7 @@ import {
   platformSlugFromHost,
   type DomainKind,
 } from "./domain-utils";
+import type { ClientLoginType } from "./client-login-identity";
 
 export const DEFAULT_PROJECT_ID = "tiyansh-prime-square";
 
@@ -44,6 +45,17 @@ export function isPlatformAccessHost(hostValue: string) {
     host === legacyFallbackHost() ||
     host === clientPlatformHost()
   );
+}
+
+export async function clientLoginModeForProject(
+  projectId: string,
+): Promise<ClientLoginType> {
+  const row = await env.DB.prepare(
+    "SELECT value FROM settings WHERE project_id=? AND key='clientLoginMode' LIMIT 1",
+  )
+    .bind(projectId)
+    .first<{ value: string }>();
+  return row?.value === "mobile" ? "mobile" : "email";
 }
 
 type ProjectRow = {
