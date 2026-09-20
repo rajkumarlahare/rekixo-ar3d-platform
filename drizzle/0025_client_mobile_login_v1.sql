@@ -11,7 +11,7 @@ SET login_type='email',
     login_id=lower(trim(email))
 WHERE login_id IS NULL OR trim(login_id)='';
 
-CREATE INDEX IF NOT EXISTS idx_admin_users_login_id
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_login_id
 ON admin_users(login_id);
 
 CREATE INDEX IF NOT EXISTS idx_admin_users_mobile
