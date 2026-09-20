@@ -70,7 +70,7 @@ export const adminUsers = sqliteTable("admin_users", {
   sessionVersion:integer("session_version").notNull().default(1), passwordChangedAt:text("password_changed_at"),
   createdAt:text("created_at").notNull(), updatedAt:text("updated_at").notNull(), lastLoginAt:text("last_login_at")
 },table=>({
-  loginIdIndex:index("idx_admin_users_login_id").on(table.loginId),
+  loginIdIndex:uniqueIndex("idx_admin_users_login_id").on(table.loginId),
   mobileIndex:index("idx_admin_users_mobile").on(table.mobile)
 }));
 export const projectMemberships = sqliteTable("project_memberships", {
