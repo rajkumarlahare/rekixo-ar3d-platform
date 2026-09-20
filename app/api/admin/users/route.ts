@@ -3,14 +3,19 @@ import { hashAdminPassword,requireSuperAdmin,sameOrigin } from "../../../admin-a
 import { writeAudit } from "../../../audit";
 import { upsertPrimaryProjectDomain } from "../../../project-domains";
 import { provisionClientAccess } from "../../../project-provisioning";
-import { clientFallbackHost } from "../../../project-context";
+import { clientFallbackHost,clientLoginModeForProject } from "../../../project-context";
 import { currentProjectLinks } from "../../../project-links";
 import { validClientPassword } from "../../../client-password-policy";
+import {
+  internalEmailForMobile,
+  normalizeClientLoginId,
+  type ClientLoginType,
+} from "../../../client-login-identity";
 
 const unauthorized=()=>Response.json({error:"Super Admin access required"},{status:403});
-const emailPattern=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const hostPattern=/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-type UserRow={id:string;email:string;name:string;role:string;status:string;mustChangePassword:number;createdAt:string;updatedAt:string;lastLoginAt:string|null;projectId:string;projectName:string;projectSlug:string;publicHost:string|null;adminHost:string|null};
+type UserRow={id:string;email:string;loginType:ClientLoginType;loginId:string|null;mobile:string|null;name:string;role:string;status:string;mustChangePassword:number;createdAt:string;updatedAt:string;lastLoginAt:string|null;projectId:string;projectName:string;projectSlug:string;publicHost:string|null;adminHost:string|null};
+type ProjectRow={id:string;name:string;slug:string;kind:string;publicHost:string|null;adminHost:string|null;status:string;deletedAt:string|null;adminCount:number;loginMode:string};
 const cleanHost=(value:unknown)=>{const host=String(value||"").trim().toLowerCase().replace(/^https?:\/\//,"").replace(/\/.*/,"").replace(/\.$/,"");return host||null};
 const validHost=(host:string|null)=>!host||hostPattern.test(host);
 const slugify=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,48)||"project";
@@ -20,25 +25,50 @@ const isGeoLab=async(projectId:string)=>Boolean(await env.DB.prepare("SELECT 1 F
 export async function GET(){
   const actor=await requireSuperAdmin();if(!actor)return unauthorized();
   const [result,projects,audits,archived]=await Promise.all([
-    env.DB.prepare("SELECT u.id,u.email,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC").all<UserRow>(),
-    env.DB.prepare("SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' GROUP BY p.id ORDER BY p.created_at DESC").all(),
+    env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC").all<UserRow>(),
+    env.DB.prepare("SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' GROUP BY p.id ORDER BY p.created_at DESC").all<ProjectRow>(),
     env.DB.prepare("SELECT action,actor_email AS actorEmail,project_id AS projectId,target_id AS targetId,created_at AS createdAt FROM audit_logs ORDER BY created_at DESC LIMIT 50").all(),
     env.DB.prepare("SELECT p.id,p.name,p.kind,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status='deleted' GROUP BY p.id ORDER BY p.deleted_at DESC,p.updated_at DESC").all()
   ]);
-  return Response.json({users:result.results.map(user=>({...user,adminUrl:clientAdminUrl(user.projectSlug,user.adminHost)})),projects:projects.results,archivedProjects:archived.results,audits:audits.results,clientAdminUrl:clientAdminUrl()},{headers:{"cache-control":"no-store"}});
+  return Response.json({
+    users:result.results.map(user=>({
+      ...user,
+      loginType:user.loginType==="mobile"?"mobile":"email",
+      loginId:user.loginId||user.email,
+      email:user.loginType==="mobile"?null:user.email,
+      adminUrl:clientAdminUrl(user.projectSlug,user.adminHost),
+    })),
+    projects:projects.results.map(project=>({...project,loginMode:project.loginMode==="mobile"?"mobile":"email"})),
+    archivedProjects:archived.results,
+    audits:audits.results,
+    clientAdminUrl:clientAdminUrl()
+  },{headers:{"cache-control":"no-store"}});
 }
 
 export async function POST(request:Request){
   const actor=await requireSuperAdmin();if(!actor)return unauthorized();if(!sameOrigin(request))return Response.json({error:"Invalid request origin"},{status:403});
-  const body=await request.json().catch(()=>({})) as {email?:string;name?:string;password?:string;projectId?:string;projectName?:string;publicHost?:string;adminHost?:string};
-  const email=String(body.email||"").trim().toLowerCase(),name=String(body.name||"").trim(),password=String(body.password||""),projectName=String(body.projectName||"").trim(),publicHost=cleanHost(body.publicHost),adminHost=cleanHost(body.adminHost);
-  if(!emailPattern.test(email)||name.length<2||name.length>80||!validClientPassword(password)||!validHost(publicHost)||!validHost(adminHost))return Response.json({error:"Valid details aur 8+ character password with letter + number required"},{status:400});
-  if(email===(env as unknown as Record<string,string>).ADMIN_EMAIL?.toLowerCase())return Response.json({error:"Owner email client account me use nahi ho sakta"},{status:409});
-  if(await env.DB.prepare("SELECT id FROM admin_users WHERE email=? LIMIT 1").bind(email).first())return Response.json({error:"Is email ka account pehle se hai"},{status:409});
-  let projectId=String(body.projectId||"").trim(),resolvedName=projectName,resolvedSlug="";
-  if(projectId){const project=await env.DB.prepare("SELECT id,name,slug,status FROM projects WHERE id=? AND status!='deleted' LIMIT 1").bind(projectId).first<{id:string;name:string;slug:string;status:string}>();if(!project)return Response.json({error:"Existing project nahi mila"},{status:404});resolvedName=project.name;resolvedSlug=project.slug}
-  else {if(projectName.length<2||projectName.length>100)return Response.json({error:"Project name required"},{status:400});projectId=crypto.randomUUID()}
-  const id=crypto.randomUUID(),now=new Date().toISOString(),hash=await hashAdminPassword(password),slug=resolvedSlug||`${slugify(resolvedName)}-${projectId.slice(0,6)}`;
+  const body=await request.json().catch(()=>({})) as {loginId?:string;email?:string;name?:string;password?:string;projectId?:string;projectName?:string;publicHost?:string;adminHost?:string};
+  const name=String(body.name||"").trim(),password=String(body.password||""),projectName=String(body.projectName||"").trim(),publicHost=cleanHost(body.publicHost),adminHost=cleanHost(body.adminHost);
+  if(name.length<2||name.length>80||!validClientPassword(password)||!validHost(publicHost)||!validHost(adminHost))return Response.json({error:"Valid details aur 8+ character password with letter + number required"},{status:400});
+
+  let projectId=String(body.projectId||"").trim(),resolvedName=projectName,resolvedSlug="",loginType:ClientLoginType="mobile";
+  if(projectId){
+    const project=await env.DB.prepare("SELECT id,name,slug,status FROM projects WHERE id=? AND status!='deleted' LIMIT 1").bind(projectId).first<{id:string;name:string;slug:string;status:string}>();
+    if(!project)return Response.json({error:"Existing project nahi mila"},{status:404});
+    resolvedName=project.name;resolvedSlug=project.slug;loginType=await clientLoginModeForProject(projectId);
+  }else{
+    if(projectName.length<2||projectName.length>100)return Response.json({error:"Project name required"},{status:400});
+    projectId=crypto.randomUUID();
+    loginType="mobile";
+  }
+
+  const loginId=normalizeClientLoginId(loginType,body.loginId??body.email);
+  if(!loginId)return Response.json({error:loginType==="mobile"?"Valid mobile number required — 10 digit India number ya +country code use karein":"Valid client email required"},{status:400});
+  if(loginType==="email"&&loginId===(env as unknown as Record<string,string>).ADMIN_EMAIL?.toLowerCase())return Response.json({error:"Owner email client account me use nahi ho sakta"},{status:409});
+  const duplicate=await env.DB.prepare("SELECT id FROM admin_users WHERE login_id=? OR ((login_type='email' OR login_type IS NULL) AND lower(email)=?) LIMIT 1").bind(loginId,loginId).first();
+  if(duplicate)return Response.json({error:"Is login ID ka account pehle se hai"},{status:409});
+
+  const id=crypto.randomUUID(),email=loginType==="email"?loginId:internalEmailForMobile(id),mobile=loginType==="mobile"?loginId:null,now=new Date().toISOString(),hash=await hashAdminPassword(password),slug=resolvedSlug||`${slugify(resolvedName)}-${projectId.slice(0,6)}`;
   try{
     await provisionClientAccess({
       createProject: !body.projectId,
@@ -47,19 +77,22 @@ export async function POST(request:Request){
       projectSlug: slug,
       adminId: id,
       email,
+      loginType,
+      loginId,
+      mobile,
       name,
       password: hash,
       actor,
-      auditDetails: {email,projectName: resolvedName,publicHost,adminHost},
+      auditDetails: {loginType,loginId,projectName: resolvedName,publicHost,adminHost},
       publicHost,
       adminHost,
       now,
     });
   }catch(error){
     console.error("Client project create failed",error);
-    return Response.json({error:"Email, project slug ya domain pehle se use ho raha hai"},{status:409});
+    return Response.json({error:"Login ID, project slug ya domain pehle se use ho raha hai"},{status:409});
   }
-  return Response.json({user:{id,email,name,projectId,projectName:resolvedName,projectSlug:slug,publicHost,adminHost,role:"client_admin",status:"active",mustChangePassword:true,createdAt:now,updatedAt:now,lastLoginAt:null,adminUrl:clientAdminUrl(slug,adminHost)},clientAdminUrl:clientAdminUrl(slug,adminHost)},{status:201});
+  return Response.json({user:{id,email:loginType==="email"?email:null,loginType,loginId,mobile,name,projectId,projectName:resolvedName,projectSlug:slug,publicHost,adminHost,role:"client_admin",status:"active",mustChangePassword:true,createdAt:now,updatedAt:now,lastLoginAt:null,adminUrl:clientAdminUrl(slug,adminHost)},clientAdminUrl:clientAdminUrl(slug,adminHost)},{status:201});
 }
 
 export async function PATCH(request:Request){
