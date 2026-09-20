@@ -4,6 +4,7 @@ import { authenticateAdmin,sameOrigin,sessionCookie } from "../../../admin-auth"
 const WINDOW=15*60*1000,MAX=5;
 
 type LoginInput={
+  loginId?:string;
   email?:string;
   password?:string;
   projectId?:string;
@@ -13,8 +14,8 @@ type LoginInput={
   returnPath?:string;
 };
 
-async function keyFor(request:Request,email:string){
-  const ip=request.headers.get("cf-connecting-ip")||"unknown",raw=new TextEncoder().encode(`${ip}:${email}`),hash=await crypto.subtle.digest("SHA-256",raw);
+async function keyFor(request:Request,identifier:string){
+  const ip=request.headers.get("cf-connecting-ip")||"unknown",raw=new TextEncoder().encode(`${ip}:${identifier.trim().toLowerCase()}`),hash=await crypto.subtle.digest("SHA-256",raw);
   return Array.from(new Uint8Array(hash)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 
@@ -28,6 +29,7 @@ async function loginInput(request:Request):Promise<{body:LoginInput;nativeForm:b
   if(nativeForm){
     const form=await request.formData();
     return {nativeForm,body:{
+      loginId:String(form.get("loginId")||form.get("email")||""),
       email:String(form.get("email")||""),
       password:String(form.get("password")||""),
       projectId:String(form.get("projectId")||""),
@@ -68,18 +70,18 @@ export async function POST(request:Request){
 
   if(!sameOrigin(request))return loginFailure(request,parsed.nativeForm,returnPath,"Invalid request origin",403,"origin");
 
-  const email=String(body.email||"").trim().toLowerCase(),key=await keyFor(request,email),now=Date.now(),db=env.DB,host=(request.headers.get("host")||new URL(request.url).host).toLowerCase().split(":")[0];
+  const identifier=String(body.loginId||body.email||"").trim(),key=await keyFor(request,identifier),now=Date.now(),db=env.DB,host=(request.headers.get("host")||new URL(request.url).host).toLowerCase().split(":")[0];
   const row=await db.prepare("SELECT attempts, window_start AS windowStart FROM login_attempts WHERE key = ?").bind(key).first<{attempts:number;windowStart:number}>();
 
   if(row&&now-row.windowStart<WINDOW&&row.attempts>=MAX){
     return loginFailure(request,parsed.nativeForm,returnPath,"Too many attempts. 15 minutes baad try karein.",429,"rate");
   }
 
-  const session=await authenticateAdmin(email,String(body.password||""),host,{projectId:String(body.projectId||""),projectSlug:String(body.projectSlug||"")});
+  const session=await authenticateAdmin(identifier,String(body.password||""),host,{projectId:String(body.projectId||""),projectSlug:String(body.projectSlug||"")});
   if(!session){
     if(!row||now-row.windowStart>=WINDOW)await db.prepare("INSERT INTO login_attempts (key, attempts, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts=1, window_start=excluded.window_start").bind(key,now).run();
     else await db.prepare("UPDATE login_attempts SET attempts=attempts+1 WHERE key=?").bind(key).run();
-    return loginFailure(request,parsed.nativeForm,returnPath,"Email ya password galat hai.",401,"invalid");
+    return loginFailure(request,parsed.nativeForm,returnPath,"Login ID ya password galat hai.",401,"invalid");
   }
 
   await db.batch([
@@ -95,7 +97,7 @@ export async function POST(request:Request){
   }
 
   return Response.json(
-    {ok:true,mustChangePassword:session.mustChangePassword,user:{name:session.name,email:session.email,role:session.role}},
+    {ok:true,mustChangePassword:session.mustChangePassword,user:{name:session.name,loginId:session.loginId||session.email,loginType:session.loginType||"email",role:session.role}},
     {headers:{"set-cookie":cookie,"cache-control":"no-store"}},
   );
 }
