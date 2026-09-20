@@ -17,6 +17,9 @@ type ProvisionClientAccessInput = {
   projectSlug: string;
   adminId: string;
   email: string;
+  loginType: "email" | "mobile";
+  loginId: string;
+  mobile: string | null;
   name: string;
   password: PasswordHash;
   actor: { id: string; email: string };
@@ -67,6 +70,7 @@ function defaultProjectSettings(projectName: string) {
     shareDescription: `Explore ${projectName} with AR 3D interactive plot visualization.`,
     shareTemplate: SHARE_TEMPLATE,
     plotFrontDirections: "{}",
+    clientLoginMode: "mobile",
   };
 }
 
@@ -226,11 +230,14 @@ export async function provisionClientAccess(input: ProvisionClientAccessInput) {
 
   statements.push(
     env.DB.prepare(
-      "INSERT INTO admin_users (id,email,name,project_id,role,password_hash,password_salt,status,must_change_password,session_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT INTO admin_users (id,email,name,login_type,login_id,mobile,project_id,role,password_hash,password_salt,status,must_change_password,session_version,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     ).bind(
       input.adminId,
       input.email,
       input.name,
+      input.loginType,
+      input.loginId,
+      input.mobile,
       input.projectId,
       "client_admin",
       input.password.passwordHash,
