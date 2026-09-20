@@ -21,7 +21,7 @@ export default async function ProjectAdminPage({ params }: { params: Promise<{ s
   if (session.mustChangePassword) redirect(`${base}/change-password`);
   return (
     <AdminDashboard
-      user={{ name: session.name, email: session.email, role: "client_admin" }}
+      user={{ name: session.name, email: session.loginId || session.email, role: "client_admin" }}
       signOut={`/api/admin/logout?returnTo=${encodeURIComponent(`${base}/admin-login`)}`}
       projectId={project.id}
       publicSiteHref={base}
