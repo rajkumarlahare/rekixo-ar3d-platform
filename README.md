@@ -57,7 +57,8 @@ Step 1 changes repository identity only. The existing production source layout r
 
 Important current areas:
 
-- `app/` — application, Super Admin, Client Admin, mapper, public project routes and APIs
+- `app/` — Next/Vinext route and runtime entrypoints
+- `modules/` — stable bounded interfaces for Auth, Projects, Domains, Plots, Mapper, Geo, Pricing, DB, Super Admin, Client Admin and Public Project
 - `db/` — Drizzle schema/runtime access
 - `drizzle/` — production D1 migration history
 - `public/project/` — generic customer project runtime assets
@@ -66,7 +67,7 @@ Important current areas:
 - `tests/` — regression contracts
 - `.github/workflows/` — CI/CD
 
-Physical modularization into clearer app/package boundaries is a separate architecture phase and must preserve production behavior.
+Stage 2 establishes stable `@/modules/*` boundaries before any risky physical route moves. See [docs/STAGE-2-MODULARIZATION.md](./docs/STAGE-2-MODULARIZATION.md). Future physical moves must preserve these interfaces and production behavior.
 
 ## Development
 
