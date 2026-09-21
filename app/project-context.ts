@@ -5,8 +5,10 @@ import {
   type DomainKind,
 } from "./domain-utils";
 import type { ClientLoginType } from "./client-login-identity";
-
-export const DEFAULT_PROJECT_ID = "tiyansh-prime-square";
+import {
+  LEGACY_TIYANSH_PROJECT_ID,
+  isLegacyTiyanshHost,
+} from "./legacy-tiyansh-compat";
 
 const cfg = () => env as unknown as Record<string, string>;
 
@@ -24,12 +26,6 @@ export function clientFallbackHost() {
   );
 }
 
-export function legacyFallbackHost() {
-  return normalizeHost(
-    cfg().LEGACY_FALLBACK_HOST || "tiyansh-prime-square.ai-8f3.workers.dev",
-  );
-}
-
 export function clientPlatformHost() {
   return normalizeHost(cfg().CLIENT_PLATFORM_HOST || "");
 }
@@ -42,7 +38,6 @@ export function isPlatformAccessHost(hostValue: string) {
   const host = normalizeHost(hostValue);
   return (
     host === clientFallbackHost() ||
-    host === legacyFallbackHost() ||
     host === clientPlatformHost()
   );
 }
@@ -154,8 +149,8 @@ export async function publicProjectId(request: Request): Promise<string | null> 
     if (project) return project.id;
   }
 
-  if (host === legacyFallbackHost()) {
-    const project = await projectById(DEFAULT_PROJECT_ID);
+  if (isLegacyTiyanshHost(host)) {
+    const project = await projectById(LEGACY_TIYANSH_PROJECT_ID);
     if (project) return project.id;
   }
 
@@ -203,8 +198,8 @@ export async function projectHostRole(hostValue: string) {
     };
   }
 
-  if (host === legacyFallbackHost())
-    return { projectId: DEFAULT_PROJECT_ID, role: "public" as const };
+  if (isLegacyTiyanshHost(host))
+    return { projectId: LEGACY_TIYANSH_PROJECT_ID, role: "public" as const };
 
   return null;
 }
