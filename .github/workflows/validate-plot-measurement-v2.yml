@@ -1,8 +1,10 @@
 name: Validate Rekixo AR3D Platform
 
 on:
-  pull_request:
-    branches: [main]
+  # Validate every feature-branch commit directly. The production main branch
+  # has its own deploy workflow with the same full regression suite.
+  push:
+    branches-ignore: [main]
   workflow_dispatch:
 
 permissions:
