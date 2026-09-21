@@ -11,9 +11,10 @@ type EngineProject = {
 };
 
 type EngineStatusPayload = {
+  contractVersion?: number;
   project: EngineProject;
-  scenes?: Array<{ id: string; enabled: boolean; type: string }>;
-  activeModel?: { id: string; available: boolean };
+  enabledSceneCount?: number;
+  activeModelAvailable?: boolean;
 };
 
 export type Project3DLink = {
@@ -74,9 +75,13 @@ async function fetchEngineJson(url: string, timeoutMs = 2500) {
 export async function engineProjectStatus(slug: string) {
   const clean = String(slug || "").trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(clean)) return null;
-  const url = new URL("/3Dprojects/api/status", engineAdminOrigin());
-  url.searchParams.set("slug", clean);
-  return fetchEngineJson(url.toString());
+  const url = new URL(
+    `/3Dprojects/api/integration/projects/${encodeURIComponent(clean)}`,
+    engineAdminOrigin(),
+  );
+  const payload = await fetchEngineJson(url.toString());
+  if (!payload || payload.contractVersion !== AR3D_INTEGRATION_CONTRACT_VERSION) return null;
+  return payload;
 }
 
 export async function publishedEngineProject(slug: string) {
