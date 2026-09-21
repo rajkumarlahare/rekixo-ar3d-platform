@@ -2,10 +2,10 @@ import { env } from "cloudflare:workers";
 import {
   clientFallbackHost,
   clientPlatformHost,
-  legacyFallbackHost,
   requestHost,
   sharedAdminHost,
 } from "@/modules/projects";
+import { legacyTiyanshFallbackHost } from "@/modules/legacy-compat";
 
 export async function GET(request: Request) {
   return Response.json(
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
           : "client",
       host: requestHost(request),
       clientFallbackHost: clientFallbackHost() || null,
-      legacyFallbackHost: legacyFallbackHost() || null,
+      legacyFallbackHost: legacyTiyanshFallbackHost() || null,
       platformHost: clientPlatformHost() || null,
       sharedAdminHost: sharedAdminHost() || null,
     },

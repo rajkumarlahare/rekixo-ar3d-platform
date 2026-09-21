@@ -18,8 +18,10 @@
   - Project is resolved from hostname or platform slug.
   - No new Worker is required for each customer.
 - `tiyansh-prime-square`
-  - Temporary zero-downtime legacy bridge only.
-  - It uses the same D1/R2 and the same current application code while domains are migrated.
+  - Temporary rollback/routing bridge only.
+  - It uses the same D1/R2 and the same generic tenant runtime as `rekixo-client-sites`.
+  - Its workers.dev host is scoped to the Tiyansh tenant and is not a shared multi-project host.
+  - Historical static Tiyansh browser data is not part of the live runtime.
 
 ## Tenant isolation
 
@@ -41,7 +43,7 @@ A generic project cannot publish until:
 - every plot has a polygon,
 - every polygon validates.
 
-Tiyansh is migrated as `published` and remains the locked legacy reference.
+Tiyansh is migrated as `published` and remains the locked legacy reference, but it now executes through the same project-scoped data path as other customer tenants.
 
 ## URLs
 
@@ -80,9 +82,13 @@ https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms
 2. Deploy `rekixo-client-sites`.
 3. Attach `sites.rekixo.com` to `rekixo-client-sites` when ready.
 4. If you want `client-slug.sites.rekixo.com`, configure wildcard DNS + Worker Route for `*.sites.rekixo.com/*` to `rekixo-client-sites`.
-5. Keep the old `tiyansh-prime-square` Worker until the Tiyansh production hostname is confirmed on the generic Worker.
-6. Only then remove the legacy deployment step in a later cleanup release.
+5. Keep the old `tiyansh-prime-square` Worker as a rollback/routing bridge until the external Tiyansh production hostname cutover is independently confirmed.
+6. Stage 3 production parity checks must stay green before any later removal of the legacy deployment step.
 
 ## Why V5 does not auto-create DNS/custom hostnames
 
 Domain ownership, certificate validation, and Cloudflare zone/SaaS configuration are infrastructure authorization steps. The application stores and resolves the mapping, but it must not silently create or hijack DNS hostnames.
+
+## Stage 3 legacy isolation
+
+Tiyansh-specific runtime identity is isolated behind `modules/legacy-compat`. Generic product code has no default tenant. Super Admin uses a platform scope instead of a Tiyansh project fallback, customer data requires explicit project IDs, and the browser runtime always boots from D1/R2-backed project data. Historical static inputs remain only under `legacy/tiyansh-reference/` for migration audit/history.

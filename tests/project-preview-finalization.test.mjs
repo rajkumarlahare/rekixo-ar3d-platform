@@ -33,11 +33,13 @@ test("mapper shares presentation rotation while canonical geometry remains uncha
 });
 
 test("generic preview cannot flash or bootstrap Tiyansh tenant data", () => {
-  assert.match(publicPage, /REKIXO_GENERIC_BOOT/);
+  assert.match(publicPage, /const REKIXO_GENERIC_BOOT=true/);
   assert.match(publicPage, /rekixo-project-loading/);
-  assert.match(publicPage, /GENERIC_BOOT \? \[\] :/);
-  assert.match(publicPage, /GENERIC_BOOT\?'':'919009995582'/);
-  assert.doesNotMatch(publicPage, /PROJECT_LOCATION=s\.location\|\|PROJECT_LOCATION/);
+  assert.match(publicPage, /const plots = \[\]/);
+  assert.match(publicPage, /let CALL_PHONE = '', WHATSAPP_PHONE = '', MAP_URL = ''/);
+  assert.doesNotMatch(publicPage, /window\.TIYANSH_PLOTS/);
+  assert.doesNotMatch(publicPage, /REKIXO_DEFAULT_PROJECT/);
+  assert.doesNotMatch(publicPage, /master\.src='masterplan\.jpg'/);
 });
 
 test("generic public map contains the full natural masterplan and keeps rotated hit testing aligned", () => {

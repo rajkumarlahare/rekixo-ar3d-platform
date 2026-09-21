@@ -22,6 +22,7 @@ const moduleNames = [
   "public-project",
   "ui",
   "contracts",
+  "legacy-compat",
 ];
 
 const sharedImplementationBasenames = new Set([

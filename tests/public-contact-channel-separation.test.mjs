@@ -6,7 +6,7 @@ const html = await readFile(new URL("../public/project/index.html", import.meta.
 
 test("public customer site keeps Call and WhatsApp as independent contact channels", () => {
   assert.match(html, /REKIXO_CONTACT_CHANNEL_SEPARATION_V1/);
-  assert.match(html, /let CALL_PHONE = GENERIC_BOOT\?'':'919009995582', WHATSAPP_PHONE = CALL_PHONE/);
+  assert.match(html, /let CALL_PHONE = '', WHATSAPP_PHONE = '', MAP_URL = ''/);
   assert.doesNotMatch(html, /let PHONE =/);
 
   // A literal "\\n" after a // marker comments out the following declaration.
@@ -32,10 +32,10 @@ test("WhatsApp prefers explicit WhatsApp number and falls back to phone1 then ph
   assert.match(html, /window\.open\('https:\/\/wa\.me\/'\+WHATSAPP_PHONE\+'\?text='/);
 });
 
-test("generic and default projects use the same centralized resolver", () => {
-  assert.match(html, /function applyContactChannels\(settings,isDefaultProject\)/);
-  assert.match(html, /applyContactChannels\(s,isTiyansh\);/);
-  assert.doesNotMatch(html, /s\.whatsapp\|\|s\.phone1\|\|PHONE/);
+test("all projects use the same centralized contact resolver", () => {
+  assert.match(html, /function applyContactChannels\(settings\)/);
+  assert.match(html, /applyContactChannels\(s\);/);
+  assert.doesNotMatch(html, /isDefaultProject|isTiyansh/);
 });
 
 test("contact-channel fix does not touch map geometry or presentation controls", () => {

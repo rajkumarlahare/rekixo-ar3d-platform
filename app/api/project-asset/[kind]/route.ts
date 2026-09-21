@@ -28,7 +28,7 @@ async function authorizedProjectId(request: Request) {
   // Super Admin works across many tenants. The selected project must always
   // win over the legacy Tiyansh session fallback.
   if (session?.role === "super_admin") {
-    return activeProjectId(requested || session.projectId);
+    return requested ? activeProjectId(requested) : null;
   }
 
   // Client admins remain hard tenant-scoped.

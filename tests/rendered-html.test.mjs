@@ -61,6 +61,6 @@ test("client access includes mandatory password change and tenant guards", async
   assert.match(projectContext, /searchParams\.get\("projectId"\)/);
   assert.match(projectContext, /searchParams\.get\("projectSlug"\)/);
   assert.match(projectContext, /legacy\.adminHost === host/);
-  assert.match(projectContext, /host === legacyFallbackHost\(\)/);
-  assert.match(projectContext, /projectById\(DEFAULT_PROJECT_ID\)/);
+  assert.match(projectContext, /isLegacyTiyanshHost\(host\)/);
+  assert.match(projectContext, /projectById\(LEGACY_TIYANSH_PROJECT_ID\)/);
 });

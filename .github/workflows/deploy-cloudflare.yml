@@ -67,7 +67,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
 
-      # Zero-downtime bridge: keep the old Tiyansh Worker alive during domain cutover.
+      - name: Verify Tiyansh on Generic Client runtime
+        run: node scripts/verify-tiyansh-generic-parity.mjs generic
+        env:
+          REKIXO_PLATFORM_HOST: ${{ vars.REKIXO_PLATFORM_HOST }}
+          REKIXO_WORKERS_SUBDOMAIN: ${{ vars.REKIXO_WORKERS_SUBDOMAIN }}
+
+      # Zero-downtime rollback/routing bridge. The browser runtime itself is generic.
       - name: Prepare Legacy Tiyansh Worker
         run: node scripts/prepare-cloudflare-deploy.mjs legacy
         env:
@@ -88,6 +94,12 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify Tiyansh legacy bridge isolation
+        run: node scripts/verify-tiyansh-generic-parity.mjs post-legacy
+        env:
+          REKIXO_PLATFORM_HOST: ${{ vars.REKIXO_PLATFORM_HOST }}
+          REKIXO_WORKERS_SUBDOMAIN: ${{ vars.REKIXO_WORKERS_SUBDOMAIN }}
 
       - name: Prepare Rekixo Super Admin Worker
         run: node scripts/prepare-cloudflare-deploy.mjs super

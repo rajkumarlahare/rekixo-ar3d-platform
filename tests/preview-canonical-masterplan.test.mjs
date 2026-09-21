@@ -15,7 +15,7 @@ test("authenticated preview canonicalizes old short project ids before rendering
 
 test("preview uses optimized project masterplan with canonical fallback and saved public rotation", async () => {
   const site = await source("../public/project/index.html");
-  assert.ok(site.includes("ACTIVE_PROJECT_ID=data.projectId"));
+  assert.ok(site.includes("ACTIVE_PROJECT_ID=String(data.projectId||'').trim()"));
   assert.ok(site.includes("canonicalForward.set('projectId',ACTIVE_PROJECT_ID)"));
   assert.ok(site.includes("window.REKIXO_PROJECT_QUERY=canonicalForward.toString()"));
   assert.ok(site.includes("canonicalForward.set('assetRev',String(Date.now()))"));

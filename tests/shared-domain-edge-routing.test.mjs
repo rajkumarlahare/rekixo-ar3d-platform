@@ -58,7 +58,7 @@ test("Rekixo static assets use a native isolated namespace plus compatibility fa
   assert.match(worker, /CLIENT_PLATFORM_HOST/);
   assert.match(worker, /externalUrl\.pathname\.startsWith\("\/projects\/"\)/);
   assert.match(projectPage, /\/__rekixo\/project\/index\.html\?projectSlug=/);
-  assert.match(dashboard, /\/__rekixo\/project\/masterplan\.jpg/);
+  assert.match(dashboard, /\/api\/project-asset\/masterplan\?projectId=/);
 });
 
 test("free workers.dev fallback remains independent of shared-domain rewriting", async () => {

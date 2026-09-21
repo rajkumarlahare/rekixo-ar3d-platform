@@ -16,7 +16,10 @@ export async function GET(request: Request) {
     const db = getDb();
     const requested = new URL(request.url).searchParams.get("projectId");
     const projectId =
-      session.role === "super_admin" && requested ? requested : session.projectId;
+      session.role === "super_admin" ? String(requested || "").trim() : session.projectId;
+    if (!projectId) {
+      return Response.json({ error: "Project required" }, { status: 400 });
+    }
 
     const [project, plotRows, settingRows, galleryRows] = await Promise.all([
       env.DB.prepare(
@@ -58,6 +61,12 @@ export async function POST(request: Request) {
   }
   const session = await validAdminSession();
   if (!session) return denied();
+  if (session.role === "super_admin") {
+    return Response.json(
+      { error: "Use project-specific Super Admin tools" },
+      { status: 403 },
+    );
+  }
 
   try {
     const body = (await request.json()) as {

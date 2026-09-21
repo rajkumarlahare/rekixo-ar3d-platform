@@ -1,8 +1,6 @@
 export {
-  DEFAULT_PROJECT_ID,
   requestHost,
   clientFallbackHost,
-  legacyFallbackHost,
   clientPlatformHost,
   sharedAdminHost,
   isPlatformAccessHost,
