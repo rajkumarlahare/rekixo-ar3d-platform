@@ -1,16 +1,16 @@
 import { env } from "cloudflare:workers";
-import { hashAdminPassword,requireSuperAdmin,sameOrigin } from "../../../admin-auth";
-import { writeAudit } from "../../../audit";
-import { upsertPrimaryProjectDomain } from "../../../project-domains";
-import { provisionClientAccess } from "../../../project-provisioning";
-import { clientFallbackHost,clientLoginModeForProject } from "../../../project-context";
-import { currentProjectLinks } from "../../../project-links";
-import { validClientPassword } from "../../../client-password-policy";
+import { hashAdminPassword,requireSuperAdmin,sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
+import { upsertPrimaryProjectDomain } from "@/modules/domains";
+import { provisionClientAccess } from "@/modules/projects";
+import { clientFallbackHost,clientLoginModeForProject } from "@/modules/projects";
+import { currentProjectLinks } from "@/modules/projects";
+import { validClientPassword } from "@/modules/auth";
 import {
   internalEmailForMobile,
   normalizeClientLoginId,
   type ClientLoginType,
-} from "../../../client-login-identity";
+} from "@/modules/auth";
 
 const unauthorized=()=>Response.json({error:"Super Admin access required"},{status:403});
 const hostPattern=/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
