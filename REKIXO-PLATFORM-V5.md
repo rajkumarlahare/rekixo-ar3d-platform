@@ -1,4 +1,12 @@
-# Rekixo Platform Architecture V5
+# Rekixo AR3D Platform Architecture V5
+
+## Repository identity
+
+- Canonical GitHub repository: `rekixo-ar3d-platform`.
+- Historical GitHub repository name: `tiyansh-prime-square`.
+- Tiyansh Prime Square is a tenant/project, not the platform identity.
+- The repository rename does **not** rename production Worker, D1, R2, route, project IDs, or migration history.
+- `rekixo-ar3d-engine` is a sibling repository in the same Rekixo AR3D product family with separate runtime resources.
 
 ## Locked production architecture
 
