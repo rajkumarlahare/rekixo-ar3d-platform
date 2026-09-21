@@ -7,6 +7,7 @@ import { publicProjectId } from "@/modules/projects";
 import { activeProjectDomain } from "@/modules/domains";
 import { currentProjectLinks } from "@/modules/projects";
 import { withProjectContactFallbacks } from "@/modules/projects";
+import { publicProject3DLink } from "@/modules/engine-integration";
 
 const PUBLIC_SETTING_KEYS = new Set([
   "projectName",
@@ -119,6 +120,7 @@ export async function GET(request: Request) {
           .where(eq(plotPricing.projectId, projectId))
       : [];
     const pricingByPlot = new Map(pricingRows.map((item) => [item.plotId, item]));
+    const engine3d = await publicProject3DLink(projectId);
     const edgeMeasurementsByPlot = new Map<string, typeof edgeMeasurementRows>();
     for (const item of edgeMeasurementRows) {
       const list = edgeMeasurementsByPlot.get(item.plotId) || [];
@@ -136,6 +138,7 @@ export async function GET(request: Request) {
         publishedAt: project.publishedAt,
         adminUrl: links.adminUrl,
         platformUrl: links.platformUrl,
+        engine3d,
         plots: plotRows.map((plot) => {
           const { notes, ...publicPlot } = plot;
           void notes;
