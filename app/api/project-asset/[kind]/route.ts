@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { getAdminSession } from "../../../admin-auth";
-import { publicProjectId } from "../../../project-context";
+import { getAdminSession } from "@/modules/auth";
+import { publicProjectId } from "@/modules/projects";
 
 const PUBLIC_KINDS = new Set(["masterplan", "logo", "shareCard"]);
 const ADMIN_KINDS = new Set(["sourcePdf"]);
