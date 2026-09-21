@@ -1,11 +1,11 @@
 import { env } from "cloudflare:workers";
-import { getDb } from "../../../db";
-import { gallery, plots, settings } from "../../../db/schema";
+import { getDb } from "@/modules/db";
+import { gallery, plots, settings } from "@/modules/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { sameOrigin, validAdminSession } from "../../admin-auth";
-import { isClientEditableSettingKey, pickClientVisibleSettings, validClientPlotStatus } from "../../client-admin-policy";
-import { writeAudit } from "../../audit";
-import { validateProjectContactPatch } from "../../project-profile-policy";
+import { sameOrigin, validAdminSession } from "@/modules/auth";
+import { isClientEditableSettingKey, pickClientVisibleSettings, validClientPlotStatus } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
+import { validateProjectContactPatch } from "@/modules/projects";
 
 const denied = () => Response.json({ error: "Admin login required" }, { status: 401 });
 
