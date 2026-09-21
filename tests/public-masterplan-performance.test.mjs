@@ -11,9 +11,10 @@ const asset = await readFile(
   "utf8",
 );
 
-test("generic project does not prefetch legacy Tiyansh masterplan", () => {
+test("public runtime never prefetches a bundled tenant masterplan", () => {
   assert.doesNotMatch(page, /class="master" src="masterplan\.jpg"/);
-  assert.match(page, /initialMaster&&!GENERIC_BOOT/);
+  assert.doesNotMatch(page, /master\.src='masterplan\.jpg'/);
+  assert.match(page, /preferredMasterUrl='\/api\/project-asset\/masterplan\?'/);
 });
 
 test("public project prefers optimized derivative and falls back safely", () => {
