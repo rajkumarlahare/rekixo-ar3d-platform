@@ -19,7 +19,7 @@ export const projectDomains = sqliteTable("project_domains", {
   updatedAt:text("updated_at").notNull()
 },table=>({projectKindIndex:index("idx_project_domains_project_kind").on(table.projectId,table.kind,table.status)}));
 
-export const plots = sqliteTable("plots", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), id:text("id").notNull(), sqft:real("sqft").notNull(), sqm:real("sqm").notNull(), sqyd:real("sqyd").notNull(), dimensions:text("dimensions").notNull(), road:text("road").notNull(), front:real("front"), depth:real("depth"), back:real("back"), depth2:real("depth2"), dimensionUnit:text("dimension_unit"), frontEdgeIndex:integer("front_edge_index"), depthEdgeIndex:integer("depth_edge_index"), backEdgeIndex:integer("back_edge_index"), depth2EdgeIndex:integer("depth2_edge_index"), frontLabel:text("front_label"), depthLabel:text("depth_label"), backLabel:text("back_label"), depth2Label:text("depth2_label"), sideDimensions:text("side_dimensions"), edgeSemantics:text("edge_semantics"), polygon:text("polygon").notNull().default(""), status:text("status").notNull().default("available"), notes:text("notes").notNull().default(""), featured:integer("featured",{mode:"boolean"}).notNull().default(false), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
+export const plots = sqliteTable("plots", { projectId:text("project_id").notNull().references(()=>projects.id), id:text("id").notNull(), sqft:real("sqft").notNull(), sqm:real("sqm").notNull(), sqyd:real("sqyd").notNull(), dimensions:text("dimensions").notNull(), road:text("road").notNull(), front:real("front"), depth:real("depth"), back:real("back"), depth2:real("depth2"), dimensionUnit:text("dimension_unit"), frontEdgeIndex:integer("front_edge_index"), depthEdgeIndex:integer("depth_edge_index"), backEdgeIndex:integer("back_edge_index"), depth2EdgeIndex:integer("depth2_edge_index"), frontLabel:text("front_label"), depthLabel:text("depth_label"), backLabel:text("back_label"), depth2Label:text("depth2_label"), sideDimensions:text("side_dimensions"), edgeSemantics:text("edge_semantics"), polygon:text("polygon").notNull().default(""), status:text("status").notNull().default("available"), notes:text("notes").notNull().default(""), featured:integer("featured",{mode:"boolean"}).notNull().default(false), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
 export const plotEdgeMeasurements = sqliteTable("plot_edge_measurements", {
   projectId:text("project_id").notNull().references(()=>projects.id),
   plotId:text("plot_id").notNull(),
@@ -42,7 +42,7 @@ export const plotEdgeMeasurements = sqliteTable("plot_edge_measurements", {
   projectPlotIndex:index("idx_plot_edge_measurements_project_plot").on(table.projectId,table.plotId)
 }));
 
-export const settings = sqliteTable("settings", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), key:text("key").notNull(), value:text("value").notNull(), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.key]})}));
+export const settings = sqliteTable("settings", { projectId:text("project_id").notNull().references(()=>projects.id), key:text("key").notNull(), value:text("value").notNull(), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.key]})}));
 export const plotPricing = sqliteTable("plot_pricing", {
   projectId:text("project_id").notNull().references(()=>projects.id),
   plotId:text("plot_id").notNull(),
@@ -56,7 +56,7 @@ export const plotPricing = sqliteTable("plot_pricing", {
   pk:primaryKey({columns:[table.projectId,table.plotId]}),
   projectIndex:index("idx_plot_pricing_project").on(table.projectId)
 }));
-export const gallery = sqliteTable("gallery", { projectId:text("project_id").notNull().default("tiyansh-prime-square").references(()=>projects.id), id:text("id").notNull(), objectKey:text("object_key").notNull().unique(), filename:text("filename").notNull(), contentType:text("content_type").notNull(), caption:text("caption").notNull().default(""), sortOrder:integer("sort_order").notNull().default(0), createdAt:text("created_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
+export const gallery = sqliteTable("gallery", { projectId:text("project_id").notNull().references(()=>projects.id), id:text("id").notNull(), objectKey:text("object_key").notNull().unique(), filename:text("filename").notNull(), contentType:text("content_type").notNull(), caption:text("caption").notNull().default(""), sortOrder:integer("sort_order").notNull().default(0), createdAt:text("created_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
 export const loginAttempts = sqliteTable("login_attempts", { key:text("key").primaryKey(), attempts:integer("attempts").notNull().default(0), windowStart:integer("window_start").notNull() });
 export const adminUsers = sqliteTable("admin_users", {
   id:text("id").primaryKey(), email:text("email").notNull().unique(), name:text("name").notNull(),
