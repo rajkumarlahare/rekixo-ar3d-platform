@@ -1,0 +1,33 @@
+# Rekixo AR3D Platform module boundaries
+
+Stage 2 introduces stable internal module interfaces without changing production routes, D1/R2 resources, project IDs, or tenant data.
+
+## Dependency rule
+
+Browser/API entrypoints under `app/` should import shared platform behavior through `@/modules/*` instead of reaching directly into another feature's implementation file.
+
+The route tree remains under Next/Vinext's required `app/` directory. This stage intentionally does **not** move route files.
+
+## Boundaries
+
+- `auth` — Super Admin/client sessions, login identity, password and client-edit policy.
+- `audit` — audit log write contract.
+- `domains` — host/slug normalization and project-domain persistence.
+- `projects` — project resolution, links, provisioning, profile/customer actions.
+- `plots` — area policy and plot-side/measurement semantics.
+- `mapper` — geometry/CAD/source-sheet parsing.
+- `geo` — geo models, calibration, public manifest/image configuration.
+- `pricing` — pricing-sheet parsing and expansion.
+- `sharing` — project share branding contract.
+- `db` — D1 access and schema facade.
+- `super-admin` — Super Admin UI composition surface.
+- `client-admin` — Client Admin UI composition surface.
+- `public-project` — public-project read-side facade.
+- `ui` — cross-feature UI primitives owned by the platform.
+- `contracts` — architecture-level module names/version.
+
+## Compatibility
+
+The current implementation files remain in `app/` during Stage 2 so production behavior and existing tests stay stable. The `modules/*` paths are now the supported cross-feature interfaces. Later physical moves can happen behind these interfaces without changing route imports.
+
+No module may bind to a new database or bucket merely because code is reorganized.
