@@ -25,9 +25,14 @@ The route tree remains under Next/Vinext's required `app/` directory. This stage
 - `public-project` — public-project read-side facade.
 - `ui` — cross-feature UI primitives owned by the platform.
 - `contracts` — architecture-level module names/version.
+- `legacy-compat` — explicitly isolated historical Tiyansh routing/rollback identifiers; generic product code must not define them.
 
 ## Compatibility
 
 The current implementation files remain in `app/` during Stage 2 so production behavior and existing tests stay stable. The `modules/*` paths are now the supported cross-feature interfaces. Later physical moves can happen behind these interfaces without changing route imports.
 
 No module may bind to a new database or bucket merely because code is reorganized.
+
+## Stage 3 rule
+
+Tiyansh-specific identifiers may exist only behind `modules/legacy-compat` or in immutable migration/reference history. New generic features must not import legacy reference files or infer a default tenant.
