@@ -1,2 +1,2 @@
-import { clearSessionCookie } from "../../../admin-auth";
+import { clearSessionCookie } from "@/modules/auth";
 export async function GET(request:Request){const url=new URL(request.url),returnTo=url.searchParams.get("returnTo")||"/";let location=new URL("/",request.url).toString();if(returnTo.startsWith("/")&&!returnTo.startsWith("//"))location=new URL(returnTo,request.url).toString();return new Response(null,{status:302,headers:{location,"set-cookie":clearSessionCookie()}})}
