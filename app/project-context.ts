@@ -198,8 +198,17 @@ export async function projectHostRole(hostValue: string) {
     };
   }
 
-  if (isLegacyTiyanshHost(host))
-    return { projectId: LEGACY_TIYANSH_PROJECT_ID, role: "public" as const };
+  if (isLegacyTiyanshHost(host)) {
+    const project = await projectById(LEGACY_TIYANSH_PROJECT_ID, true);
+    if (!project) return null;
+    return {
+      projectId: project.id,
+      role:
+        project.publicStatus === "published"
+          ? ("public" as const)
+          : ("unpublished" as const),
+    };
+  }
 
   return null;
 }
