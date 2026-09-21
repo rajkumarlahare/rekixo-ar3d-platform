@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { getAdminSession, panelMode } from "../../../admin-auth";
+import { getAdminSession, panelMode } from "@/modules/auth";
 import LoginForm from "../../../admin/login/login-form";
-import { clientLoginModeForProject, isPlatformAccessHost, projectBySlug } from "../../../project-context";
+import { clientLoginModeForProject, isPlatformAccessHost, projectBySlug } from "@/modules/public-project";
 
 export const dynamic = "force-dynamic";
 
