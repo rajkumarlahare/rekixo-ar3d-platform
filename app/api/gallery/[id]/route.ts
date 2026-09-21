@@ -20,7 +20,7 @@ async function galleryProjectId(request: Request) {
   const requested = new URL(request.url).searchParams.get("projectId");
 
   if (session?.role === "super_admin") {
-    return activeProjectId(requested || session.projectId);
+    return requested ? activeProjectId(requested) : null;
   }
   if (session?.role === "client_admin") {
     if (requested && requested !== session.projectId) return null;
