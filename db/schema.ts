@@ -127,3 +127,22 @@ export const platformSettings = sqliteTable("platform_settings", {
   updatedAt:text("updated_at").notNull(),
   updatedBy:text("updated_by").notNull().default("")
 });
+
+
+// Cross-repository Rekixo AR3D integration metadata only.
+// Engine model/scene data stays in the isolated rekixo-3d-production D1.
+export const project3dLinks = sqliteTable("project_3d_links", {
+  platformProjectId:text("platform_project_id").primaryKey().references(()=>projects.id,{onDelete:"cascade"}),
+  engineProjectId:text("engine_project_id").notNull(),
+  engineSlug:text("engine_slug").notNull(),
+  status:text("status").notNull().default("active"),
+  publicEnabled:integer("public_enabled",{mode:"boolean"}).notNull().default(false),
+  publicUrl:text("public_url").notNull(),
+  updatedBy:text("updated_by").notNull().default(""),
+  createdAt:text("created_at").notNull(),
+  updatedAt:text("updated_at").notNull()
+},table=>({
+  engineProjectUnique:uniqueIndex("project_3d_links_engine_project_unique").on(table.engineProjectId),
+  engineSlugUnique:uniqueIndex("project_3d_links_engine_slug_unique").on(table.engineSlug),
+  statusIndex:index("project_3d_links_status").on(table.status,table.publicEnabled)
+}));
