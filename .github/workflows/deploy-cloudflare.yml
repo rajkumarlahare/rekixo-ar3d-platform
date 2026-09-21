@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare
+name: Deploy Rekixo AR3D Platform
 
 on:
   push:

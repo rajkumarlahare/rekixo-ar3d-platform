@@ -1,4 +1,7 @@
 {
+  // Historical production Worker/resource identifiers are intentionally stable.
+  // Repository identity is rekixo-ar3d-platform; do not rename live D1/R2 here
+  // merely to match the GitHub repository name.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tiyansh-prime-square",
   "main": "dist/server/index.js",
