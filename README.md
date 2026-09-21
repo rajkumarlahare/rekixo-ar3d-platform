@@ -67,7 +67,7 @@ Important current areas:
 - `tests/` — regression contracts
 - `.github/workflows/` — CI/CD
 
-Stage 2 establishes stable `@/modules/*` boundaries before any risky physical route moves. See [docs/STAGE-2-MODULARIZATION.md](./docs/STAGE-2-MODULARIZATION.md). Stage 3 isolates the historical Tiyansh bridge and removes Tiyansh runtime defaults; see [docs/STAGE-3-TIYANSH-LEGACY-ISOLATION.md](./docs/STAGE-3-TIYANSH-LEGACY-ISOLATION.md).
+Stage 2 establishes stable `@/modules/*` boundaries before any risky physical route moves. See [docs/STAGE-2-MODULARIZATION.md](./docs/STAGE-2-MODULARIZATION.md). Stage 3 isolates the historical Tiyansh bridge and removes Tiyansh runtime defaults; see [docs/STAGE-3-TIYANSH-LEGACY-ISOLATION.md](./docs/STAGE-3-TIYANSH-LEGACY-ISOLATION.md). Stage 5 adds optional Platform ↔ Engine linking without database sharing; see [docs/STAGE-5-PLATFORM-ENGINE-INTEGRATION.md](./docs/STAGE-5-PLATFORM-ENGINE-INTEGRATION.md).
 
 ## Development
 
@@ -97,7 +97,7 @@ Production deployment is GitHub-Actions-first. Merges to `main` run the full reg
 
 `rekixo-ar3d-platform` and `rekixo-ar3d-engine` are sibling repositories in the same Rekixo AR3D product family.
 
-The platform owns project/customer/plot operations. The engine owns realistic 3D models, scenes and rendering. Their production databases and asset buckets stay isolated; later integration should use an explicit project-link/service contract rather than sharing databases.
+The platform owns project/customer/plot operations. The engine owns realistic 3D models, scenes and rendering. Their production databases and asset buckets stay isolated. Stage 5 implements the explicit `project_3d_links` + versioned HTTP contract; the two D1 databases remain separate.
 
 ## Safety rules
 
