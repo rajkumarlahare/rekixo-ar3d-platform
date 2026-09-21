@@ -15,6 +15,7 @@ export const PLATFORM_MODULES = [
   "client-admin",
   "public-project",
   "ui",
+  "legacy-compat",
 ] as const;
 
 export type PlatformModuleName = (typeof PLATFORM_MODULES)[number];
