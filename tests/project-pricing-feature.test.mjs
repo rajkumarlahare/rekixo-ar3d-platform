@@ -30,13 +30,13 @@ test("pricing upload parser supports ranges and exact overrides", () => {
   assert.match(parser, /duplicate exact row/);
 });
 
-test("pricing admin route resolves app-level modules from its nested API directory", () => {
-  assert.match(api, /from "\.\.\/\.\.\/\.\.\/admin-auth"/);
-  assert.match(api, /from "\.\.\/\.\.\/\.\.\/audit"/);
-  assert.match(api, /from "\.\.\/\.\.\/\.\.\/plot-pricing-sheet"/);
-  assert.doesNotMatch(api, /from "\.\.\/\.\.\/admin-auth"/);
-  assert.doesNotMatch(api, /from "\.\.\/\.\.\/audit"/);
-  assert.doesNotMatch(api, /from "\.\.\/\.\.\/plot-pricing-sheet"/);
+test("pricing admin route resolves shared behavior through Stage 2 module facades", () => {
+  assert.match(api, /from "@\/modules\/auth"/);
+  assert.match(api, /from "@\/modules\/audit"/);
+  assert.match(api, /from "@\/modules\/pricing"/);
+  assert.doesNotMatch(api, /from "\.\.\/\.\.\/\.\.\/admin-auth"/);
+  assert.doesNotMatch(api, /from "\.\.\/\.\.\/\.\.\/audit"/);
+  assert.doesNotMatch(api, /from "\.\.\/\.\.\/\.\.\/plot-pricing-sheet"/);
 });
 
 test("pricing admin API is Super Admin only and toggle never deletes saved rates", () => {
