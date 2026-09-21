@@ -6,6 +6,10 @@ import {
   loginCandidates,
   type ClientLoginType,
 } from "./client-login-identity";
+import {
+  PLATFORM_ADMIN_SCOPE_ID,
+  legacyTiyanshClientHostAllowed,
+} from "./legacy-tiyansh-compat";
 
 const COOKIE="tiyansh_admin";
 const enc=new TextEncoder(),dec=new TextDecoder();
@@ -52,8 +56,9 @@ export async function hashAdminPassword(password:string){
 
 async function clientAdminHostAllowed(projectId:string,legacyAdminHost:string|null,host?:string){
   if(!host)return true;
-  const normalized=normalizeHost(host),shared=normalizeHost(cfg().CLIENT_SHARED_ADMIN_HOST||""),fallback=normalizeHost(cfg().CLIENT_FALLBACK_HOST||""),legacyFallback=normalizeHost(cfg().LEGACY_FALLBACK_HOST||""),platform=normalizeHost(cfg().CLIENT_PLATFORM_HOST||"");
-  if(normalized&&[shared,fallback,legacyFallback,platform].filter(Boolean).includes(normalized))return true;
+  const normalized=normalizeHost(host),shared=normalizeHost(cfg().CLIENT_SHARED_ADMIN_HOST||""),fallback=normalizeHost(cfg().CLIENT_FALLBACK_HOST||""),platform=normalizeHost(cfg().CLIENT_PLATFORM_HOST||"");
+  if(normalized&&[shared,fallback,platform].filter(Boolean).includes(normalized))return true;
+  if(legacyTiyanshClientHostAllowed(projectId,normalized))return true;
   if(legacyAdminHost&&normalizeHost(legacyAdminHost)===normalized)return true;
   const row=await env.DB.prepare("SELECT host FROM project_domains WHERE project_id=? AND host=? AND status='active' AND kind IN ('admin','both') LIMIT 1").bind(projectId,normalized).first();
   return Boolean(row);
@@ -81,7 +86,7 @@ type ClientAuthRow={
 export async function authenticateAdmin(identifier:string,password:string,host?:string,scope?:{projectId?:string;projectSlug?:string}):Promise<AdminSession|null>{
   const candidates=loginCandidates(identifier),now=Date.now();
   const mode=panelMode();
-  if(mode==="super"&&candidates.email&&candidates.email===cfg().ADMIN_EMAIL?.toLowerCase()&&await verifyPassword(password,cfg().ADMIN_PASSWORD_SALT,cfg().ADMIN_PASSWORD_HASH))return {id:"owner",name:"Rekixo Super Admin",email:candidates.email,loginId:candidates.email,loginType:"email",role:"super_admin",projectId:"tiyansh-prime-square",sessionVersion:1,mustChangePassword:false,exp:now+8*60*60*1000};
+  if(mode==="super"&&candidates.email&&candidates.email===cfg().ADMIN_EMAIL?.toLowerCase()&&await verifyPassword(password,cfg().ADMIN_PASSWORD_SALT,cfg().ADMIN_PASSWORD_HASH))return {id:"owner",name:"Rekixo Super Admin",email:candidates.email,loginId:candidates.email,loginType:"email",role:"super_admin",projectId:PLATFORM_ADMIN_SCOPE_ID,sessionVersion:1,mustChangePassword:false,exp:now+8*60*60*1000};
   if(mode!=="client")return null;
   const rows=await env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.project_id AS projectId,u.password_hash AS passwordHash,u.password_salt AS passwordSalt,u.session_version AS sessionVersion,u.must_change_password AS mustChangePassword,u.status,p.status AS projectStatus,p.admin_host AS adminHost,p.slug AS projectSlug FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE u.login_id=? OR u.login_id=? OR ((u.login_type='email' OR u.login_type IS NULL) AND lower(u.email)=?) LIMIT 2").bind(candidates.email,candidates.mobile,candidates.email).all<ClientAuthRow>();
   if(rows.results.length!==1)return null;
