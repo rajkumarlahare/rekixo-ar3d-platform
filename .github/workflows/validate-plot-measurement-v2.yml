@@ -42,10 +42,18 @@ jobs:
       - name: Platform module boundary contract
         run: node --test tests/platform-module-boundaries.test.mjs
 
+      - name: Stage 3 legacy isolation contract
+        run: node --test tests/stage-3-tiyansh-legacy-isolation.test.mjs
+
+      - name: Live Tiyansh generic preflight
+        run: node scripts/verify-tiyansh-generic-parity.mjs preflight
+        env:
+          REKIXO_WORKERS_SUBDOMAIN: ${{ vars.REKIXO_WORKERS_SUBDOMAIN }}
+
       - name: Measurement V2 contract
         run: |
           grep -q "CREATE TABLE IF NOT EXISTS plot_edge_measurements" drizzle/0023_rekixo_plot_measurement_v2.sql
           grep -q "sqmToSqftFactor" app/api/super-mapper/route.ts
           grep -q "frontFirstFourSideEdges" app/plot-mapper.tsx
           grep -q "REKIXO_PUBLIC_EDGE_DIMENSIONS_V9" public/project/index.html
-          grep -q "v=61" app/page.tsx
+          grep -q "v=62" app/page.tsx
