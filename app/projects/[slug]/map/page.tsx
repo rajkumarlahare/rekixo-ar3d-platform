@@ -3,9 +3,9 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { preconnect } from "react-dom";
-import { panelMode } from "../../../admin-auth";
-import { publicGoogleMapsBrowserKey } from "../../../google-maps-config";
-import { isPlatformAccessHost, projectBySlug } from "../../../project-context";
+import { panelMode } from "@/modules/auth";
+import { publicGoogleMapsBrowserKey } from "@/modules/geo";
+import { isPlatformAccessHost, projectBySlug } from "@/modules/public-project";
 import GeoPublicMap from "./geo-public-map";
 
 export const dynamic = "force-dynamic";

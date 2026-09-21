@@ -1,24 +1,24 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
-import { writeAudit } from "../../audit";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
 import {
   featureRowToRecord,
   featuresToFeatureCollection,
   normalizeGeoFeature,
-} from "../../geo-model";
+} from "@/modules/geo";
 import {
   geoCalibrationDiagnostics,
   mapNormalizedPolygonToGeo,
   solveGeoCalibration,
   type GeoControlPoint,
-} from "../../geo-calibration";
-import type { MapperPoint } from "../../mapper-geometry";
+} from "@/modules/geo";
+import type { MapperPoint } from "@/modules/mapper";
 import {
   geoGenerationFingerprint,
   normalizeGeoFineAlignment,
   sameGeoFineAlignment,
   type GeoFineAlignment,
-} from "../../geo-fine-alignment";
+} from "@/modules/geo";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });

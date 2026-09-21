@@ -1,12 +1,12 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../../admin-auth";
-import { writeAudit } from "../../../audit";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
 import {
   PROJECT_CUSTOMER_ACTION_SETTING_KEYS,
   projectCustomerActionSettingEntries,
   projectCustomerActionsFromSettings,
   validateProjectCustomerActionsPatch,
-} from "../../../project-customer-actions";
+} from "@/modules/projects";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });

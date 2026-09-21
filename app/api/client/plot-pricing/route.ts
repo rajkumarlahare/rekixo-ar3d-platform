@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { sameOrigin, validAdminSession } from "../../../admin-auth";
-import { writeAudit } from "../../../audit";
+import { sameOrigin, validAdminSession } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
 
 const PRICING_ENABLED_KEY = "pricingEnabled";
 const CLIENT_PRICING_EDIT_KEY = "clientPricingEditEnabled";

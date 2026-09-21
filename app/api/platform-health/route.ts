@@ -5,7 +5,7 @@ import {
   legacyFallbackHost,
   requestHost,
   sharedAdminHost,
-} from "../../project-context";
+} from "@/modules/projects";
 
 export async function GET(request: Request) {
   return Response.json(

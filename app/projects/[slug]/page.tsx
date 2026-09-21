@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { env } from "cloudflare:workers";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { panelMode } from "../../admin-auth";
-import { isPlatformAccessHost, projectBySlug } from "../../project-context";
+import { panelMode } from "@/modules/auth";
+import { isPlatformAccessHost, projectBySlug } from "@/modules/public-project";
 
 export const dynamic = "force-dynamic";
 

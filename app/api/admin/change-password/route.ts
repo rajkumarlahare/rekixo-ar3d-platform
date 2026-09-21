@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { getAdminSession,hashAdminPassword,sameOrigin,sessionCookie } from "../../../admin-auth";
-import { validClientPassword } from "../../../client-password-policy";
+import { getAdminSession,hashAdminPassword,sameOrigin,sessionCookie } from "@/modules/auth";
+import { validClientPassword } from "@/modules/auth";
 
 export async function POST(request:Request){
   if(!sameOrigin(request))return Response.json({error:"Invalid request origin"},{status:403});

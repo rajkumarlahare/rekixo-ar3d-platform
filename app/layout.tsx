@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./super-mapper.css";
 import "./mapper-side-controls.css";
-import { panelMode } from "./admin-auth";
+import { panelMode } from "@/modules/auth";
 import MapperUploadProgressBridge from "./mapper-upload-progress-bridge";
 
 export const viewport: Viewport = {

@@ -1,19 +1,19 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
-import { writeAudit } from "../../audit";
-import { parseCadGeometry } from "../../cad-import";
-import { cleanPlotId, type HomographyPair } from "../../mapper-geometry";
-import { type EdgeDirection } from "../../plot-edge-semantics";
-import { assessPlotSheetRows, parsePlotSheetText } from "../../plot-sheet";
-import { normalizeSqmToSqftFactor } from "../../area-policy";
-import { parsePlotMeasurementSheetText } from "../../measurement-sheet";
-import { resolveFourSideEdges } from "../../plot-side-resolver";
-import { parseRoadAccessSheetText } from "../../road-access-sheet";
-import { parseSideMappingSheetText } from "../../side-mapping-sheet";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
+import { parseCadGeometry } from "@/modules/mapper";
+import { cleanPlotId, type HomographyPair } from "@/modules/mapper";
+import { type EdgeDirection } from "@/modules/plots";
+import { assessPlotSheetRows, parsePlotSheetText } from "@/modules/plots";
+import { normalizeSqmToSqftFactor } from "@/modules/plots";
+import { parsePlotMeasurementSheetText } from "@/modules/mapper";
+import { resolveFourSideEdges } from "@/modules/plots";
+import { parseRoadAccessSheetText } from "@/modules/mapper";
+import { parseSideMappingSheetText } from "@/modules/mapper";
 import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
-} from "../../plot-side-semantics";
+} from "@/modules/plots";
 
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);

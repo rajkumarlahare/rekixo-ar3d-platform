@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
-import { writeAudit } from "../../audit";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
 
 const denied = () => Response.json({ error: "Super Admin access required" }, { status: 403 });
 const CONFIRMATION = "CLONE TO GEO LAB";

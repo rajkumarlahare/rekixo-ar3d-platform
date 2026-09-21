@@ -1,4 +1,4 @@
-name: Validate Plot Measurement V2
+name: Validate Rekixo AR3D Platform
 
 on:
   pull_request:
@@ -38,6 +38,9 @@ jobs:
 
       - name: Diff whitespace safety
         run: git diff --check origin/main...HEAD
+
+      - name: Platform module boundary contract
+        run: node --test tests/platform-module-boundaries.test.mjs
 
       - name: Measurement V2 contract
         run: |

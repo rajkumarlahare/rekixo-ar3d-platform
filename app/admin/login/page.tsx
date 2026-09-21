@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { panelMode,validAdminSession } from "../../admin-auth";
+import { panelMode,validAdminSession } from "@/modules/auth";
 import LoginForm from "./login-form";
-import { clientLoginModeForProject,projectHostRole } from "../../project-context";
+import { clientLoginModeForProject,projectHostRole } from "@/modules/public-project";
 
 export const dynamic="force-dynamic";
 

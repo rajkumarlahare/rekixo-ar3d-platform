@@ -1,12 +1,12 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
-import { writeAudit } from "../../audit";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
 import {
   type EdgeDirection,
   type QuarterTurn,
-} from "../../plot-edge-semantics";
-import { parseSideMappingSheetText } from "../../side-mapping-sheet";
-import { resolveFourSideEdges } from "../../plot-side-resolver";
+} from "@/modules/plots";
+import { parseSideMappingSheetText } from "@/modules/mapper";
+import { resolveFourSideEdges } from "@/modules/plots";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });

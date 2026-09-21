@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { panelMode } from "./admin-auth";
-import { projectHostRole } from "./project-context";
+import { panelMode } from "@/modules/auth";
+import { projectHostRole } from "@/modules/public-project";
 
 export const dynamic = "force-dynamic";
 

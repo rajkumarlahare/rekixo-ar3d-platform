@@ -1,12 +1,12 @@
-import { getDb } from "../../../db";
-import { gallery, plotEdgeMeasurements, plotPricing, plots, settings } from "../../../db/schema";
+import { getDb } from "@/modules/db";
+import { gallery, plotEdgeMeasurements, plotPricing, plots, settings } from "@/modules/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
-import { getAdminSession } from "../../admin-auth";
-import { publicProjectId } from "../../project-context";
-import { activeProjectDomain } from "../../project-domains";
-import { currentProjectLinks } from "../../project-links";
-import { withProjectContactFallbacks } from "../../project-profile-policy";
+import { getAdminSession } from "@/modules/auth";
+import { publicProjectId } from "@/modules/projects";
+import { activeProjectDomain } from "@/modules/domains";
+import { currentProjectLinks } from "@/modules/projects";
+import { withProjectContactFallbacks } from "@/modules/projects";
 
 const PUBLIC_SETTING_KEYS = new Set([
   "projectName",

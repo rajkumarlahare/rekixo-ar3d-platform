@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../../admin-auth";
-import { writeAudit } from "../../../audit";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
 
 const MODE_KEY = "publicInitialViewMode";
 const X_KEY = "publicInitialFocusX";
