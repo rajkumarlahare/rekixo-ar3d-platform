@@ -7,6 +7,7 @@ import {
   LogOut,
   MapPinned,
   ContactRound,
+  Cuboid,
   Share2,
   ShieldCheck,
   Users,
@@ -16,6 +17,7 @@ import GeoLabClone from "./geo-lab-clone";
 import GeoMapper from "./geo-mapper";
 import PlotMapper from "./plot-mapper";
 import ProjectCustomerActionsManager from "./project-customer-actions-manager";
+import Project3DLinkManager from "./project-3d-link-manager";
 import ProjectDomainManager from "./project-domain-manager";
 import ProjectPublishPanel from "./project-publish-panel";
 import ProjectProfileManager from "./project-profile-manager";
@@ -31,7 +33,7 @@ type Project = {
   adminCount: number;
 };
 
-type WorkspaceTab = "clients" | "profile" | "mapper" | "geo" | "share";
+type WorkspaceTab = "clients" | "profile" | "mapper" | "geo" | "three-d" | "share";
 
 export default function SuperAdminDashboard({
   user,
@@ -110,7 +112,9 @@ export default function SuperAdminDashboard({
           ? "Plot Mapper Engine"
           : tab === "geo"
             ? "Geo Mapper"
-            : "Share Preview Builder";
+            : tab === "three-d"
+              ? "3D Engine Integration"
+              : "Share Preview Builder";
   const subtitle =
     tab === "clients"
       ? "Create projects, assign client access and manage domains."
@@ -120,7 +124,9 @@ export default function SuperAdminDashboard({
           ? "Company masterplan से client website के clickable plots तैयार करें।"
           : tab === "geo"
             ? "Project boundaries, GPS control points aur GIS exchange data ko isolated Geo workspace me manage karein."
-            : "Har project ka branded WhatsApp / social link preview ek jagah se manage karein.";
+            : tab === "three-d"
+              ? "Platform project ko isolated Rekixo AR3D Engine project se safely link karein."
+              : "Har project ka branded WhatsApp / social link preview ek jagah se manage karein.";
 
   return (
     <div className="super-shell">
@@ -178,6 +184,12 @@ export default function SuperAdminDashboard({
             <Globe2 /> Geo Mapper
           </button>
           <button
+            className={tab === "three-d" ? "active" : ""}
+            onClick={() => setTab("three-d")}
+          >
+            <Cuboid /> 3D Engine
+          </button>
+          <button
             className={tab === "share" ? "active" : ""}
             onClick={() => setTab("share")}
           >
@@ -232,6 +244,12 @@ export default function SuperAdminDashboard({
                 />
                 <GeoMapper key={projectId} projectId={projectId} notify={notify} />
               </>
+            ) : tab === "three-d" ? (
+              <Project3DLinkManager
+                key={`3d-link:${projectId}`}
+                projectId={projectId}
+                notify={notify}
+              />
             ) : (
               <>
                 <ProjectShareManager
