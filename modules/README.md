@@ -26,6 +26,7 @@ The route tree remains under Next/Vinext's required `app/` directory. This stage
 - `ui` — cross-feature UI primitives owned by the platform.
 - `contracts` — architecture-level module names/version.
 - `legacy-compat` — explicitly isolated historical Tiyansh routing/rollback identifiers; generic product code must not define them.
+- `engine-integration` — versioned Platform ↔ AR3D Engine linkage/read boundary; it may call the Engine HTTP contract but must never bind to Engine D1/R2.
 
 ## Compatibility
 
