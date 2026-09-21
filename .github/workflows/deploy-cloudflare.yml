@@ -70,6 +70,7 @@ jobs:
       - name: Verify Tiyansh on Generic Client runtime
         run: node scripts/verify-tiyansh-generic-parity.mjs generic
         env:
+          REKIXO_PLATFORM_HOST: ${{ vars.REKIXO_PLATFORM_HOST }}
           REKIXO_WORKERS_SUBDOMAIN: ${{ vars.REKIXO_WORKERS_SUBDOMAIN }}
 
       # Zero-downtime rollback/routing bridge. The browser runtime itself is generic.
@@ -97,6 +98,7 @@ jobs:
       - name: Verify Tiyansh legacy bridge isolation
         run: node scripts/verify-tiyansh-generic-parity.mjs post-legacy
         env:
+          REKIXO_PLATFORM_HOST: ${{ vars.REKIXO_PLATFORM_HOST }}
           REKIXO_WORKERS_SUBDOMAIN: ${{ vars.REKIXO_WORKERS_SUBDOMAIN }}
 
       - name: Prepare Rekixo Super Admin Worker
