@@ -7,7 +7,7 @@ import {
 } from "../scripts/build-legacy-plot-migration.mjs";
 
 const source = JSON.parse(
-  await readFile(new URL("../public/plots.json", import.meta.url), "utf8"),
+  await readFile(new URL("../legacy/tiyansh-reference/plots.json", import.meta.url), "utf8"),
 );
 const migration = await readFile(
   new URL("../drizzle/0008_tiyansh_legacy_geometry_recovery.sql", import.meta.url),
