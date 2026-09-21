@@ -5,9 +5,18 @@ const projectId = "tiyansh-prime-square";
 const projectSlug = "tiyansh-prime-square";
 const workersSubdomain =
   String(process.env.REKIXO_WORKERS_SUBDOMAIN || "").trim() || "ai-8f3";
+const platformHost = String(process.env.REKIXO_PLATFORM_HOST || "")
+  .trim()
+  .toLowerCase()
+  .replace(/^https?:\/\//, "")
+  .replace(/\/$/, "");
 const genericOrigin =
   String(process.env.REKIXO_GENERIC_ORIGIN || "").trim().replace(/\/$/, "") ||
-  `https://rekixo-client-sites.${workersSubdomain}.workers.dev`;
+  (platformHost ? `https://${platformHost}` : "");
+assert.ok(
+  genericOrigin,
+  "REKIXO_PLATFORM_HOST or REKIXO_GENERIC_ORIGIN is required for generic live parity",
+);
 const legacyOrigin =
   String(process.env.REKIXO_LEGACY_ORIGIN || "").trim().replace(/\/$/, "") ||
   `https://tiyansh-prime-square.${workersSubdomain}.workers.dev`;
