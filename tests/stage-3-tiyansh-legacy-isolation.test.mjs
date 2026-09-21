@@ -40,6 +40,21 @@ test("legacy Worker host is Tiyansh-only and is not a shared multi-tenant access
   assert.doesNotMatch(auth, /\[shared,fallback,legacyFallback,platform\]/);
 });
 
+test("legacy Tiyansh host role is resolved from the active project state", () => {
+  assert.match(
+    context,
+    /if \(isLegacyTiyanshHost\(host\)\) \{[\s\S]*projectById\(LEGACY_TIYANSH_PROJECT_ID, true\)/,
+  );
+  assert.match(
+    context,
+    /project\.publicStatus === "published"[\s\S]*\("public" as const\)[\s\S]*\("unpublished" as const\)/,
+  );
+  assert.doesNotMatch(
+    context,
+    /if \(isLegacyTiyanshHost\(host\)\)\s*return \{ projectId: LEGACY_TIYANSH_PROJECT_ID, role: "public" as const \}/,
+  );
+});
+
 test("Super Admin has a platform scope instead of an implicit Tiyansh tenant", () => {
   assert.match(auth, /projectId:PLATFORM_ADMIN_SCOPE_ID/);
   assert.doesNotMatch(auth, /role:"super_admin",projectId:"tiyansh-prime-square"/);
