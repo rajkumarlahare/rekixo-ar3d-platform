@@ -54,6 +54,7 @@ jobs:
       - name: Live Tiyansh generic preflight
         run: node scripts/verify-tiyansh-generic-parity.mjs preflight
         env:
+          REKIXO_PLATFORM_HOST: ${{ vars.REKIXO_PLATFORM_HOST }}
           REKIXO_WORKERS_SUBDOMAIN: ${{ vars.REKIXO_WORKERS_SUBDOMAIN }}
 
       - name: Measurement V2 contract
