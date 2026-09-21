@@ -1,9 +1,9 @@
 import { env } from "cloudflare:workers";
 import { and, eq } from "drizzle-orm";
-import { getDb } from "../../../../db";
-import { gallery } from "../../../../db/schema";
-import { publicProjectId } from "../../../project-context";
-import { getAdminSession } from "../../../admin-auth";
+import { getDb } from "@/modules/db";
+import { gallery } from "@/modules/db/schema";
+import { publicProjectId } from "@/modules/projects";
+import { getAdminSession } from "@/modules/auth";
 
 async function activeProjectId(projectId: string) {
   if (!projectId) return null;
