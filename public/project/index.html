@@ -1146,17 +1146,12 @@ rekixoStartPublicBoot();
   }
 
   const contactDigits = value => String(value||'').replace(/\D/g,'');
-  function applyContactChannels(settings,isDefaultProject){
+  function applyContactChannels(settings){
     const primary=contactDigits(settings?.phone1);
     const secondary=contactDigits(settings?.phone2);
     const explicitWhatsapp=contactDigits(settings?.whatsapp);
     const resolvedCall=primary||secondary;
     const resolvedWhatsapp=explicitWhatsapp||primary||secondary;
-    if(isDefaultProject){
-      CALL_PHONE=resolvedCall||CALL_PHONE;
-      WHATSAPP_PHONE=resolvedWhatsapp||WHATSAPP_PHONE||CALL_PHONE;
-      return;
-    }
     CALL_PHONE=resolvedCall;
     WHATSAPP_PHONE=resolvedWhatsapp;
   }
@@ -1901,7 +1896,7 @@ rekixoStartPublicBoot();
       }catch(_){}
     });
     plots.forEach(p=>{const row=live.get(p.id);if(row){const shape={points:p.points,center:p.center,path:p.path};Object.assign(p,row,shape)}const el=svg.querySelector(`[data-plot-id="${p.id}"]`);if(el)el.dataset.status=plotStatus(p)});
-    applyContactChannels(s,false);
+    applyContactChannels(s);
     MAP_URL=s.mapUrl||'';
     const resolvedName=String(s.projectName||data.projectName||'Project').trim()||'Project';
     const resolvedLocation=String(s.location||'').trim();
