@@ -1,9 +1,9 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../../admin-auth";
-import { writeAudit } from "../../../audit";
-import { activeProjectDomain } from "../../../project-domains";
-import { currentProjectLinks } from "../../../project-links";
-import { missingRequiredProjectContact } from "../../../project-profile-policy";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
+import { activeProjectDomain } from "@/modules/domains";
+import { currentProjectLinks } from "@/modules/projects";
+import { missingRequiredProjectContact } from "@/modules/projects";
 
 const denied = () => Response.json({ error: "Super Admin access required" }, { status: 403 });
 const LEGACY_PROJECT = "tiyansh-prime-square";
