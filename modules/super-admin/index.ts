@@ -1,3 +1,4 @@
+export { default } from "@/app/super-admin-dashboard";
 export { default as SuperAdminDashboard } from "@/app/super-admin-dashboard";
 export { default as PlotMapper } from "@/app/plot-mapper";
 export { default as GeoMapper } from "@/app/geo-mapper";
