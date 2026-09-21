@@ -26,7 +26,7 @@ The current codebase contains:
 - plot status, pricing, gallery and project profile management
 - D1 schema/migrations and R2 project assets
 - generic multi-tenant Cloudflare Worker routing
-- a temporary legacy Tiyansh compatibility Worker
+- a temporary legacy Tiyansh routing/rollback Worker that runs the same generic tenant runtime
 
 ## Production tenancy model
 
@@ -67,7 +67,7 @@ Important current areas:
 - `tests/` — regression contracts
 - `.github/workflows/` — CI/CD
 
-Stage 2 establishes stable `@/modules/*` boundaries before any risky physical route moves. See [docs/STAGE-2-MODULARIZATION.md](./docs/STAGE-2-MODULARIZATION.md). Future physical moves must preserve these interfaces and production behavior.
+Stage 2 establishes stable `@/modules/*` boundaries before any risky physical route moves. See [docs/STAGE-2-MODULARIZATION.md](./docs/STAGE-2-MODULARIZATION.md). Stage 3 isolates the historical Tiyansh bridge and removes Tiyansh runtime defaults; see [docs/STAGE-3-TIYANSH-LEGACY-ISOLATION.md](./docs/STAGE-3-TIYANSH-LEGACY-ISOLATION.md).
 
 ## Development
 
