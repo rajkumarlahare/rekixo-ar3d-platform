@@ -43,8 +43,8 @@ export async function GET(request: Request) {
       engine: engine?.project
         ? {
             project: engine.project,
-            activeModelAvailable: Boolean(engine.activeModel?.available),
-            enabledSceneCount: (engine.scenes || []).filter((scene) => scene.enabled).length,
+            activeModelAvailable: Boolean(engine.activeModelAvailable),
+            enabledSceneCount: Number(engine.enabledSceneCount || 0),
           }
         : null,
       adminHandoffUrl:
