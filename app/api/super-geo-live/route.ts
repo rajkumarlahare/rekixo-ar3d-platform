@@ -1,10 +1,10 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../admin-auth";
-import { writeAudit } from "../../audit";
-import { buildGeoPublicManifest, type GeoPublicSnapshot } from "../../geo-public-manifest";
-import { createGeoOverlayVariant } from "../../geo-public-image";
-import { publicGoogleMapsBrowserKey } from "../../google-maps-config";
-import { currentProjectLinks } from "../../project-links";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
+import { buildGeoPublicManifest, type GeoPublicSnapshot } from "@/modules/geo";
+import { createGeoOverlayVariant } from "@/modules/geo";
+import { publicGoogleMapsBrowserKey } from "@/modules/geo";
+import { currentProjectLinks } from "@/modules/projects";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
