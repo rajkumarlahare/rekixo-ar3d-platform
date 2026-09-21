@@ -800,9 +800,6 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
       <button class="icon" id="callTop" aria-label="Call">
         <svg viewBox="0 0 24 24"><path d="M7.2 3.5 4.6 5.3c-.8.6-.9 1.8-.4 3 2.2 5.4 6.1 9.3 11.5 11.5 1.2.5 2.4.4 3-.4l1.8-2.6-4-3-1.8 1.8c-2.6-1.1-5.2-3.7-6.3-6.3l1.8-1.8-3-4Z"/></svg>
       </button>
-      <button class="icon" id="engine3dTop" aria-label="Open project 3D experience" title="3D Experience" hidden>
-        <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
-      </button>
       <button class="icon" id="outlineTop" aria-label="Open admin panel" title="Admin panel">
         <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
       </button>
@@ -1877,12 +1874,6 @@ rekixoStartPublicBoot();
     window.REKIXO_PROJECT_QUERY=canonicalForward.toString()?'?'+canonicalForward.toString():'';
 
     const s=data&&data.settings||{};
-    const engine3d=data&&data.engine3d&&typeof data.engine3d.url==='string'?data.engine3d:null;
-    const engine3dTop=q('#engine3dTop');
-    if(engine3dTop){
-      engine3dTop.hidden=!engine3d;
-      engine3dTop.onclick=engine3d?()=>window.open(engine3d.url,'_blank','noopener,noreferrer'):null;
-    }
     applyPlotStatusTheme(s);
     publicRotation=normalizeQuarterTurn(s.publicRotation);
     publicInitialViewMode=normalizeInitialViewMode(s.publicInitialViewMode);

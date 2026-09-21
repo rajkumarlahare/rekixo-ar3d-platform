@@ -32,7 +32,7 @@ test("Platform consumes a versioned Engine HTTP contract instead of Engine D1", 
   assert.doesNotMatch(integration, /rekixo-3d-production|MODEL_ASSETS|projects_3d|models_3d|scenes_3d/);
 });
 
-test("public 3D exposure fails closed and requires published Engine state", () => {
+test("public 3D link data stays fail-closed without adding a customer header shortcut", () => {
   const integration = read("app/engine-integration.ts");
   const publicData = read("app/api/public-data/route.ts");
   const shell = read("public/project/index.html");
@@ -40,8 +40,9 @@ test("public 3D exposure fails closed and requires published Engine state", () =
   assert.match(integration, /publishedEngineProject/);
   assert.match(integration, /engine\.project\.status !== "published"/);
   assert.match(publicData, /engine3d/);
-  assert.match(shell, /id="engine3dTop"/);
-  assert.match(shell, /engine3dTop\.hidden=!engine3d/);
+  assert.doesNotMatch(shell, /engine3dTop|Open project 3D experience|title="3D Experience"/);
+  assert.match(shell, /id="callTop"/);
+  assert.match(shell, /id="outlineTop"/);
 });
 
 test("admin handoff transfers context only and exposes no Platform session", () => {
