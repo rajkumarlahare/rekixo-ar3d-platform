@@ -1,9 +1,9 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../../admin-auth";
-import { writeAudit } from "../../../audit";
-import { activeProjectDomain } from "../../../project-domains";
-import { currentProjectLinks } from "../../../project-links";
-import { GLOBAL_SHARE_BRAND, SHARE_TEMPLATE } from "../../../share-branding";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
+import { activeProjectDomain } from "@/modules/domains";
+import { currentProjectLinks } from "@/modules/projects";
+import { GLOBAL_SHARE_BRAND, SHARE_TEMPLATE } from "@/modules/sharing";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
