@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
-import { requireSuperAdmin, sameOrigin } from "../../../admin-auth";
-import { writeAudit } from "../../../audit";
+import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
+import { writeAudit } from "@/modules/audit";
 import {
   cleanHostInput,
   domainSupports,
@@ -8,18 +8,18 @@ import {
   validHostname,
   validSlug,
   type DomainKind,
-} from "../../../domain-utils";
+} from "@/modules/domains";
 import {
   assertDomainAvailable,
   deleteProjectDomain,
   upsertPrimaryProjectDomain,
-} from "../../../project-domains";
+} from "@/modules/domains";
 import {
   clientFallbackHost,
   clientPlatformHost,
   sharedAdminHost,
-} from "../../../project-context";
-import { currentProjectLinks } from "../../../project-links";
+} from "@/modules/projects";
+import { currentProjectLinks } from "@/modules/projects";
 
 const denied = () => Response.json({ error: "Super Admin access required" }, { status: 403 });
 async function isGeoLab(projectId: string) {
