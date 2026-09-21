@@ -1,6 +1,6 @@
 import { env, waitUntil } from "cloudflare:workers";
-import { projectBySlug } from "../../project-context";
-import { createGeoOverlayVariant } from "../../geo-public-image";
+import { projectBySlug } from "@/modules/public-project";
+import { createGeoOverlayVariant } from "@/modules/geo";
 
 const LIVE_SETTING_KEYS = [
   "geoPublicEnabled",
