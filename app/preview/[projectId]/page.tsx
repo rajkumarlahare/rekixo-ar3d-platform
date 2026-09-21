@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { notFound, redirect } from "next/navigation";
-import { validAdminSession } from "../../admin-auth";
+import { validAdminSession } from "@/modules/auth";
 
 export const dynamic = "force-dynamic";
 
