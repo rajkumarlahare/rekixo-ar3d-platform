@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { authenticateAdmin,sameOrigin,sessionCookie } from "../../../admin-auth";
+import { authenticateAdmin,sameOrigin,sessionCookie } from "@/modules/auth";
 
 const WINDOW=15*60*1000,MAX=5;
 
