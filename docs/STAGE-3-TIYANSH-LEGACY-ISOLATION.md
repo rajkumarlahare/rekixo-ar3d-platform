@@ -43,3 +43,7 @@ The bridge runs the same project-data-driven code as the generic Worker. It no l
 ## No data migration
 
 Stage 3 has no D1 migration and moves no R2 objects. Project IDs, domains, pricing, plot status, geometry, gallery records and client credentials remain unchanged.
+
+## CI acceptance
+
+The Stage 3 pull request is accepted only when source syntax, production build, the full regression suite, Stage 2 module boundaries, Stage 3 isolation contracts, Measurement V2 contracts, and the live Tiyansh generic-vs-legacy preflight all pass. Production is accepted only after both post-deploy parity gates pass in the same deployment run.
