@@ -1,12 +1,12 @@
 import { env, waitUntil } from "cloudflare:workers";
-import { projectBySlug } from "../../project-context";
+import { projectBySlug } from "@/modules/public-project";
 import {
   buildGeoPublicManifest,
   parseGeoPublicManifest,
   type GeoPublicManifest,
   type GeoPublicSnapshot,
-} from "../../geo-public-manifest";
-import { publicGoogleMapsBrowserKey } from "../../google-maps-config";
+} from "@/modules/geo";
+import { publicGoogleMapsBrowserKey } from "@/modules/geo";
 
 const LIVE_SETTING_KEYS = [
   "geoPublicEnabled",
