@@ -324,6 +324,90 @@ function semanticRoleMidpoint(points: MapperPoint[], edges: number[]) {
   ] as MapperPoint;
 }
 
+function semanticRoleMeasureGuide(points: MapperPoint[], edges: number[]) {
+  if (points.length < 3 || !edges.length) return null;
+  const valid = edges
+    .filter((edge) => Number.isInteger(edge) && edge >= 0 && edge < points.length)
+    .map((edge) => {
+      const a = points[edge];
+      const b = points[(edge + 1) % points.length];
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      return { a, b, length };
+    })
+    .filter((segment) => segment.length > 0);
+  if (!valid.length) return null;
+
+  const total = valid.reduce((sum, segment) => sum + segment.length, 0);
+  let remaining = total / 2;
+  let middle = valid[valid.length - 1];
+  let ratio = 0.5;
+  for (const segment of valid) {
+    if (remaining <= segment.length) {
+      middle = segment;
+      ratio = segment.length ? remaining / segment.length : 0.5;
+      break;
+    }
+    remaining -= segment.length;
+  }
+
+  const midpoint: MapperPoint = [
+    middle.a[0] + (middle.b[0] - middle.a[0]) * ratio,
+    middle.a[1] + (middle.b[1] - middle.a[1]) * ratio,
+  ];
+  const tangentLength = Math.max(
+    1e-9,
+    Math.hypot(middle.b[0] - middle.a[0], middle.b[1] - middle.a[1]),
+  );
+  const tangent: MapperPoint = [
+    (middle.b[0] - middle.a[0]) / tangentLength,
+    (middle.b[1] - middle.a[1]) / tangentLength,
+  ];
+
+  const center = polygonCenter(points);
+  const centerVector: MapperPoint = [center[0] - midpoint[0], center[1] - midpoint[1]];
+  const centerDistance = Math.max(1e-9, Math.hypot(centerVector[0], centerVector[1]));
+  const inward: MapperPoint = [
+    centerVector[0] / centerDistance,
+    centerVector[1] / centerDistance,
+  ];
+
+  const xs = points.map((point) => point[0]);
+  const ys = points.map((point) => point[1]);
+  const diagonal = Math.max(
+    0.02,
+    Math.hypot(
+      Math.max(...xs) - Math.min(...xs),
+      Math.max(...ys) - Math.min(...ys),
+    ),
+  );
+  const inwardOffset = Math.min(0.028, Math.max(0.006, diagonal * 0.055));
+  const halfGuide = Math.min(
+    diagonal * 0.18,
+    Math.max(diagonal * 0.065, Math.min(total * 0.16, diagonal * 0.14)),
+  );
+  const anchor: MapperPoint = [
+    midpoint[0] + inward[0] * inwardOffset,
+    midpoint[1] + inward[1] * inwardOffset,
+  ];
+  const label: MapperPoint = [
+    anchor[0] + inward[0] * Math.min(0.016, diagonal * 0.035),
+    anchor[1] + inward[1] * Math.min(0.016, diagonal * 0.035),
+  ];
+  const clamp = (value: number) => Math.max(0.002, Math.min(0.998, value));
+
+  return {
+    start: [
+      clamp(anchor[0] - tangent[0] * halfGuide),
+      clamp(anchor[1] - tangent[1] * halfGuide),
+    ] as MapperPoint,
+    end: [
+      clamp(anchor[0] + tangent[0] * halfGuide),
+      clamp(anchor[1] + tangent[1] * halfGuide),
+    ] as MapperPoint,
+    label: [clamp(label[0]), clamp(label[1])] as MapperPoint,
+  };
+}
+
 function savedPlotFrontDirections(value: unknown) {
   const output: Record<string, EdgeDirection> = {};
   try {
@@ -3474,6 +3558,80 @@ export default function PlotMapper({
   const currentHasSavedBoundary = Boolean(
     currentPlot && parsePolygon(currentPlot).length >= 3,
   );
+
+  const savedCurrentPolygon = currentPlot ? parsePolygon(currentPlot) : [];
+  const measurementOverlayPoints =
+    points.length >= 3 ? points : savedCurrentPolygon.length >= 3 ? savedCurrentPolygon : [];
+  const measurementOverlayRoles: PlotSideRoleEdges = (() => {
+    if (points.length >= 3) return currentSemanticRoles();
+    const output = emptyPlotSideRoleEdges();
+    if (!currentPlot || savedCurrentPolygon.length < 3) return output;
+    const parsed = parsePlotSideSemantics(
+      currentPlot.edgeSemantics,
+      savedCurrentPolygon.length,
+    );
+    const layout = resolvedPlotSideLayout(currentPlot, savedCurrentPolygon);
+    const fallback: Record<PlotSideRole, number | null | undefined> = {
+      front: currentPlot.frontEdgeIndex,
+      back: currentPlot.backEdgeIndex,
+      depthA: currentPlot.depthEdgeIndex,
+      depthB: currentPlot.depth2EdgeIndex,
+    };
+    (["front", "back", "depthA", "depthB"] as PlotSideRole[]).forEach((role) => {
+      if (layout === "three" && role === "depthB") return;
+      const canonical = parsed?.roles[role] || [];
+      if (canonical.length) {
+        output[role] = [...canonical];
+        return;
+      }
+      const legacy = fallback[role];
+      if (
+        legacy != null &&
+        Number.isInteger(Number(legacy)) &&
+        Number(legacy) >= 0 &&
+        Number(legacy) < savedCurrentPolygon.length
+      ) {
+        output[role] = [Number(legacy)];
+      }
+    });
+    return output;
+  })();
+
+  const currentRoleMeasurementText = (role: PlotSideRole) => {
+    const liveValue =
+      role === "front" ? front :
+      role === "back" ? back :
+      role === "depthA" ? depth : depth2;
+    const savedValue =
+      role === "front" ? currentPlot?.front :
+      role === "back" ? currentPlot?.back :
+      role === "depthA" ? currentPlot?.depth : currentPlot?.depth2;
+    const savedLabel =
+      role === "front" ? currentPlot?.frontLabel :
+      role === "back" ? currentPlot?.backLabel :
+      role === "depthA" ? currentPlot?.depthLabel : currentPlot?.depth2Label;
+    const roleName =
+      role === "front" ? "Front" :
+      role === "back" ? "Back" :
+      role === "depthA"
+        ? effectiveSideLayout() === "three" ? "Depth" : "Depth A"
+        : "Depth B";
+    const raw = String(liveValue || "").trim();
+    if (!raw) return "";
+    const numeric = Number(raw);
+    const savedNumeric = savedValue == null ? null : Number(savedValue);
+    const canUsePreciseSavedLabel =
+      Boolean(String(savedLabel || "").trim()) &&
+      Number.isFinite(numeric) &&
+      savedNumeric != null &&
+      Number.isFinite(savedNumeric) &&
+      Math.abs(numeric - savedNumeric) <= 1e-9;
+    const measurement = canUsePreciseSavedLabel
+      ? String(savedLabel).trim()
+      : `${raw} ${dimensionUnit}`;
+    return `${roleName} · ${measurement}`;
+  };
+
   const currentCenter = points.length ? polygonCenter(points) : null;
   const shapeInvalid = points.length >= 4 && polygonSelfIntersects(points);
   const shapeReady = points.length >= 3 && (shape === "polygon" || points.length === 4) && !shapeInvalid;
@@ -4181,6 +4339,50 @@ export default function PlotMapper({
                       >{badge}</text>
                     );
                   })}
+                  {!calibrationMode && measurementOverlayPoints.length >= 3 && ([
+                    ["front", "#22c55e"],
+                    ["back", "#60a5fa"],
+                    ["depthA", "#f59e0b"],
+                    ...(effectiveSideLayout() === "four"
+                      ? [["depthB", "#a78bfa"] as const]
+                      : []),
+                  ] as const).map(([role, color]) => {
+                    const edges = measurementOverlayRoles[role];
+                    const textValue = currentRoleMeasurementText(role);
+                    const guide = semanticRoleMeasureGuide(measurementOverlayPoints, edges);
+                    if (!guide || !textValue) return null;
+                    return (
+                      <g
+                        key={`semantic-measure-${role}`}
+                        className="semantic-side-measurement"
+                        style={{ pointerEvents: "none" }}
+                      >
+                        <line
+                          x1={guide.start[0] * 1000}
+                          y1={guide.start[1] * 1000}
+                          x2={guide.end[0] * 1000}
+                          y2={guide.end[1] * 1000}
+                          stroke={color}
+                          strokeOpacity={.94}
+                          strokeWidth={1.35}
+                          vectorEffect="non-scaling-stroke"
+                          strokeLinecap="round"
+                        />
+                        <text
+                          x={guide.label[0] * 1000}
+                          y={guide.label[1] * 1000}
+                          fill="#f8fbff"
+                          stroke="#07111f"
+                          strokeWidth={2.2 / Math.max(1, zoom)}
+                          paintOrder="stroke"
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={12 / Math.max(1, zoom)}
+                          fontWeight={850}
+                        >{textValue}</text>
+                      </g>
+                    );
+                  })}
                   {showCadOverlay && liveMatrix && cadTransformed.map(({ candidate, points: polygon }) => (
                     <polygon key={`cad-${candidate.key}`} className="cad-transformed" points={polygon.map(([x, y]) => `${x * 1000},${y * 1000}`).join(" ")} />
                   ))}
@@ -4265,127 +4467,131 @@ export default function PlotMapper({
               style={{ display: "none" }}
             ><i /></div>
           </div>
-          {!completedProject && manualPhase === "details" && points.length >= 3 && (
-            <div className="plot-side-assigner">
-              <div className="plot-side-assigner-head">
-                <div>
-                  <b>Assign plot sides</b>
-                  <span>
-                    {semanticChainRole
-                      ? semanticChainStart == null
-                        ? "Role selected · start corner number tap karein"
-                        : `Corner ${semanticChainStart + 1} selected · end corner tap karein`
-                      : selectedSemanticEdge == null
-                        ? "Role button → start corner → end corner"
-                        : `Edge ${selectedSemanticEdge + 1} selected`}
-                  </span>
-                </div>
-                {semanticChainRole ? (
-                  <button type="button" onClick={() => {
+          {!completedProject && (
+            <div
+              className={`mapper-v4-bottom-bar ${
+                manualPhase === "details" && points.length >= 3 ? "has-side-dock" : ""
+              }`}
+            >
+              <div className="mapper-v4-bottom-tools">
+                <button type="button" disabled={!points.length} onClick={undoPoint}><Undo2 />Undo</button>
+                <button
+                  type="button"
+                  disabled={busy || (!points.length && !currentHasSavedBoundary)}
+                  onClick={clearCurrentSelection}
+                >{currentHasSavedBoundary ? "Remove saved" : "Clear"}</button>
+                <button type="button" onClick={clonePreviousShape}><Copy />Clone prev</button>
+                <button
+                  type="button"
+                  className={bulkSemanticMode ? "primary" : ""}
+                  onClick={() => {
+                    setBulkSemanticMode((value) => !value);
+                    setBulkSemanticIds(new Set());
+                    setEdgeAssignMode(null);
+                    setSelectedSemanticEdge(null);
                     setSemanticChainRole(null);
                     setSemanticChainStart(null);
-                    setSelectedSemanticEdge(null);
-                    notify("Side chain selection cancel hui");
-                  }}>Cancel chain</button>
-                ) : selectedSemanticEdge != null ? (
-                  <button type="button" onClick={clearSelectedSemanticRole}>Clear edge role</button>
-                ) : null}
+                  }}
+                >Bulk sides</button>
               </div>
-              {shape === "polygon" && (
-                <div className="mapper-actions compact">
-                  <span>
-                    Logical sides: <b>{effectiveSideLayout() === "three" ? "3" : "4"}</b>
-                    {points.length === 3 ? " · triangle auto" : ""}
-                  </span>
-                  <button
-                    type="button"
-                    className={effectiveSideLayout() === "three" ? "primary" : ""}
-                    onClick={() => changeSideLayout("three")}
-                  >3 sides · Front / Back / Depth</button>
-                  <button
-                    type="button"
-                    className={effectiveSideLayout() === "four" ? "primary" : ""}
-                    disabled={points.length === 3}
-                    onClick={() => changeSideLayout("four")}
-                  >4 sides · Front / Back / Depth A / Depth B</button>
-                </div>
-              )}
-              <div className="plot-side-role-grid">
-                {([
-                  ["front", "Front", frontEdgeIndex, "#22c55e"],
-                  ["back", "Back", backEdgeIndex, "#60a5fa"],
-                  ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A", depthEdgeIndex, "#f59e0b"],
-                  ...(effectiveSideLayout() === "four"
-                    ? [["depthB", "Depth B", depth2EdgeIndex, "#a78bfa"] as const]
-                    : []),
-                ] as const).map(([role, label, rawEdge, color]) => {
-                  const groupedEdges = currentSemanticRoles()[role];
-                  const active =
-                    semanticChainRole === role ||
-                    (selectedSemanticEdge != null && groupedEdges.includes(selectedSemanticEdge));
-                  const chainWaiting =
-                    semanticChainRole === role
-                      ? semanticChainStart == null
-                        ? "Tap start corner"
-                        : "Tap end corner"
-                      : "";
-                  return (
-                    <button
-                      key={`assign-${role}`}
-                      type="button"
-                      className={active ? "active" : ""}
-                      style={{ "--side-color": color } as React.CSSProperties}
-                      onClick={() => assignSelectedSemanticRole(role)}
-                    >
-                      <strong>{label}</strong>
-                      <small>
-                        {chainWaiting ||
-                          (groupedEdges.length > 1
-                            ? `${groupedEdges.length} edges grouped`
-                            : groupedEdges.length === 1
-                              ? `Edge ${groupedEdges[0] + 1}`
-                              : "Tap to select chain")}
-                      </small>
-                    </button>
-                  );
-                })}
-              </div>
-              <small className="plot-side-assigner-help">
-                Road-facing boundary = Front. Easy range mode: pehle Front / Back / Depth role
-                button tap karein, phir numbered start corner aur end corner tap karein. Example:
-                corner 3 → 12 par click-order me 3→4 se 11→12 tak poori curved boundary ek side
-                banegi. Closing/reverse side ke liye corners usi desired direction me tap karein
-                (jaise 12 → 3). Single straight edge ka old edge-tap workflow bhi valid hai.
-              </small>
-            </div>
-          )}
-          {!completedProject && (
-            <div className="mapper-v4-bottom-bar">
-              <button type="button" disabled={!points.length} onClick={undoPoint}><Undo2 />Undo</button>
               <button
                 type="button"
-                disabled={busy || (!points.length && !currentHasSavedBoundary)}
-                onClick={clearCurrentSelection}
-              >{currentHasSavedBoundary ? "Remove saved" : "Clear"}</button>
-              <button type="button" onClick={clonePreviousShape}><Copy />Clone prev</button>
-              <button
-                type="button"
-                className={bulkSemanticMode ? "primary" : ""}
-                onClick={() => {
-                  setBulkSemanticMode((value) => !value);
-                  setBulkSemanticIds(new Set());
-                  setEdgeAssignMode(null);
-                  setSelectedSemanticEdge(null);
-                  setSemanticChainRole(null);
-                  setSemanticChainStart(null);
-                }}
-              >Bulk sides</button>
-              <button
-                type="button"
-                className="primary"
+                className="primary mapper-confirm-button"
                 disabled={busy || !shapeReady}
                 onClick={confirmPlot}
               ><CheckCircle2 />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Confirm ${plotId} →`}</button>
+
+              {manualPhase === "details" && points.length >= 3 && (
+                <div className="plot-side-assigner mapper-side-dock">
+                  <div className="plot-side-assigner-head">
+                    <div>
+                      <b>Assign plot sides</b>
+                      <span>
+                        {semanticChainRole
+                          ? semanticChainStart == null
+                            ? "Role selected · start corner number tap karein"
+                            : `Corner ${semanticChainStart + 1} selected · end corner tap karein`
+                          : selectedSemanticEdge == null
+                            ? "Role → start corner → end corner"
+                            : `Edge ${selectedSemanticEdge + 1} selected`}
+                      </span>
+                    </div>
+                    {semanticChainRole ? (
+                      <button type="button" onClick={() => {
+                        setSemanticChainRole(null);
+                        setSemanticChainStart(null);
+                        setSelectedSemanticEdge(null);
+                        notify("Side chain selection cancel hui");
+                      }}>Cancel</button>
+                    ) : selectedSemanticEdge != null ? (
+                      <button type="button" onClick={clearSelectedSemanticRole}>Clear role</button>
+                    ) : null}
+                  </div>
+                  {shape === "polygon" && (
+                    <div className="mapper-actions compact plot-side-layout-toggle">
+                      <span>
+                        <b>{effectiveSideLayout() === "three" ? "3 sides" : "4 sides"}</b>
+                        {points.length === 3 ? " · triangle auto" : ""}
+                      </span>
+                      <button
+                        type="button"
+                        className={effectiveSideLayout() === "three" ? "primary" : ""}
+                        onClick={() => changeSideLayout("three")}
+                      >3 sides</button>
+                      <button
+                        type="button"
+                        className={effectiveSideLayout() === "four" ? "primary" : ""}
+                        disabled={points.length === 3}
+                        onClick={() => changeSideLayout("four")}
+                      >4 sides</button>
+                    </div>
+                  )}
+                  <div className="plot-side-role-grid">
+                    {([
+                      ["front", "Front", "#22c55e"],
+                      ["back", "Back", "#60a5fa"],
+                      ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A", "#f59e0b"],
+                      ...(effectiveSideLayout() === "four"
+                        ? [["depthB", "Depth B", "#a78bfa"] as const]
+                        : []),
+                    ] as const).map(([role, label, color]) => {
+                      const groupedEdges = currentSemanticRoles()[role];
+                      const active =
+                        semanticChainRole === role ||
+                        (selectedSemanticEdge != null && groupedEdges.includes(selectedSemanticEdge));
+                      const chainWaiting =
+                        semanticChainRole === role
+                          ? semanticChainStart == null
+                            ? "Tap start corner"
+                            : "Tap end corner"
+                          : "";
+                      return (
+                        <button
+                          key={`assign-${role}`}
+                          type="button"
+                          className={active ? "active" : ""}
+                          style={{ "--side-color": color } as React.CSSProperties}
+                          onClick={() => assignSelectedSemanticRole(role)}
+                        >
+                          <strong>{label}</strong>
+                          <small>
+                            {chainWaiting ||
+                              (groupedEdges.length > 1
+                                ? `${groupedEdges.length} edges`
+                                : groupedEdges.length === 1
+                                  ? `Edge ${groupedEdges[0] + 1}`
+                                  : "Select")}
+                          </small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <small className="plot-side-assigner-help">
+                    Role button → numbered start corner → end corner. Curved segments beech me
+                    automatically same side group banenge.
+                  </small>
+                </div>
+              )}
             </div>
           )}
           {!completedProject && bulkSemanticMode && (

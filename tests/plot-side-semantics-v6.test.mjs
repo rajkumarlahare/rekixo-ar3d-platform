@@ -50,9 +50,9 @@ test("Super Admin exposes numbered corner-range side assignment with legacy edge
   assert.match(mapper, /selectedSemanticEdge/);
   assert.match(mapper, /assignSelectedSemanticRole/);
   assert.match(mapper, /handleSemanticCornerTap/);
-  assert.match(mapper, /Role button → start corner → end corner/);
-  assert.match(mapper, /3 sides · Front \/ Back \/ Depth/);
-  assert.match(mapper, /4 sides · Front \/ Back \/ Depth A \/ Depth B/);
+  assert.match(mapper, /Role → start corner → end corner/);
+  assert.match(mapper, />3 sides<\/button>/);
+  assert.match(mapper, />4 sides<\/button>/);
   assert.match(mapper, /semantic-badge-/);
 });
 
