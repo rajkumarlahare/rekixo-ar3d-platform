@@ -105,6 +105,12 @@ export async function GET(
   } else if (!object && kind === "masterplan") {
     object = await env.BUCKET.get(`projects/${projectId}/mapper/masterplanPublic`);
     servedMasterplanSource = "public-fallback";
+  } else if (
+    !object &&
+    kind === "masterplanOriginal" &&
+    objectKey !== `projects/${projectId}/mapper/masterplanOriginal`
+  ) {
+    object = await env.BUCKET.get(`projects/${projectId}/mapper/masterplanOriginal`);
   }
   if (!object) return new Response("Not found", { status: 404 });
 
