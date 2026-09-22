@@ -60,7 +60,8 @@ test("gesture handlers are capture-phase on the image viewport and handles stay 
   assert.match(mapper, /SELECT single-tap is deliberately NOT captured here/);
   assert.match(mapper, /for \(const pointerId of activeGesturePointersRef\.current\.keys\(\)\)/);
   assert.match(mapper, /mapperGestureTargetIsHandle/);
-  assert.match(mapper, /onPointerDown=\{\(event\) => dragHandle\(event, index\)\}/);
+  assert.match(mapper, /if \(semanticChainRole\)[\s\S]*dragHandle\(event, index\)/);
+  assert.match(mapper, /handleSemanticCornerTap\(index\)/);
 });
 
 test("mobile browser gestures cannot steal the mapper and touch handles are usable", () => {
