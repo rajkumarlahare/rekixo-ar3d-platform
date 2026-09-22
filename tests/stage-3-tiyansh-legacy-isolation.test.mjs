@@ -101,10 +101,10 @@ test("Tiyansh static recovery artifacts are archived outside the live public tre
   assert.ok(!fs.existsSync("public/project/plots-data.js"));
 });
 
-test("all public entry points use runtime v64 and explicit tenant context", () => {
-  assert.match(rootPage, /projectId=\$\{encodeURIComponent\(target\.projectId \|\| ""\)\}&v=64/);
-  assert.match(sharedPage, /projectSlug=.*&v=64/);
-  assert.match(previewPage, /preview=1&v=64/);
+test("all public entry points use runtime v65 and explicit tenant context", () => {
+  assert.match(rootPage, /projectId=\$\{encodeURIComponent\(target\.projectId \|\| ""\)\}&v=65/);
+  assert.match(sharedPage, /projectSlug=.*&v=65/);
+  assert.match(previewPage, /preview=1&v=65/);
 });
 
 test("existing Tiyansh email login compatibility and future mobile login remain intact", () => {
