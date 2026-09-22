@@ -42,8 +42,9 @@ test("auto CAD mapper is owner-only, project-native and keeps precise manual fal
   assert.match(mapper, /publishAutoMatches/);
   assert.match(mapper, /plotSheet/);
   assert.match(mapper, /sourceCad/);
-  assert.match(mapper, /MAX_MAPPING_DIMENSION = 6144/);
-  assert.match(mapper, /Keep the exact project aspect ratio/);
+  assert.match(mapper, /MAX_MAPPING_DIMENSION = 4096/);
+  assert.match(mapper, /Persistent polygons are normalized 0\.\.1/);
+  assert.match(mapper, /resizeWidth: width/);
   assert.doesNotMatch(mapper, /MAP_WIDTH = 1200/);
   assert.doesNotMatch(mapper, /MAP_HEIGHT = 2133/);
 

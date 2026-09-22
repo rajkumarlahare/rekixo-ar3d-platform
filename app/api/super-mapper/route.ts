@@ -570,18 +570,56 @@ export async function POST(request: Request) {
       if (!(width > 100 && height > 100 && width <= 10000 && height <= 10000)) {
         return Response.json({ error: "Masterplan dimensions invalid hain" }, { status: 400 });
       }
+
       const originalFile = form.get("originalFile");
       const publicFile = form.get("publicFile");
+      const originalUploadCompleted = String(form.get("originalUploadCompleted") || "") === "1";
+      const originalObjectToken = String(form.get("originalObjectToken") || "");
+      const originalFileName = String(form.get("originalFileName") || "").slice(0, 240);
+      const originalFileSize = Number(form.get("originalFileSize") || 0);
+
       if (
         originalFile instanceof File &&
         (!imageUploadLooksValid(originalFile) || originalFile.size > 40 * 1024 * 1024)
       )
-        return Response.json({ error: "Original masterplan invalid hai" }, { status: 400 });
+        return Response.json(
+          { error: "Legacy original masterplan 40 MB se chhota hona chahiye" },
+          { status: 400 },
+        );
       if (
         publicFile instanceof File &&
         (!imageUploadLooksValid(publicFile) || publicFile.size > 4 * 1024 * 1024)
       )
         return Response.json({ error: "Public masterplan invalid hai" }, { status: 400 });
+
+      const usingMultipartOriginal =
+        originalUploadCompleted &&
+        /^[a-zA-Z0-9_-]{12,80}$/.test(originalObjectToken);
+      if (originalUploadCompleted && !usingMultipartOriginal)
+        return Response.json(
+          { error: "Original masterplan multipart token invalid hai" },
+          { status: 400 },
+        );
+
+      if (usingMultipartOriginal) {
+        const uploadedOriginal = await env.BUCKET.head(
+          `projects/${projectId}/mapper/masterplanOriginal/${originalObjectToken}`,
+        );
+        if (!uploadedOriginal)
+          return Response.json(
+            { error: "Original masterplan multipart upload complete nahi hua" },
+            { status: 409 },
+          );
+        if (
+          Number.isFinite(originalFileSize) &&
+          originalFileSize > 0 &&
+          uploadedOriginal.size !== Math.round(originalFileSize)
+        )
+          return Response.json(
+            { error: "Original masterplan size verify nahi hui" },
+            { status: 409 },
+          );
+      }
 
       const writes: Promise<unknown>[] = [
         env.BUCKET.put(objectKey, file.stream(), {
@@ -609,19 +647,38 @@ export async function POST(request: Request) {
         );
       }
       await Promise.all(writes);
+
+      const version = String(Date.now());
+      const resolvedOriginalName =
+        (usingMultipartOriginal ? originalFileName : originalFile instanceof File ? originalFile.name : file.name)
+          .slice(0, 240);
+
       await Promise.all([
         writeSetting(projectId, "masterplanName", file.name.slice(0, 240), now),
-        writeSetting(
-          projectId,
-          "masterplanOriginalName",
-          (originalFile instanceof File ? originalFile.name : file.name).slice(0, 240),
-          now,
-        ),
+        writeSetting(projectId, "masterplanOriginalName", resolvedOriginalName, now),
+        writeSetting(projectId, "masterplanVersion", version, now),
         writeSetting(projectId, "mapWidth", String(width), now),
         writeSetting(projectId, "mapHeight", String(height), now),
         writeSetting(projectId, "masterplanOriginalWidth", String(originalWidth || width), now),
         writeSetting(projectId, "masterplanOriginalHeight", String(originalHeight || height), now),
+        ...(usingMultipartOriginal
+          ? [
+              writeSetting(
+                projectId,
+                "masterplanOriginalObjectToken",
+                originalObjectToken,
+                now,
+              ),
+            ]
+          : []),
       ]);
+
+      // Legacy uploader wrote the source at a stable key. If it is ever used again,
+      // clear the versioned-original pointer so downloads keep resolving correctly.
+      if (originalFile instanceof File && !usingMultipartOriginal) {
+        await deleteSettings(projectId, ["masterplanOriginalObjectToken"]);
+      }
+
       // A new render can have different perspective even with identical dimensions.
       // Keep already-published normalized polygons and inventory, but never reuse a
       // stale CAD->image calibration for future automatic publishes.
@@ -634,17 +691,26 @@ export async function POST(request: Request) {
       ]);
       await writeAudit(actor, "mapper.masterplan_uploaded", projectId, null, {
         filename: file.name,
-        originalFilename: originalFile instanceof File ? originalFile.name : file.name,
+        originalFilename: resolvedOriginalName,
+        originalSize:
+          usingMultipartOriginal && Number.isFinite(originalFileSize)
+            ? Math.round(originalFileSize)
+            : originalFile instanceof File
+              ? originalFile.size
+              : null,
+        originalStorage: usingMultipartOriginal ? "multipart-versioned" : "legacy-inline",
         size: file.size,
         width,
         height,
+        version,
       });
       return Response.json({
         ok: true,
         name: file.name,
         mapWidth: width,
         mapHeight: height,
-        url: `/api/project-asset/masterplan?projectId=${encodeURIComponent(projectId)}&v=${Date.now()}`,
+        masterplanVersion: version,
+        url: `/api/project-asset/masterplan?projectId=${encodeURIComponent(projectId)}&v=${version}`,
       });
     }
 

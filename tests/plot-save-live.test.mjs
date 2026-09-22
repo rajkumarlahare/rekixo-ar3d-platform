@@ -60,11 +60,15 @@ test("Clear on a mapped plot removes the persisted boundary and verifies server 
   assert.match(api, /"mapper\.boundary_removed"/);
 });
 
-test("RPK original 29.51 MB masterplan remains valid for future replacement", async () => {
-  const [mapper, api] = await Promise.all([
+test("RPK original 29.51 MB and future masterplans up to 100 MB remain supported", async () => {
+  const [mapper, api, multipart] = await Promise.all([
     source("../app/plot-mapper.tsx"),
     source("../app/api/super-mapper/route.ts"),
+    source("../app/api/super-mapper-masterplan-upload/route.ts"),
   ]);
-  assert.match(mapper, /MAX_ORIGINAL_MASTERPLAN_BYTES = 40 \* 1024 \* 1024/);
+  assert.match(mapper, /MAX_ORIGINAL_MASTERPLAN_BYTES = 100 \* 1024 \* 1024/);
+  assert.match(mapper, /MASTERPLAN_ORIGINAL_CHUNK_BYTES = 8 \* 1024 \* 1024/);
+  assert.match(multipart, /MAX_ORIGINAL_BYTES = 100 \* 1024 \* 1024/);
+  // Legacy inline clients stay accepted at their historical safe limit.
   assert.match(api, /originalFile\.size > 40 \* 1024 \* 1024/);
 });
