@@ -45,6 +45,9 @@ test("current side measurements stay readable at precision zoom and use saved la
   assert.match(mapper, /fontSize=\{18 \/ Math\.max\(1, zoom\)\}/);
   assert.match(mapper, /diagonal \* 0\.28/);
   assert.match(mapper, /diagonal \* 0\.09/);
+  assert.match(mapper, /const labelGap = 0\.013 \/ Math\.max\(1, zoomLevel\)/);
+  assert.match(mapper, /semanticRoleMeasureGuide\(measurementOverlayPoints, edges, zoom\)/);
+  assert.match(mapper, /lastVerifiedRoles\[role\],[\s\S]*zoom,[\s\S]*\)/);
 });
 
 test("just-saved mapped polygon keeps Front Back Depth overlay after auto-advance", () => {

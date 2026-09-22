@@ -383,7 +383,11 @@ function semanticRoleMidpoint(points: MapperPoint[], edges: number[]) {
   ] as MapperPoint;
 }
 
-function semanticRoleMeasureGuide(points: MapperPoint[], edges: number[]) {
+function semanticRoleMeasureGuide(
+  points: MapperPoint[],
+  edges: number[],
+  zoomLevel = 1,
+) {
   if (points.length < 3 || !edges.length) return null;
   const valid = edges
     .filter((edge) => Number.isInteger(edge) && edge >= 0 && edge < points.length)
@@ -451,7 +455,10 @@ function semanticRoleMeasureGuide(points: MapperPoint[], edges: number[]) {
     midpoint[0] + inward[0] * inwardOffset,
     midpoint[1] + inward[1] * inwardOffset,
   ];
-  const labelGap = Math.min(0.032, Math.max(0.014, diagonal * 0.065));
+  // Keep the text just above its own guide line. The gap is counter-scaled
+  // with mapper zoom, exactly like the text size, so 1800% precision mode does
+  // not visually throw Front/Back/Depth labels far away from their lines.
+  const labelGap = 0.013 / Math.max(1, zoomLevel);
   const label: MapperPoint = [
     anchor[0] + inward[0] * labelGap,
     anchor[1] + inward[1] * labelGap,
@@ -4283,6 +4290,7 @@ export default function PlotMapper({
                     const guide = semanticRoleMeasureGuide(
                       lastVerifiedPolygon,
                       lastVerifiedRoles[role],
+                      zoom,
                     );
                     const textValue = savedPlotRoleMeasurementText(
                       lastVerifiedPlot,
@@ -4449,7 +4457,7 @@ export default function PlotMapper({
                   ] as const).map(([role, color]) => {
                     const edges = measurementOverlayRoles[role];
                     const textValue = currentRoleMeasurementText(role);
-                    const guide = semanticRoleMeasureGuide(measurementOverlayPoints, edges);
+                    const guide = semanticRoleMeasureGuide(measurementOverlayPoints, edges, zoom);
                     if (!guide || !textValue) return null;
                     return (
                       <g
