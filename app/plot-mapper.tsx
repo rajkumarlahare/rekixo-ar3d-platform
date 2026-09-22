@@ -53,6 +53,7 @@ import {
   resolveFourSideEdges,
 } from "./plot-side-resolver";
 import {
+  forwardCornerEdgeChain,
   parsePlotSideSemantics,
   serializePlotSideSemantics,
   setPlotSideEdge,
@@ -289,36 +290,6 @@ type PlotSideRoleEdges = Record<PlotSideRole, number[]>;
 
 function emptyPlotSideRoleEdges(): PlotSideRoleEdges {
   return { front: [], back: [], depthA: [], depthB: [] };
-}
-
-function forwardCornerEdgeChain(
-  startCorner: number,
-  endCorner: number,
-  pointCount: number,
-) {
-  if (
-    !Number.isInteger(startCorner) ||
-    !Number.isInteger(endCorner) ||
-    !Number.isInteger(pointCount) ||
-    pointCount < 3 ||
-    startCorner < 0 ||
-    endCorner < 0 ||
-    startCorner >= pointCount ||
-    endCorner >= pointCount ||
-    startCorner === endCorner
-  ) return [];
-
-  // Explicit click order is the source of truth. Corner 3 → 12 means the
-  // boundary 3→4 ... 11→12. Reverse/wrapped sides are selected by tapping
-  // the corners in the opposite order, so the mapper never guesses shortest.
-  const edges: number[] = [];
-  let cursor = startCorner;
-  for (let guard = 0; guard < pointCount; guard += 1) {
-    if (cursor === endCorner) break;
-    edges.push(cursor);
-    cursor = (cursor + 1) % pointCount;
-  }
-  return cursor === endCorner ? edges : [];
 }
 
 function semanticRoleMidpoint(points: MapperPoint[], edges: number[]) {
