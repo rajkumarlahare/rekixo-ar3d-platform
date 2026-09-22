@@ -5,32 +5,29 @@ import test from "node:test";
 const mapper = await readFile(new URL("../app/plot-mapper.tsx", import.meta.url), "utf8");
 const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
-test("side assignment is docked inside the sticky bottom bar beside confirm/update", () => {
+test("side assignment and Update share one structural footer action row", () => {
   const bottom = mapper.indexOf("mapper-v4-bottom-bar");
-  const confirm = mapper.indexOf('className="primary mapper-confirm-button"', bottom);
-  const dock = mapper.indexOf('className="plot-side-assigner mapper-side-dock"', bottom);
+  const actionRow = mapper.indexOf("mapper-v4-bottom-action-row", bottom);
+  const confirm = mapper.indexOf('className="primary mapper-confirm-button"', actionRow);
+  const dock = mapper.indexOf('className="plot-side-assigner mapper-side-dock"', actionRow);
   assert.ok(bottom >= 0, "bottom bar missing");
-  assert.ok(confirm > bottom, "confirm/update button must live in bottom bar");
-  assert.ok(dock > confirm, "side assigner must live after confirm/update in the same dock");
+  assert.ok(actionRow > bottom, "footer action row missing");
+  assert.ok(confirm > actionRow, "confirm/update must live inside footer action row");
+  assert.ok(dock > confirm, "side assigner must be the right-hand peer of Update");
   assert.equal(mapper.indexOf('className="plot-side-assigner"', bottom), -1, "old floating side assigner must not remain");
 
-  assert.match(css, /\.mapper-v4-bottom-bar\.has-side-dock\{grid-template-areas:"tools tools" "confirm sides"\}/);
-  assert.match(css, /\.mapper-confirm-button\{grid-area:confirm/);
-  assert.match(css, /\.mapper-side-dock\{grid-area:sides/);
-  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-side-dock/);
+  assert.match(css, /\.mapper-v4-bottom-action-row\{display:grid;grid-template-columns:minmax\(112px,1fr\)/);
+  assert.match(css, /\.mapper-v4-bottom-action-row\.has-side-dock\{grid-template-columns:minmax\(112px,150px\) minmax\(0,1fr\)\}/);
+  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-v4-bottom-action-row\.has-side-dock/);
+  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-side-dock\{position:static!important/);
 });
 
-test("bottom tools remain separate so the update row has a full-width side dock", () => {
+test("bottom tools stay on their own row and mobile stacks only inside the action row", () => {
   assert.match(mapper, /className="mapper-v4-bottom-tools"/);
-  assert.match(css, /\.mapper-v4-bottom-tools\{grid-area:tools;grid-column:1\/-1;grid-row:1/);
-  assert.match(css, /\.mapper-confirm-button\{grid-area:confirm;grid-column:1;grid-row:2/);
-  assert.match(css, /\.mapper-side-dock\{grid-area:sides;grid-column:2;grid-row:2;position:static!important/);
-  assert.match(css, /grid-template-columns:minmax\(112px,auto\) minmax\(0,1fr\)/);
-  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-confirm-button\{grid-column:1;grid-row:2\}/);
-  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-side-dock\{grid-column:2;grid-row:2;position:static!important/);
-  assert.match(css, /@media\(max-width:620px\)[\s\S]*grid-template-areas:"tools tools" "confirm confirm" "sides sides"/);
-  assert.match(css, /@media\(max-width:620px\)[\s\S]*\.mapper-confirm-button\{grid-column:1\/-1;grid-row:2\}/);
-  assert.match(css, /@media\(max-width:620px\)[\s\S]*\.mapper-side-dock\{grid-column:1\/-1;grid-row:3/);
+  assert.match(mapper, /mapper-v4-bottom-action-row/);
+  assert.match(css, /\.mapper-v4-bottom-bar\{[^}]*grid-template-rows:auto auto/);
+  assert.match(css, /\.mapper-v4-bottom-tools\{display:grid;grid-template-columns:auto auto auto minmax\(150px,1fr\)/);
+  assert.match(css, /@media\(max-width:620px\)[\s\S]*\.mapper-v4-bottom-action-row,\.mapper-v4-bottom-action-row\.has-side-dock\{grid-template-columns:1fr\}/);
 });
 
 test("current side measurements render inside the plot from live values and exact saved labels", () => {
