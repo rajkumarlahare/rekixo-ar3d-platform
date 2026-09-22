@@ -2372,10 +2372,10 @@ body {
 .mapper-v4-canvas.pan-mode .mapper-image-v2{touch-action:pan-x pan-y}
 .mapper-v4-bottom-bar{position:sticky;z-index:9;left:0;right:0;bottom:0;display:grid;grid-template-columns:minmax(112px,auto) minmax(0,1fr);grid-template-areas:"tools tools" "confirm confirm";align-items:stretch;gap:7px;padding:9px;background:#071322f5;border-top:1px solid #2b3e59;backdrop-filter:blur(10px)}
 .mapper-v4-bottom-bar.has-side-dock{grid-template-areas:"tools tools" "confirm sides"}
-.mapper-v4-bottom-tools{grid-area:tools;display:grid;grid-template-columns:auto auto auto minmax(150px,1fr);gap:7px;min-width:0}
+.mapper-v4-bottom-tools{grid-area:tools;grid-column:1/-1;grid-row:1;display:grid;grid-template-columns:auto auto auto minmax(150px,1fr);gap:7px;min-width:0}
 .mapper-v4-bottom-bar button{min-height:46px;border:1px solid #30425e;border-radius:11px;background:#0e1c2f;color:#b8c6da;padding:0 12px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:900}.mapper-v4-bottom-bar button svg{width:16px}.mapper-v4-bottom-bar button:disabled{opacity:.35}.mapper-v4-bottom-bar button.primary{border-color:#23835a;background:#0f3c2c;color:#68e6af}
-.mapper-confirm-button{grid-area:confirm;min-width:112px}
-.mapper-side-dock{grid-area:sides;min-width:0;margin:0!important;padding:8px 10px!important;border-radius:11px!important;display:grid;grid-template-columns:minmax(150px,.8fr) minmax(170px,.9fr) minmax(360px,2.4fr);align-items:center;gap:8px;background:#081526f2!important}
+.mapper-confirm-button{grid-area:confirm;grid-column:1;grid-row:2;min-width:112px;align-self:stretch}
+.mapper-side-dock{grid-area:sides;grid-column:2;grid-row:2;position:static!important;inset:auto!important;transform:none!important;align-self:stretch;min-width:0;margin:0!important;padding:8px 10px!important;border-radius:11px!important;display:grid;grid-template-columns:minmax(150px,.8fr) minmax(170px,.9fr) minmax(360px,2.4fr);align-items:center;gap:8px;background:#081526f2!important}
 .mapper-side-dock .plot-side-assigner-head{min-width:0}
 .mapper-side-dock .plot-side-assigner-head>div{min-width:0}
 .mapper-side-dock .plot-side-assigner-head b{font-size:12px}
@@ -2390,7 +2390,9 @@ body {
 .mapper-side-dock .plot-side-role-grid small{font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mapper-side-dock .plot-side-assigner-help{display:none}
 .mapper-v4-canvas:fullscreen .mapper-v4-bottom-bar{padding-bottom:max(9px,env(safe-area-inset-bottom,0px))}
-.mapper-v4-canvas:fullscreen .mapper-side-dock{box-shadow:0 0 0 1px #152a45 inset}
+.mapper-v4-canvas:fullscreen .mapper-v4-bottom-tools{grid-column:1/-1;grid-row:1}
+.mapper-v4-canvas:fullscreen .mapper-confirm-button{grid-column:1;grid-row:2}
+.mapper-v4-canvas:fullscreen .mapper-side-dock{grid-column:2;grid-row:2;position:static!important;inset:auto!important;transform:none!important;box-shadow:0 0 0 1px #152a45 inset}
 .mapper-shape-error{position:sticky;z-index:10;bottom:64px;margin:0 9px 8px;padding:9px 11px;border:1px solid #9b3545;border-radius:10px;background:#431821;color:#ff9cac;font-size:11px;font-weight:800}
 .mapper-point-handle.draggable{width:30px!important;height:30px!important;font-size:11px!important;box-shadow:0 2px 9px #000c,0 0 0 2px #ffb30055!important}
 .mapper-loupe{width:132px!important;height:132px!important}
@@ -2406,9 +2408,10 @@ body {
   .mapper-v4-toolbar button{min-width:46px;min-height:44px}
   .mapper-v4-bottom-bar{grid-template-columns:92px minmax(0,1fr);grid-template-areas:"tools tools" "confirm confirm";gap:6px;padding:7px}
   .mapper-v4-bottom-bar.has-side-dock{grid-template-areas:"tools tools" "confirm confirm" "sides sides"}
-  .mapper-v4-bottom-tools{grid-template-columns:56px 56px 74px minmax(92px,1fr);gap:6px}
+  .mapper-v4-bottom-tools{grid-column:1/-1;grid-row:1;grid-template-columns:56px 56px 74px minmax(92px,1fr);gap:6px}
   .mapper-v4-bottom-bar button{min-height:48px;padding:0 7px;font-size:10px}
-  .mapper-side-dock{grid-template-columns:1fr;gap:7px;padding:7px!important}
+  .mapper-confirm-button{grid-column:1/-1;grid-row:2}
+  .mapper-side-dock{grid-column:1/-1;grid-row:3;grid-template-columns:1fr;gap:7px;padding:7px!important}
   .mapper-side-dock .plot-side-layout-toggle{grid-template-columns:1fr 62px 62px}
   .mapper-side-dock .plot-side-role-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .mapper-side-dock .plot-side-role-grid button{min-height:40px}
@@ -2423,11 +2426,23 @@ body {
 @media(min-width:900px){
   .mapper-v4-canvas:fullscreen .mapper-v4-bottom-bar.has-side-dock{
     grid-template-columns:minmax(112px,150px) minmax(0,1fr);
+    grid-template-areas:"tools tools" "confirm sides";
+  }
+  .mapper-v4-canvas:fullscreen .mapper-v4-bottom-tools{
+    grid-column:1/-1;
+    grid-row:1;
   }
   .mapper-v4-canvas:fullscreen .mapper-confirm-button{
+    grid-column:1;
+    grid-row:2;
     min-height:58px;
   }
   .mapper-v4-canvas:fullscreen .mapper-side-dock{
+    grid-column:2;
+    grid-row:2;
+    position:static!important;
+    inset:auto!important;
+    transform:none!important;
     min-height:58px;
   }
 }

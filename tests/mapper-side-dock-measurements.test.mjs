@@ -22,9 +22,15 @@ test("side assignment is docked inside the sticky bottom bar beside confirm/upda
 
 test("bottom tools remain separate so the update row has a full-width side dock", () => {
   assert.match(mapper, /className="mapper-v4-bottom-tools"/);
-  assert.match(css, /\.mapper-v4-bottom-tools\{grid-area:tools/);
+  assert.match(css, /\.mapper-v4-bottom-tools\{grid-area:tools;grid-column:1\/-1;grid-row:1/);
+  assert.match(css, /\.mapper-confirm-button\{grid-area:confirm;grid-column:1;grid-row:2/);
+  assert.match(css, /\.mapper-side-dock\{grid-area:sides;grid-column:2;grid-row:2;position:static!important/);
   assert.match(css, /grid-template-columns:minmax\(112px,auto\) minmax\(0,1fr\)/);
+  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-confirm-button\{grid-column:1;grid-row:2\}/);
+  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-side-dock\{grid-column:2;grid-row:2;position:static!important/);
   assert.match(css, /@media\(max-width:620px\)[\s\S]*grid-template-areas:"tools tools" "confirm confirm" "sides sides"/);
+  assert.match(css, /@media\(max-width:620px\)[\s\S]*\.mapper-confirm-button\{grid-column:1\/-1;grid-row:2\}/);
+  assert.match(css, /@media\(max-width:620px\)[\s\S]*\.mapper-side-dock\{grid-column:1\/-1;grid-row:3/);
 });
 
 test("current side measurements render inside the plot from live values and exact saved labels", () => {
