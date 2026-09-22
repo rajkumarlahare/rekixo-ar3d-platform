@@ -62,5 +62,5 @@ jobs:
           grep -q "CREATE TABLE IF NOT EXISTS plot_edge_measurements" drizzle/0023_rekixo_plot_measurement_v2.sql
           grep -q "sqmToSqftFactor" app/api/super-mapper/route.ts
           grep -q "frontFirstFourSideEdges" app/plot-mapper.tsx
-          grep -q "REKIXO_PUBLIC_EDGE_DIMENSIONS_V10_THREE_SIDE" public/project/index.html
-          grep -q "v=63" app/page.tsx
+          grep -q "REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL" public/project/index.html
+          grep -q "v=64" app/page.tsx
