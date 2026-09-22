@@ -4494,104 +4494,111 @@ export default function PlotMapper({
                   }}
                 >Bulk sides</button>
               </div>
-              <button
-                type="button"
-                className="primary mapper-confirm-button"
-                disabled={busy || !shapeReady}
-                onClick={confirmPlot}
-              ><CheckCircle2 />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Confirm ${plotId} →`}</button>
-
-              {manualPhase === "details" && points.length >= 3 && (
-                <div className="plot-side-assigner mapper-side-dock">
-                  <div className="plot-side-assigner-head">
-                    <div>
-                      <b>Assign plot sides</b>
-                      <span>
-                        {semanticChainRole
-                          ? semanticChainStart == null
-                            ? "Role selected · start corner number tap karein"
-                            : `Corner ${semanticChainStart + 1} selected · end corner tap karein`
-                          : selectedSemanticEdge == null
-                            ? "Role → start corner → end corner"
-                            : `Edge ${selectedSemanticEdge + 1} selected`}
-                      </span>
+              <div
+                className={`mapper-v4-bottom-action-row ${
+                  manualPhase === "details" && points.length >= 3 ? "has-side-dock" : ""
+                }`}
+              >
+                <button
+                  type="button"
+                  className="primary mapper-confirm-button"
+                  disabled={busy || !shapeReady}
+                  onClick={confirmPlot}
+                ><CheckCircle2 />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Confirm ${plotId} →`}</button>
+  
+                {manualPhase === "details" && points.length >= 3 && (
+                  <div className="plot-side-assigner mapper-side-dock">
+                    <div className="plot-side-assigner-head">
+                      <div>
+                        <b>Assign plot sides</b>
+                        <span>
+                          {semanticChainRole
+                            ? semanticChainStart == null
+                              ? "Role selected · start corner number tap karein"
+                              : `Corner ${semanticChainStart + 1} selected · end corner tap karein`
+                            : selectedSemanticEdge == null
+                              ? "Role → start corner → end corner"
+                              : `Edge ${selectedSemanticEdge + 1} selected`}
+                        </span>
+                      </div>
+                      {semanticChainRole ? (
+                        <button type="button" onClick={() => {
+                          setSemanticChainRole(null);
+                          setSemanticChainStart(null);
+                          setSelectedSemanticEdge(null);
+                          notify("Side chain selection cancel hui");
+                        }}>Cancel</button>
+                      ) : selectedSemanticEdge != null ? (
+                        <button type="button" onClick={clearSelectedSemanticRole}>Clear role</button>
+                      ) : null}
                     </div>
-                    {semanticChainRole ? (
-                      <button type="button" onClick={() => {
-                        setSemanticChainRole(null);
-                        setSemanticChainStart(null);
-                        setSelectedSemanticEdge(null);
-                        notify("Side chain selection cancel hui");
-                      }}>Cancel</button>
-                    ) : selectedSemanticEdge != null ? (
-                      <button type="button" onClick={clearSelectedSemanticRole}>Clear role</button>
-                    ) : null}
-                  </div>
-                  {shape === "polygon" && (
-                    <div className="mapper-actions compact plot-side-layout-toggle">
-                      <span>
-                        <b>{effectiveSideLayout() === "three" ? "3 sides" : "4 sides"}</b>
-                        {points.length === 3 ? " · triangle auto" : ""}
-                      </span>
-                      <button
-                        type="button"
-                        className={effectiveSideLayout() === "three" ? "primary" : ""}
-                        onClick={() => changeSideLayout("three")}
-                      >3 sides</button>
-                      <button
-                        type="button"
-                        className={effectiveSideLayout() === "four" ? "primary" : ""}
-                        disabled={points.length === 3}
-                        onClick={() => changeSideLayout("four")}
-                      >4 sides</button>
-                    </div>
-                  )}
-                  <div className="plot-side-role-grid">
-                    {([
-                      ["front", "Front", "#22c55e"],
-                      ["back", "Back", "#60a5fa"],
-                      ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A", "#f59e0b"],
-                      ...(effectiveSideLayout() === "four"
-                        ? [["depthB", "Depth B", "#a78bfa"] as const]
-                        : []),
-                    ] as const).map(([role, label, color]) => {
-                      const groupedEdges = currentSemanticRoles()[role];
-                      const active =
-                        semanticChainRole === role ||
-                        (selectedSemanticEdge != null && groupedEdges.includes(selectedSemanticEdge));
-                      const chainWaiting =
-                        semanticChainRole === role
-                          ? semanticChainStart == null
-                            ? "Tap start corner"
-                            : "Tap end corner"
-                          : "";
-                      return (
+                    {shape === "polygon" && (
+                      <div className="mapper-actions compact plot-side-layout-toggle">
+                        <span>
+                          <b>{effectiveSideLayout() === "three" ? "3 sides" : "4 sides"}</b>
+                          {points.length === 3 ? " · triangle auto" : ""}
+                        </span>
                         <button
-                          key={`assign-${role}`}
                           type="button"
-                          className={active ? "active" : ""}
-                          style={{ "--side-color": color } as React.CSSProperties}
-                          onClick={() => assignSelectedSemanticRole(role)}
-                        >
-                          <strong>{label}</strong>
-                          <small>
-                            {chainWaiting ||
-                              (groupedEdges.length > 1
-                                ? `${groupedEdges.length} edges`
-                                : groupedEdges.length === 1
-                                  ? `Edge ${groupedEdges[0] + 1}`
-                                  : "Select")}
-                          </small>
-                        </button>
-                      );
-                    })}
+                          className={effectiveSideLayout() === "three" ? "primary" : ""}
+                          onClick={() => changeSideLayout("three")}
+                        >3 sides</button>
+                        <button
+                          type="button"
+                          className={effectiveSideLayout() === "four" ? "primary" : ""}
+                          disabled={points.length === 3}
+                          onClick={() => changeSideLayout("four")}
+                        >4 sides</button>
+                      </div>
+                    )}
+                    <div className="plot-side-role-grid">
+                      {([
+                        ["front", "Front", "#22c55e"],
+                        ["back", "Back", "#60a5fa"],
+                        ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A", "#f59e0b"],
+                        ...(effectiveSideLayout() === "four"
+                          ? [["depthB", "Depth B", "#a78bfa"] as const]
+                          : []),
+                      ] as const).map(([role, label, color]) => {
+                        const groupedEdges = currentSemanticRoles()[role];
+                        const active =
+                          semanticChainRole === role ||
+                          (selectedSemanticEdge != null && groupedEdges.includes(selectedSemanticEdge));
+                        const chainWaiting =
+                          semanticChainRole === role
+                            ? semanticChainStart == null
+                              ? "Tap start corner"
+                              : "Tap end corner"
+                            : "";
+                        return (
+                          <button
+                            key={`assign-${role}`}
+                            type="button"
+                            className={active ? "active" : ""}
+                            style={{ "--side-color": color } as React.CSSProperties}
+                            onClick={() => assignSelectedSemanticRole(role)}
+                          >
+                            <strong>{label}</strong>
+                            <small>
+                              {chainWaiting ||
+                                (groupedEdges.length > 1
+                                  ? `${groupedEdges.length} edges`
+                                  : groupedEdges.length === 1
+                                    ? `Edge ${groupedEdges[0] + 1}`
+                                    : "Select")}
+                            </small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <small className="plot-side-assigner-help">
+                      Role button → numbered start corner → end corner. Curved segments beech me
+                      automatically same side group banenge.
+                    </small>
                   </div>
-                  <small className="plot-side-assigner-help">
-                    Role button → numbered start corner → end corner. Curved segments beech me
-                    automatically same side group banenge.
-                  </small>
-                </div>
-              )}
+                )}
+  
+              </div>
             </div>
           )}
           {!completedProject && bulkSemanticMode && (
