@@ -47,9 +47,10 @@ test("Super Mapper persists semantic metadata while conflict update still does n
 
 test("Super Admin mapper keeps measurements independent from edge-first four-side identity", () => {
   const mapper = read("app/plot-mapper.tsx");
-  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V2_MULTI_EDGE_CHAIN/);
+  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V3_CORNER_RANGE/);
   assert.match(mapper, /selectedSemanticEdge/);
   assert.match(mapper, /assignSelectedSemanticRole/);
+  assert.match(mapper, /3 sides · Front \/ Back \/ Depth/);
   assert.match(mapper, /\["front", "Front"/);
   assert.match(mapper, /\["back", "Back"/);
   assert.match(mapper, /\["depthA", "Depth A"/);
