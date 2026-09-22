@@ -58,6 +58,12 @@ html.rekixo-project-error .rekixo-boot-error{display:grid}
 .map.gesture-active .hotspots{visibility:hidden}
 .map.gesture-active .world{will-change:transform}
 .plot{fill:rgba(32,225,125,.001);stroke:transparent;stroke-width:1.1;vector-effect:non-scaling-stroke;cursor:pointer;transition:fill .12s,stroke .12s,filter .12s}
+/* REKIXO_PUBLIC_SVG_FOCUS_SHAPE_V1
+   SVG plots stay keyboard-focusable, but browser-default focus outlines use the
+   element bounding box and appear as a temporary rectangle on mouse press.
+   Suppress that box and render keyboard focus on the canonical polygon itself. */
+.plot:focus{outline:none}
+.plot:focus-visible:not(.selected){outline:none;stroke:#fff;stroke-width:1.8;filter:drop-shadow(0 0 4px rgba(255,255,255,.65))}
 .plot.selected{fill:rgba(var(--plot-available-rgb),.22);stroke:#fff;stroke-width:1.45;filter:drop-shadow(0 0 3px rgba(var(--plot-available-rgb),.75))}
 /* REKIXO_PUBLIC_2D_SELECTED_STATUS_CONTRAST_V3
    REKIXO_PROJECT_STATUS_THEME_V1
