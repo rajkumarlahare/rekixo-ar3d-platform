@@ -86,6 +86,35 @@ export function serializePlotSideSemantics(
     : null;
 }
 
+export function forwardCornerEdgeChain(
+  startCorner: number,
+  endCorner: number,
+  pointCount: number,
+) {
+  if (
+    !Number.isInteger(startCorner) ||
+    !Number.isInteger(endCorner) ||
+    !Number.isInteger(pointCount) ||
+    pointCount < 3 ||
+    startCorner < 0 ||
+    endCorner < 0 ||
+    startCorner >= pointCount ||
+    endCorner >= pointCount ||
+    startCorner === endCorner
+  ) return [];
+
+  // Explicit polygon click order is authoritative. Corner 3 → 12 means
+  // edges 3→4 ... 11→12. A wrapped side is selected by tapping e.g. 12 → 3.
+  const edges: number[] = [];
+  let cursor = startCorner;
+  for (let guard = 0; guard < pointCount; guard += 1) {
+    if (cursor === endCorner) break;
+    edges.push(cursor);
+    cursor = (cursor + 1) % pointCount;
+  }
+  return cursor === endCorner ? edges : [];
+}
+
 export function primaryPlotSideEdge(
   value: unknown,
   role: PlotSideRole,
