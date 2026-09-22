@@ -67,7 +67,8 @@ test("legacy CSS remains fallback styling only", () => {
 
 test("semantic side overlay keeps a large touch target without covering the masterplan edge", () => {
   assert.match(mapper, /className="semantic-edge-hit-target"/);
-  assert.match(mapper, /strokeWidth=\{30\}[\s\S]*pointerEvents: "stroke"/);
+  assert.match(mapper, /strokeWidth=\{30\}/);
+  assert.match(mapper, /pointerEvents: semanticChainRole \? "none" : "stroke"/);
   assert.match(mapper, /className="semantic-edge-visible-guide"/);
   assert.match(
     mapper,
