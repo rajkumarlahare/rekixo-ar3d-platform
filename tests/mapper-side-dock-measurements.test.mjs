@@ -30,7 +30,7 @@ test("bottom tools stay on their own row and mobile stacks only inside the actio
   assert.match(css, /@media\(max-width:620px\)[\s\S]*\.mapper-v4-bottom-action-row,\.mapper-v4-bottom-action-row\.has-side-dock\{grid-template-columns:1fr\}/);
 });
 
-test("current side measurements render inside the plot from live values and exact saved labels", () => {
+test("current side measurements stay readable at precision zoom and use saved labels when exact", () => {
   assert.match(mapper, /function semanticRoleMeasureGuide/);
   assert.match(mapper, /const measurementOverlayPoints =\s*points\.length >= 3 \? points : savedCurrentPolygon/);
   assert.match(mapper, /const currentRoleMeasurementText = \(role: PlotSideRole\)/);
@@ -40,8 +40,22 @@ test("current side measurements render inside the plot from live values and exac
   assert.match(mapper, /currentPlot\?\.depth2Label/);
   assert.match(mapper, /dimensionUnit/);
   assert.match(mapper, /className="semantic-side-measurement"/);
-  assert.match(mapper, /vectorEffect="non-scaling-stroke"/);
-  assert.match(mapper, /fontSize=\{12 \/ Math\.max\(1, zoom\)\}/);
+  assert.match(mapper, /strokeWidth=\{2\.25\}/);
+  assert.match(mapper, /strokeWidth=\{3\.6 \/ Math\.max\(1, zoom\)\}/);
+  assert.match(mapper, /fontSize=\{18 \/ Math\.max\(1, zoom\)\}/);
+  assert.match(mapper, /diagonal \* 0\.28/);
+  assert.match(mapper, /diagonal \* 0\.09/);
+});
+
+test("just-saved mapped polygon keeps Front Back Depth overlay after auto-advance", () => {
+  assert.match(mapper, /function savedPlotSemanticRoles/);
+  assert.match(mapper, /function savedPlotRoleMeasurementText/);
+  assert.match(mapper, /const lastVerifiedPlot =/);
+  assert.match(mapper, /lastVerifiedId && lastVerifiedId !== plotId/);
+  assert.match(mapper, /className="semantic-side-measurement saved"/);
+  assert.match(mapper, /saved-semantic-measure-/);
+  assert.match(mapper, /setLastVerifiedId\(verified\.plot\.id\)/);
+  assert.match(mapper, /const hasNextInventoryPlot = selectNextPlot/);
 });
 
 test("measurement overlays are visual-only and saved geometry/read-back contracts stay untouched", () => {

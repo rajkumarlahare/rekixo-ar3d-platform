@@ -292,6 +292,65 @@ function emptyPlotSideRoleEdges(): PlotSideRoleEdges {
   return { front: [], back: [], depthA: [], depthB: [] };
 }
 
+function savedPlotSemanticRoles(
+  plot: Plot | null | undefined,
+  polygon: MapperPoint[],
+): PlotSideRoleEdges {
+  const output = emptyPlotSideRoleEdges();
+  if (!plot || polygon.length < 3) return output;
+  const parsed = parsePlotSideSemantics(plot.edgeSemantics, polygon.length);
+  const layout = resolvedPlotSideLayout(plot, polygon);
+  const fallback: Record<PlotSideRole, number | null | undefined> = {
+    front: plot.frontEdgeIndex,
+    back: plot.backEdgeIndex,
+    depthA: plot.depthEdgeIndex,
+    depthB: plot.depth2EdgeIndex,
+  };
+  (["front", "back", "depthA", "depthB"] as PlotSideRole[]).forEach((role) => {
+    if (layout === "three" && role === "depthB") return;
+    const canonical = parsed?.roles[role] || [];
+    if (canonical.length) {
+      output[role] = [...canonical];
+      return;
+    }
+    const legacy = fallback[role];
+    if (
+      legacy != null &&
+      Number.isInteger(Number(legacy)) &&
+      Number(legacy) >= 0 &&
+      Number(legacy) < polygon.length
+    ) {
+      output[role] = [Number(legacy)];
+    }
+  });
+  return output;
+}
+
+function savedPlotRoleMeasurementText(
+  plot: Plot | null | undefined,
+  role: PlotSideRole,
+  layout: PlotSideLayout,
+) {
+  if (!plot || (layout === "three" && role === "depthB")) return "";
+  const value =
+    role === "front" ? plot.front :
+    role === "back" ? plot.back :
+    role === "depthA" ? plot.depth : plot.depth2;
+  const label =
+    role === "front" ? plot.frontLabel :
+    role === "back" ? plot.backLabel :
+    role === "depthA" ? plot.depthLabel : plot.depth2Label;
+  const roleName =
+    role === "front" ? "Front" :
+    role === "back" ? "Back" :
+    role === "depthA" ? (layout === "three" ? "Depth" : "Depth A") :
+    "Depth B";
+  const precise = String(label || "").trim();
+  if (precise) return `${roleName} · ${precise}`;
+  if (value == null || !Number.isFinite(Number(value))) return "";
+  return `${roleName} · ${value} ${plot.dimensionUnit === "m" ? "m" : "ft"}`;
+}
+
 function semanticRoleMidpoint(points: MapperPoint[], edges: number[]) {
   if (!points.length || !edges.length) return null;
   const segments = edges
@@ -380,18 +439,22 @@ function semanticRoleMeasureGuide(points: MapperPoint[], edges: number[]) {
       Math.max(...ys) - Math.min(...ys),
     ),
   );
-  const inwardOffset = Math.min(0.028, Math.max(0.006, diagonal * 0.055));
+  // Keep measurement guides visibly separated from the polygon boundary.
+  // Values are normalized to plot size, so the spacing stays useful at 100%
+  // and at the 1800% precision zoom without mutating stored geometry.
+  const inwardOffset = Math.min(0.052, Math.max(0.012, diagonal * 0.09));
   const halfGuide = Math.min(
-    diagonal * 0.18,
-    Math.max(diagonal * 0.065, Math.min(total * 0.16, diagonal * 0.14)),
+    diagonal * 0.28,
+    Math.max(diagonal * 0.105, Math.min(total * 0.24, diagonal * 0.23)),
   );
   const anchor: MapperPoint = [
     midpoint[0] + inward[0] * inwardOffset,
     midpoint[1] + inward[1] * inwardOffset,
   ];
+  const labelGap = Math.min(0.032, Math.max(0.014, diagonal * 0.065));
   const label: MapperPoint = [
-    anchor[0] + inward[0] * Math.min(0.016, diagonal * 0.035),
-    anchor[1] + inward[1] * Math.min(0.016, diagonal * 0.035),
+    anchor[0] + inward[0] * labelGap,
+    anchor[1] + inward[1] * labelGap,
   ];
   const clamp = (value: number) => Math.max(0.002, Math.min(0.998, value));
 
@@ -3562,40 +3625,27 @@ export default function PlotMapper({
   const savedCurrentPolygon = currentPlot ? parsePolygon(currentPlot) : [];
   const measurementOverlayPoints =
     points.length >= 3 ? points : savedCurrentPolygon.length >= 3 ? savedCurrentPolygon : [];
-  const measurementOverlayRoles: PlotSideRoleEdges = (() => {
-    if (points.length >= 3) return currentSemanticRoles();
-    const output = emptyPlotSideRoleEdges();
-    if (!currentPlot || savedCurrentPolygon.length < 3) return output;
-    const parsed = parsePlotSideSemantics(
-      currentPlot.edgeSemantics,
-      savedCurrentPolygon.length,
-    );
-    const layout = resolvedPlotSideLayout(currentPlot, savedCurrentPolygon);
-    const fallback: Record<PlotSideRole, number | null | undefined> = {
-      front: currentPlot.frontEdgeIndex,
-      back: currentPlot.backEdgeIndex,
-      depthA: currentPlot.depthEdgeIndex,
-      depthB: currentPlot.depth2EdgeIndex,
-    };
-    (["front", "back", "depthA", "depthB"] as PlotSideRole[]).forEach((role) => {
-      if (layout === "three" && role === "depthB") return;
-      const canonical = parsed?.roles[role] || [];
-      if (canonical.length) {
-        output[role] = [...canonical];
-        return;
-      }
-      const legacy = fallback[role];
-      if (
-        legacy != null &&
-        Number.isInteger(Number(legacy)) &&
-        Number(legacy) >= 0 &&
-        Number(legacy) < savedCurrentPolygon.length
-      ) {
-        output[role] = [Number(legacy)];
-      }
-    });
-    return output;
-  })();
+  const measurementOverlayRoles: PlotSideRoleEdges =
+    points.length >= 3
+      ? currentSemanticRoles()
+      : savedPlotSemanticRoles(currentPlot, savedCurrentPolygon);
+
+  // After a verified save the mapper normally advances to the next inventory
+  // plot. Keep the just-saved polygon's side measurements visible on the mapped
+  // layer so the operator can visually verify the final result without reopening it.
+  const lastVerifiedPlot =
+    lastVerifiedId && lastVerifiedId !== plotId
+      ? plots.find((plot) => plot.id === lastVerifiedId) || null
+      : null;
+  const lastVerifiedPolygon = lastVerifiedPlot ? parsePolygon(lastVerifiedPlot) : [];
+  const lastVerifiedLayout =
+    lastVerifiedPlot && lastVerifiedPolygon.length >= 3
+      ? resolvedPlotSideLayout(lastVerifiedPlot, lastVerifiedPolygon)
+      : "four";
+  const lastVerifiedRoles = savedPlotSemanticRoles(
+    lastVerifiedPlot,
+    lastVerifiedPolygon,
+  );
 
   const currentRoleMeasurementText = (role: PlotSideRole) => {
     const liveValue =
@@ -4222,6 +4272,56 @@ export default function PlotMapper({
                       <text x={center[0] * 1000} y={center[1] * 1000} style={mappedPlotLabelStyle}>{plot.id}</text>
                     </g>;
                   })}
+                  {!calibrationMode && lastVerifiedPlot && lastVerifiedPolygon.length >= 3 && ([
+                    ["front", "#22c55e"],
+                    ["back", "#60a5fa"],
+                    ["depthA", "#f59e0b"],
+                    ...(lastVerifiedLayout === "four"
+                      ? [["depthB", "#a78bfa"] as const]
+                      : []),
+                  ] as const).map(([role, color]) => {
+                    const guide = semanticRoleMeasureGuide(
+                      lastVerifiedPolygon,
+                      lastVerifiedRoles[role],
+                    );
+                    const textValue = savedPlotRoleMeasurementText(
+                      lastVerifiedPlot,
+                      role,
+                      lastVerifiedLayout,
+                    );
+                    if (!guide || !textValue) return null;
+                    return (
+                      <g
+                        key={`saved-semantic-measure-${lastVerifiedPlot.id}-${role}`}
+                        className="semantic-side-measurement saved"
+                        style={{ pointerEvents: "none" }}
+                      >
+                        <line
+                          x1={guide.start[0] * 1000}
+                          y1={guide.start[1] * 1000}
+                          x2={guide.end[0] * 1000}
+                          y2={guide.end[1] * 1000}
+                          stroke={color}
+                          strokeOpacity={.96}
+                          strokeWidth={2.25}
+                          vectorEffect="non-scaling-stroke"
+                          strokeLinecap="round"
+                        />
+                        <text
+                          x={guide.label[0] * 1000}
+                          y={guide.label[1] * 1000}
+                          fill="#ffffff"
+                          stroke="#06101f"
+                          strokeWidth={3.6 / Math.max(1, zoom)}
+                          paintOrder="stroke"
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={18 / Math.max(1, zoom)}
+                          fontWeight={950}
+                        >{textValue}</text>
+                      </g>
+                    );
+                  })}
                   {bulkSemanticMode && mappedPlots.map((plot) => {
                     const polygon = parsePolygon(plot);
                     if (polygon.length < 3) return null;
@@ -4363,22 +4463,22 @@ export default function PlotMapper({
                           x2={guide.end[0] * 1000}
                           y2={guide.end[1] * 1000}
                           stroke={color}
-                          strokeOpacity={.94}
-                          strokeWidth={1.35}
+                          strokeOpacity={.98}
+                          strokeWidth={2.25}
                           vectorEffect="non-scaling-stroke"
                           strokeLinecap="round"
                         />
                         <text
                           x={guide.label[0] * 1000}
                           y={guide.label[1] * 1000}
-                          fill="#f8fbff"
-                          stroke="#07111f"
-                          strokeWidth={2.2 / Math.max(1, zoom)}
+                          fill="#ffffff"
+                          stroke="#06101f"
+                          strokeWidth={3.6 / Math.max(1, zoom)}
                           paintOrder="stroke"
                           textAnchor="middle"
                           dominantBaseline="central"
-                          fontSize={12 / Math.max(1, zoom)}
-                          fontWeight={850}
+                          fontSize={18 / Math.max(1, zoom)}
+                          fontWeight={950}
                         >{textValue}</text>
                       </g>
                     );
