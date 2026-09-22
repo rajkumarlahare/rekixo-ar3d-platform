@@ -2367,6 +2367,13 @@ body {
 .mapper-v4-current>button{width:44px;height:44px;border:1px solid #30425f;border-radius:11px;background:#0f1e32;color:#b9c8de;display:grid;place-items:center}
 .mapper-v4-current>button:disabled{opacity:.35}.mapper-v4-current svg{width:18px}.mapper-v4-current label{min-width:0;display:grid;gap:2px}.mapper-v4-current label small{color:#7387a5;font-size:9px;font-weight:900;letter-spacing:.08em}.mapper-v4-current select{min-width:0;width:100%;height:38px;border:1px solid #30425e;border-radius:9px;background:#0b192a;color:#fff;padding:0 8px;font-weight:850}.mapper-v4-current>span{color:#8da0bb;font-size:12px;white-space:nowrap}.mapper-v4-current>span b{color:#36d88e}
 .mapper-v4-toolbar{top:61px!important}.mapper-v4-toolbar strong{min-width:150px}.mapper-v4-toolbar button.active{border-color:#24cb80!important;background:#12382e!important;color:#62e5ad!important}
+.mapper-inline-shape-tools{display:flex;align-items:center;gap:5px;margin-right:auto;padding:0 2px}
+.mapper-v4-toolbar .mapper-inline-shape-tools button{width:38px;min-width:38px;height:38px;min-height:38px;padding:0;border-radius:9px}
+.mapper-v4-toolbar .mapper-inline-shape-tools button svg{width:18px;height:18px}
+.mapper-v4-toolbar .mapper-inline-shape-tools button.complete:not(:disabled){border-color:#2c7a59;background:#0e2e24;color:#5ce0a5}
+.mapper-v4-toolbar .mapper-inline-shape-tools button:disabled{opacity:.34}
+.mapper-mode button{display:inline-flex;align-items:center;gap:7px}
+.mapper-mode button svg{width:17px;height:17px;flex:0 0 17px}
 .mapper-v4-canvas.select-mode .mapper-image-v2 svg{pointer-events:auto;touch-action:none}
 .mapper-v4-canvas.pan-mode .mapper-image-v2 svg{pointer-events:none}
 .mapper-v4-canvas.pan-mode .mapper-image-v2{touch-action:pan-x pan-y}
@@ -2406,6 +2413,8 @@ body {
   .mapper-v4-toolbar{top:61px!important;min-width:max-content!important;padding:6px!important}
   .mapper-v4-toolbar strong{min-width:120px;font-size:10px}
   .mapper-v4-toolbar button{min-width:46px;min-height:44px}
+  .mapper-v4-toolbar .mapper-inline-shape-tools{gap:4px;margin-right:8px}
+  .mapper-v4-toolbar .mapper-inline-shape-tools button{width:42px;min-width:42px;height:42px;min-height:42px}
   .mapper-v4-bottom-bar{gap:6px;padding:7px}
   .mapper-v4-bottom-tools{grid-template-columns:56px 56px 74px minmax(92px,1fr);gap:6px}
   .mapper-v4-bottom-action-row,.mapper-v4-bottom-action-row.has-side-dock{grid-template-columns:1fr}
@@ -2423,6 +2432,15 @@ body {
 
 
 @media(min-width:900px){
+  .mapper-v4-canvas:fullscreen .mapper-inline-shape-tools{
+    margin-right:auto;
+  }
+  .mapper-v4-canvas:fullscreen .mapper-inline-shape-tools button{
+    width:40px;
+    min-width:40px;
+    height:40px;
+    min-height:40px;
+  }
   .mapper-v4-canvas:fullscreen .mapper-v4-bottom-action-row.has-side-dock{
     grid-template-columns:minmax(112px,150px) minmax(0,1fr);
   }
