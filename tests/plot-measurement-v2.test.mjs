@@ -71,7 +71,7 @@ test("normal manual quad workflow is front-first and direction CSV remains legac
   assert.match(mapper, /resolveFourSideEdges/);
 });
 
-test("public drawer prefers edge-specific measurement rows and supports multi-segment roles", () => {
+test("public drawer keeps edge evidence but labels each logical multi-segment side only once", () => {
   const api = read("app/api/public-data/route.ts");
   const html = read("public/project/index.html");
   assert.match(api, /plotEdgeMeasurements/);
@@ -79,7 +79,10 @@ test("public drawer prefers edge-specific measurement rows and supports multi-se
   assert.match(html, /function plotEdgeMeasurementRows/);
   assert.match(html, /function plotEdgeMeasurementValue/);
   assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL/);
-  assert.match(html, /plotEdgeMeasurementValue\(p,role,edge\)\|\|value/);
+  assert.match(html, /function semanticRoleDiagramGeometry/);
+  assert.match(html, /for\(const segment of geometry\.segments\)/);
+  assert.match(html, /text\.textContent=title\+\(value\?' · '\+value:''\)/);
+  assert.doesNotMatch(html, /plotEdgeMeasurementValue\(p,role,edge\)\|\|value/);
 });
 
 test("runtime cache is bumped so public clients receive measurement v2", () => {
