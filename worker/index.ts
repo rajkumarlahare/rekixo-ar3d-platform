@@ -117,7 +117,10 @@ async function fetchPrefixedFrameworkAsset(request: Request, env: Env) {
 }
 
 function isSensitiveClientPath(pathname: string) {
-  if (pathname.startsWith("/api/admin")) return true;
+  if (
+    pathname.startsWith("/api/admin") ||
+    pathname.startsWith("/api/client")
+  ) return true;
   return (
     pathname.startsWith("/projects/") &&
     /\/(?:admin(?:-login)?|change-password)(?:\/|$)/.test(pathname)
