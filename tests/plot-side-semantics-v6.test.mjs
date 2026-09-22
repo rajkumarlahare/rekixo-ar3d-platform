@@ -93,7 +93,10 @@ test("customer irregular diagram uses actual-edge dimensions and no guessed fall
   assert.match(html, /function plotSideSemantics/);
   assert.match(html, /parsed\.front\.length/);
   assert.match(html, /front!==null&&distinctRoles/);
-  assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V10_THREE_SIDE/);
+  assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL/);
+  assert.match(html, /function semanticRoleDiagramGeometry/);
+  assert.match(html, /logical Front\/Back\/Depth side only once/);
+  assert.doesNotMatch(html, /plotEdgeMeasurementValue\(p,role,edge\)\|\|value/);
   assert.match(html, /const irregular=.*includes\('irregular'\)/);
   assert.match(html, /setLegacyDiagramDimensionsVisible\(!canonicalRendered&&!irregular\)/);
   assert.match(html, /diagram-legend\{display:none!important\}/);
@@ -109,9 +112,9 @@ test("runtime has no VISTAR tenant hardcode", () => {
   assert.doesNotMatch(runtime, /vatika-green-city-vistar|vatika green city vistar/);
 });
 
-test("runtime cache version is v63", () => {
-  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v63/);
+test("runtime cache version is v64", () => {
+  assert.match(read("tests/public-runtime-cache-policy.test.mjs"), /runtime v64/);
   for (const file of ["app/page.tsx","app/preview/[projectId]/page.tsx","app/projects/[slug]/page.tsx"]) {
-    assert.match(read(file), /v=63/);
+    assert.match(read(file), /v=64/);
   }
 });
