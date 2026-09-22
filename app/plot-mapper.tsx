@@ -108,6 +108,8 @@ type MapperSettings = {
   masterplanOriginalWidth?: string;
   masterplanOriginalHeight?: string;
   masterplanOriginalName?: string;
+  masterplanVersion?: string;
+  masterplanOriginalObjectToken?: string;
   cadCandidateCount?: string;
   cadParseError?: string;
   homography?: string;
@@ -197,22 +199,23 @@ const COMPLETED_PROJECT_ID = "tiyansh-prime-square";
 const MAX_MAPPER_ZOOM = 18;
 const MAPPER_LABEL_SCREEN_FONT_PX = 14;
 const MAPPER_LABEL_SCREEN_STROKE_PX = 2.4;
-const MAX_MAPPING_DIMENSION = 6144;
-const MAX_MAPPING_PIXELS = 24_000_000;
-const TARGET_MAPPING_BYTES = 12 * 1024 * 1024;
-const MAX_PUBLIC_DIMENSION = 2400;
-const MAX_PUBLIC_PIXELS = 5_000_000;
-const TARGET_PUBLIC_BYTES = 2_500_000;
-const MAX_ORIGINAL_MASTERPLAN_BYTES = 40 * 1024 * 1024;
-// Android browsers can decode a 7680×4320 JPEG into well over 100 MB of raw pixels.
-// Keep desktop precision unchanged, but use a smaller working canvas on constrained
-// touch devices. Persistent polygons are normalized, so derivative resolution does
-// not alter geometry.
-const MOBILE_MAPPING_DIMENSION = 4096;
-const MOBILE_MAPPING_PIXELS = 10_000_000;
-const MOBILE_PUBLIC_DIMENSION = 2048;
-const MOBILE_PUBLIC_PIXELS = 3_000_000;
-const MASTERPLAN_UPLOAD_TIMEOUT_MS = 120_000;
+const MAX_MAPPING_DIMENSION = 4096;
+const MAX_MAPPING_PIXELS = 10_000_000;
+const TARGET_MAPPING_BYTES = 8 * 1024 * 1024;
+const MAX_PUBLIC_DIMENSION = 2048;
+const MAX_PUBLIC_PIXELS = 3_000_000;
+const TARGET_PUBLIC_BYTES = 2 * 1024 * 1024;
+const MAX_ORIGINAL_MASTERPLAN_BYTES = 100 * 1024 * 1024;
+// Large source files are uploaded to R2 in multipart chunks. The mapper itself
+// never needs the 30–100 MB original after derivatives have been prepared.
+const MASTERPLAN_ORIGINAL_CHUNK_BYTES = 8 * 1024 * 1024;
+// On constrained/mobile devices keep the working decode materially smaller.
+// Persistent polygons are normalized 0..1 so this never changes saved geometry.
+const MOBILE_MAPPING_DIMENSION = 3072;
+const MOBILE_MAPPING_PIXELS = 6_000_000;
+const MOBILE_PUBLIC_DIMENSION = 1600;
+const MOBILE_PUBLIC_PIXELS = 2_000_000;
+const MASTERPLAN_FINALIZE_TIMEOUT_MS = 180_000;
 
 function plotHasFourSideMeasurements(plot: Plot) {
   const roles = [
@@ -397,38 +400,142 @@ function masterplanProcessingLimits() {
       };
 }
 
+async function readMasterplanDimensions(sourceFile: File) {
+  const headerBytes = new Uint8Array(
+    await sourceFile.slice(0, Math.min(sourceFile.size, 2 * 1024 * 1024)).arrayBuffer(),
+  );
+  const ascii = (start: number, length: number) =>
+    String.fromCharCode(...headerBytes.slice(start, start + length));
+  const be32 = (offset: number) =>
+    ((headerBytes[offset] << 24) |
+      (headerBytes[offset + 1] << 16) |
+      (headerBytes[offset + 2] << 8) |
+      headerBytes[offset + 3]) >>> 0;
+  const le16 = (offset: number) =>
+    headerBytes[offset] | (headerBytes[offset + 1] << 8);
+  const le24 = (offset: number) =>
+    headerBytes[offset] | (headerBytes[offset + 1] << 8) | (headerBytes[offset + 2] << 16);
+
+  // PNG IHDR.
+  if (
+    headerBytes.length >= 24 &&
+    headerBytes[0] === 0x89 &&
+    ascii(1, 3) === "PNG"
+  ) {
+    const width = be32(16);
+    const height = be32(20);
+    if (width > 0 && height > 0) return { width, height };
+  }
+
+  // JPEG SOF marker. Reading just the first 2 MB avoids allocating the whole
+  // compressed source and is enough for normal EXIF/ICC-heavy production files.
+  if (headerBytes.length >= 4 && headerBytes[0] === 0xff && headerBytes[1] === 0xd8) {
+    const sof = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
+    let offset = 2;
+    while (offset + 8 < headerBytes.length) {
+      if (headerBytes[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      while (offset < headerBytes.length && headerBytes[offset] === 0xff) offset += 1;
+      const marker = headerBytes[offset++];
+      if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (offset + 2 > headerBytes.length) break;
+      const length = (headerBytes[offset] << 8) | headerBytes[offset + 1];
+      if (length < 2 || offset + length > headerBytes.length) break;
+      if (sof.has(marker) && length >= 7) {
+        const height = (headerBytes[offset + 3] << 8) | headerBytes[offset + 4];
+        const width = (headerBytes[offset + 5] << 8) | headerBytes[offset + 6];
+        if (width > 0 && height > 0) return { width, height };
+      }
+      offset += length;
+    }
+  }
+
+  // WebP VP8X / VP8 / VP8L dimensions.
+  if (
+    headerBytes.length >= 30 &&
+    ascii(0, 4) === "RIFF" &&
+    ascii(8, 4) === "WEBP"
+  ) {
+    const chunk = ascii(12, 4);
+    if (chunk === "VP8X" && headerBytes.length >= 30) {
+      return { width: 1 + le24(24), height: 1 + le24(27) };
+    }
+    if (
+      chunk === "VP8 " &&
+      headerBytes.length >= 30 &&
+      headerBytes[23] === 0x9d &&
+      headerBytes[24] === 0x01 &&
+      headerBytes[25] === 0x2a
+    ) {
+      return { width: le16(26) & 0x3fff, height: le16(28) & 0x3fff };
+    }
+    if (chunk === "VP8L" && headerBytes.length >= 25 && headerBytes[20] === 0x2f) {
+      const b0 = headerBytes[21];
+      const b1 = headerBytes[22];
+      const b2 = headerBytes[23];
+      const b3 = headerBytes[24];
+      return {
+        width: 1 + b0 + ((b1 & 0x3f) << 8),
+        height: 1 + (b1 >> 6) + (b2 << 2) + ((b3 & 0x0f) << 10),
+      };
+    }
+  }
+
+  // Compatibility fallback for unusual valid images whose dimensions could not
+  // be read from the header. This is the old behavior, used only when necessary.
+  const fallback = await createImageBitmap(sourceFile);
+  try {
+    return { width: fallback.width, height: fallback.height };
+  } finally {
+    fallback.close();
+  }
+}
+
 async function prepareMasterplan(file: File) {
   const sourceFile = normalizeMasterplanFile(file);
   if (sourceFile.size > MAX_ORIGINAL_MASTERPLAN_BYTES) {
-    throw new Error("Masterplan 40 MB se chhoti rakhein");
+    throw new Error("Masterplan 100 MB se chhoti rakhein");
   }
+
+  const sourceSize = await readMasterplanDimensions(sourceFile);
+  const originalWidth = sourceSize.width;
+  const originalHeight = sourceSize.height;
+  if (!(originalWidth > 100 && originalHeight > 100)) {
+    throw new Error("Masterplan dimensions invalid hain");
+  }
+
+  const limits = masterplanProcessingLimits();
+  const mappingScale = Math.min(
+    1,
+    limits.mappingDimension / Math.max(originalWidth, originalHeight),
+    Math.sqrt(limits.mappingPixels / (originalWidth * originalHeight)),
+  );
+  const width = Math.max(1, Math.round(originalWidth * mappingScale));
+  const height = Math.max(1, Math.round(originalHeight * mappingScale));
 
   let bitmap: ImageBitmap;
   try {
-    bitmap = await createImageBitmap(sourceFile);
+    bitmap = await createImageBitmap(
+      sourceFile,
+      mappingScale < 0.999
+        ? {
+            resizeWidth: width,
+            resizeHeight: height,
+            resizeQuality: "high",
+          }
+        : undefined,
+    );
   } catch {
     throw new Error(
-      "Masterplan image decode nahi hui. JPG/PNG/WebP file dobara choose karein.",
+      "Masterplan image decode nahi hui. JPG/PNG/WebP file ya thoda lower-resolution export try karein.",
     );
   }
 
   try {
-    const originalWidth = bitmap.width;
-    const originalHeight = bitmap.height;
-    if (!(originalWidth > 100 && originalHeight > 100)) {
-      throw new Error("Masterplan dimensions invalid hain");
-    }
-
-    const limits = masterplanProcessingLimits();
-    const mappingScale = Math.min(
-      1,
-      limits.mappingDimension / Math.max(bitmap.width, bitmap.height),
-      Math.sqrt(limits.mappingPixels / (bitmap.width * bitmap.height)),
-    );
-    const width = Math.max(1, Math.round(bitmap.width * mappingScale));
-    const height = Math.max(1, Math.round(bitmap.height * mappingScale));
-
     const renderWebp = async (
+      source: CanvasImageSource,
       targetWidth: number,
       targetHeight: number,
       targetBytes: number,
@@ -440,10 +547,8 @@ async function prepareMasterplan(file: File) {
       try {
         const context = canvas.getContext("2d", { alpha: true });
         if (!context) throw new Error("Masterplan process nahi ho payi");
-        // Preserve transparent outer masking. Canvas dimensions intentionally stay unchanged
-        // because Plot Mapper polygons and Geo calibration source points are normalized 0..1.
         context.clearRect(0, 0, targetWidth, targetHeight);
-        context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+        context.drawImage(source, 0, 0, targetWidth, targetHeight);
         const encode = (quality: number) =>
           new Promise<Blob | null>((resolve) =>
             canvas.toBlob(resolve, "image/webp", quality),
@@ -456,18 +561,15 @@ async function prepareMasterplan(file: File) {
         if (!blob) throw new Error("Masterplan image encode nahi hui");
         return blob;
       } finally {
-        // Release large Android canvas backing stores immediately instead of
-        // waiting for GC; this materially lowers peak memory during HD replace.
         canvas.width = 1;
         canvas.height = 1;
       }
     };
 
-    // Keep the exact project aspect ratio while preserving as much detail as
-    // practical. Existing normalized polygons remain resolution-independent.
     let mappingFile = sourceFile;
-    if (mappingScale < 1 || sourceFile.size > TARGET_MAPPING_BYTES) {
+    if (mappingScale < 0.999 || sourceFile.size > TARGET_MAPPING_BYTES) {
       const blob = await renderWebp(
+        bitmap,
         width,
         height,
         TARGET_MAPPING_BYTES,
@@ -480,20 +582,23 @@ async function prepareMasterplan(file: File) {
       );
     }
 
-    // Let the browser release the first temporary canvas before allocating the
-    // public/mobile derivative.
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-    const publicScale = Math.min(
+    const publicScaleFromOriginal = Math.min(
       1,
-      limits.publicDimension / Math.max(bitmap.width, bitmap.height),
-      Math.sqrt(limits.publicPixels / (bitmap.width * bitmap.height)),
+      limits.publicDimension / Math.max(originalWidth, originalHeight),
+      Math.sqrt(limits.publicPixels / (originalWidth * originalHeight)),
     );
-    const publicWidth = Math.max(1, Math.round(bitmap.width * publicScale));
-    const publicHeight = Math.max(1, Math.round(bitmap.height * publicScale));
-    let publicFile = sourceFile;
-    if (publicScale < 1 || sourceFile.size > TARGET_PUBLIC_BYTES) {
+    const publicWidth = Math.max(1, Math.round(originalWidth * publicScaleFromOriginal));
+    const publicHeight = Math.max(1, Math.round(originalHeight * publicScaleFromOriginal));
+    let publicFile = mappingFile;
+    if (
+      publicWidth !== width ||
+      publicHeight !== height ||
+      mappingFile.size > TARGET_PUBLIC_BYTES
+    ) {
       const blob = await renderWebp(
+        bitmap,
         publicWidth,
         publicHeight,
         TARGET_PUBLIC_BYTES,
@@ -517,6 +622,75 @@ async function prepareMasterplan(file: File) {
     };
   } finally {
     bitmap.close();
+  }
+}
+
+async function uploadMasterplanOriginal(
+  projectId: string,
+  file: File,
+  onProgress: (percent: number) => void,
+) {
+  const contentType = normalizedImageType(file) || file.type || "application/octet-stream";
+  const initiate = await apiResult(
+    await fetch(
+      `/api/super-mapper-masterplan-upload?projectId=${encodeURIComponent(projectId)}&action=initiate`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType,
+          size: file.size,
+        }),
+      },
+    ),
+  );
+  const uploadId = String(initiate.uploadId || "");
+  const token = String(initiate.token || "");
+  if (!uploadId || !token) throw new Error("Large masterplan upload session start nahi hui");
+
+  const completedParts: Array<{ partNumber: number; etag: string }> = [];
+  try {
+    let partNumber = 1;
+    for (let offset = 0; offset < file.size; offset += MASTERPLAN_ORIGINAL_CHUNK_BYTES) {
+      const end = Math.min(file.size, offset + MASTERPLAN_ORIGINAL_CHUNK_BYTES);
+      const response = await fetch(
+        `/api/super-mapper-masterplan-upload?projectId=${encodeURIComponent(projectId)}&action=part&token=${encodeURIComponent(token)}&uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: file.slice(offset, end),
+        },
+      );
+      const result = await apiResult(response);
+      const etag = String(result.etag || "");
+      if (!etag) throw new Error(`Masterplan chunk ${partNumber} verify nahi hua`);
+      completedParts.push({ partNumber, etag });
+      onProgress(Math.round((end / file.size) * 100));
+      partNumber += 1;
+    }
+
+    await apiResult(
+      await fetch(
+        `/api/super-mapper-masterplan-upload?projectId=${encodeURIComponent(projectId)}&action=complete&token=${encodeURIComponent(token)}&uploadId=${encodeURIComponent(uploadId)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ parts: completedParts }),
+        },
+      ),
+    );
+    return { token };
+  } catch (error) {
+    try {
+      await fetch(
+        `/api/super-mapper-masterplan-upload?projectId=${encodeURIComponent(projectId)}&action=abort&token=${encodeURIComponent(token)}&uploadId=${encodeURIComponent(uploadId)}`,
+        { method: "POST" },
+      );
+    } catch {
+      // Best-effort cleanup only; the original error remains authoritative.
+    }
+    throw error;
   }
 }
 
@@ -649,12 +823,30 @@ export default function PlotMapper({
     completedProject && kind === "masterplan"
       ? "/project/masterplan.jpg"
       : `/api/project-asset/${kind}?projectId=${encodeURIComponent(projectId)}`;
+  const masterplanAssetUrl = (
+    quality: "preview" | "hd",
+    version = "",
+    retryToken = "",
+  ) => {
+    if (completedProject) return "/project/masterplan.jpg";
+    const params = new URLSearchParams({ projectId, preview: "1" });
+    if (quality === "preview") params.set("variant", "public");
+    if (version) params.set("v", version);
+    if (retryToken) params.set("retry", retryToken);
+    return `/api/project-asset/masterplan?${params.toString()}`;
+  };
 
   const [plots, setPlots] = useState<Plot[]>([]);
   const [settings, setSettings] = useState<MapperSettings>({});
   const [cadGeometry, setCadGeometry] = useState<CadGeometry | null>(null);
   const [imageUrl, setImageUrl] = useState(() => assetUrl("masterplan"));
   const [imageReady, setImageReady] = useState(false);
+  const [imageQuality, setImageQuality] = useState<"preview" | "hd">("preview");
+  const [imageLoadState, setImageLoadState] = useState<
+    "idle" | "preview-loading" | "preview-ready" | "hd-loading" | "hd-ready"
+  >("idle");
+  const [imageError, setImageError] = useState("");
+  const [masterplanUploadProgress, setMasterplanUploadProgress] = useState<number | null>(null);
   // Actual decoded image dimensions are the final display truth. This prevents
   // metadata/CSS mismatch from ever stretching the masterplan.
   const [naturalImageSize, setNaturalImageSize] = useState<{ width: number; height: number } | null>(null);
@@ -722,6 +914,7 @@ export default function PlotMapper({
   const frontFirstPendingRef = useRef(false);
   const loupeRef = useRef<HTMLDivElement | null>(null);
   const metadataRepairRef = useRef(false);
+  const hdPreloadRef = useRef<HTMLImageElement | null>(null);
 
 
   useEffect(() => {
@@ -839,6 +1032,50 @@ export default function PlotMapper({
   }
 
 
+  function preloadHdMasterplan(version: string) {
+    if (completedProject) return;
+    const retryToken = String(Date.now());
+    const hdUrl = masterplanAssetUrl("hd", version, retryToken);
+    const preload = new Image();
+    hdPreloadRef.current = preload;
+    setImageLoadState("hd-loading");
+    preload.decoding = "async";
+    preload.onload = () => {
+      if (hdPreloadRef.current !== preload) return;
+      const storedWidth = Number(settings.mapWidth);
+      const storedHeight = Number(settings.mapHeight);
+      if (storedWidth > 0 && storedHeight > 0) {
+        const expected = storedWidth / storedHeight;
+        const actual = preload.naturalWidth / Math.max(1, preload.naturalHeight);
+        if (Math.abs(actual / expected - 1) > 0.015) {
+          setImageError("HD masterplan aspect ratio mismatch mila; safe preview hi use ho raha hai.");
+          setImageLoadState("preview-ready");
+          return;
+        }
+      }
+      setImageQuality("hd");
+      setImageUrl(hdUrl);
+    };
+    preload.onerror = () => {
+      if (hdPreloadRef.current !== preload) return;
+      setImageError("HD precision masterplan load nahi hua. Light preview available hai; Retry se dobara koshish karein.");
+      setImageLoadState("preview-ready");
+    };
+    preload.src = hdUrl;
+  }
+
+  function retryMasterplanLoad() {
+    const version = String(settings.masterplanVersion || settings.masterplanName || "legacy");
+    hdPreloadRef.current = null;
+    setImageError("");
+    setImageReady(false);
+    setNaturalImageSize(null);
+    setImageQuality("preview");
+    setImageLoadState("preview-loading");
+    setImageUrl(masterplanAssetUrl("preview", version, String(Date.now())));
+  }
+
+
   async function reload() {
     setSettingsReady(false);
     const response = await fetch(`/api/super-mapper?projectId=${encodeURIComponent(projectId)}`, {
@@ -855,7 +1092,18 @@ export default function PlotMapper({
     // publicRotation only controls the shared Super Admin/public presentation angle.
     setSettingsReady(true);
     setCadGeometry((data.cadGeometry || null) as CadGeometry | null);
-    setImageUrl(assetUrl("masterplan"));
+    const masterplanVersion = String(
+      nextSettings.masterplanVersion || nextSettings.masterplanName || "legacy",
+    );
+    hdPreloadRef.current = null;
+    setImageError("");
+    setImageQuality("preview");
+    setImageLoadState(nextSettings.masterplanName ? "preview-loading" : "idle");
+    setImageUrl(
+      nextSettings.masterplanName
+        ? masterplanAssetUrl("preview", masterplanVersion, String(Date.now()))
+        : assetUrl("masterplan"),
+    );
     setImageReady(false);
     setNaturalImageSize(null);
     const orderedNextPlots = [...nextPlots].sort(plotSort);
@@ -892,6 +1140,7 @@ export default function PlotMapper({
     if (
       completedProject ||
       !settingsReady ||
+      imageQuality !== "hd" ||
       !naturalImageSize ||
       metadataRepairRef.current
     )
@@ -919,6 +1168,7 @@ export default function PlotMapper({
   }, [
     completedProject,
     settingsReady,
+    imageQuality,
     naturalImageSize,
     settings.mapWidth,
     settings.mapHeight,
@@ -1701,9 +1951,20 @@ export default function PlotMapper({
           }
         }
 
+        masterplanStage = "original upload";
+        setMasterplanUploadProgress(0);
+        const originalUpload = await uploadMasterplanOriginal(
+          projectId,
+          prepared.originalFile,
+          setMasterplanUploadProgress,
+        );
+
         data.append("file", prepared.mappingFile);
-        data.append("originalFile", prepared.originalFile);
         data.append("publicFile", prepared.publicFile);
+        data.append("originalUploadCompleted", "1");
+        data.append("originalObjectToken", originalUpload.token);
+        data.append("originalFileName", prepared.originalFile.name);
+        data.append("originalFileSize", String(prepared.originalFile.size));
         data.append("mapWidth", String(prepared.width));
         data.append("mapHeight", String(prepared.height));
         data.append("originalWidth", String(prepared.originalWidth));
@@ -1712,11 +1973,11 @@ export default function PlotMapper({
 
       let response: Response;
       if (kind === "masterplan") {
-        masterplanStage = "upload";
+        masterplanStage = "derivative finalize";
         const controller = new AbortController();
         const timeoutId = window.setTimeout(
           () => controller.abort(),
-          MASTERPLAN_UPLOAD_TIMEOUT_MS,
+          MASTERPLAN_FINALIZE_TIMEOUT_MS,
         );
         try {
           response = await fetch("/api/super-mapper", {
@@ -1727,7 +1988,7 @@ export default function PlotMapper({
         } catch (error) {
           if (controller.signal.aborted) {
             throw new Error(
-              "Upload 120 seconds me complete nahi hua. Network stable karke same file dobara choose karein.",
+              "Masterplan derivatives finalize 180 seconds me complete nahi hue. Retry karein; original multipart upload safe hai.",
             );
           }
           throw error;
@@ -1775,6 +2036,7 @@ export default function PlotMapper({
           : message,
       );
     } finally {
+      if (kind === "masterplan") setMasterplanUploadProgress(null);
       setBusy(false);
     }
   }
@@ -2961,7 +3223,14 @@ export default function PlotMapper({
         <div className="mapper-source-grid">
           <label className={`mapper-upload-card ${hasMasterplan ? "ready" : ""}`}>
             <span><ImagePlus /></span>
-            <div><b>{hasMasterplan ? "Masterplan ready" : "1. Masterplan image"}</b><small>{settings.masterplanName || "High-resolution JPG/PNG/WebP"}</small></div>
+            <div>
+              <b>{hasMasterplan ? "Masterplan ready" : "1. Masterplan image"}</b>
+              <small>
+                {masterplanUploadProgress != null
+                  ? `Original upload ${masterplanUploadProgress}% · safe multipart`
+                  : settings.masterplanName || "High-resolution JPG/PNG/WebP · original up to 100 MB"}
+              </small>
+            </div>
             {hasMasterplan && <CheckCircle2 className="mapper-ready-icon" />}
             <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || completedProject} onChange={(event) => handleMasterplanUploadInput(event)} />
           </label>
@@ -3355,7 +3624,22 @@ export default function PlotMapper({
             <button aria-label="Toggle mapping focus/fullscreen" onClick={toggleMapperFullscreen}><Maximize2 />Focus</button>
           </div>
 
-          {!imageReady && <div className="mapper-loading">{hasMasterplan ? "High-resolution masterplan load हो रहा है…" : "पहले masterplan image upload करें"}</div>}
+          {!imageReady && (
+            <div className="mapper-loading">
+              {hasMasterplan ? "Masterplan preview load हो रहा है…" : "पहले masterplan image upload करें"}
+            </div>
+          )}
+          {imageReady && imageLoadState === "hd-loading" && (
+            <div className="mapper-loading">
+              Light preview ready · HD precision masterplan background में load हो रहा है…
+            </div>
+          )}
+          {imageError && (
+            <div className="mapper-warning">
+              {imageError}{" "}
+              <button type="button" onClick={retryMasterplanLoad}>Retry masterplan</button>
+            </div>
+          )}
           <div className="mapper-pan-hint">{toolMode === "pan" ? `PAN: 1 finger drag = move · 2 fingers pinch = zoom + move · ↺/↻ 90° = local mapper view only. Current: ${rotationDegrees}°.` : `SELECT: tap = corner · खाली जगह drag = move · 2 fingers pinch = zoom + move. Rotation ${rotationDegrees}° सिर्फ mapper view है; website और saved polygon geometry canonical coordinates में रहती है.`}</div>
           <div
             ref={imageWrapRef}
@@ -3401,10 +3685,37 @@ export default function PlotMapper({
                     });
                   }
                   setImageReady(true);
+                  setImageError("");
+                  if (imageQuality === "preview" && !completedProject) {
+                    setImageLoadState("preview-ready");
+                    preloadHdMasterplan(
+                      String(settings.masterplanVersion || settings.masterplanName || "legacy"),
+                    );
+                  } else {
+                    setImageLoadState("hd-ready");
+                  }
                 }}
                 onError={() => {
+                  if (imageQuality === "hd" && hasMasterplan && !completedProject) {
+                    const version = String(
+                      settings.masterplanVersion || settings.masterplanName || "legacy",
+                    );
+                    setImageQuality("preview");
+                    setImageLoadState("preview-loading");
+                    setImageError("HD masterplan decode fail hua; light preview par fallback kiya gaya.");
+                    setImageUrl(
+                      masterplanAssetUrl("preview", version, String(Date.now())),
+                    );
+                    return;
+                  }
                   setNaturalImageSize(null);
                   setImageReady(false);
+                  setImageLoadState("idle");
+                  setImageError(
+                    hasMasterplan
+                      ? "Masterplan image load nahi hui. Retry karein; saved plots/status safe hain."
+                      : "",
+                  );
                 }}
                 draggable={false}
                 style={{
