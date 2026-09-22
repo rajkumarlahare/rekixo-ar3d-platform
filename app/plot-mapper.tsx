@@ -61,6 +61,33 @@ import {
   type PlotSideRole,
 } from "./plot-side-semantics";
 
+function FourCornerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="5" cy="5" r="1.5" fill="currentColor" />
+      <circle cx="19" cy="5" r="1.5" fill="currentColor" />
+      <circle cx="19" cy="19" r="1.5" fill="currentColor" />
+      <circle cx="5" cy="19" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IrregularCornerIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 7.5 10 4l8.5 3 1 7-5.5 5.5-8-1.5-2-6.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <circle cx="4.5" cy="7.5" r="1.35" fill="currentColor" />
+      <circle cx="10" cy="4" r="1.35" fill="currentColor" />
+      <circle cx="18.5" cy="7" r="1.35" fill="currentColor" />
+      <circle cx="19.5" cy="14" r="1.35" fill="currentColor" />
+      <circle cx="14" cy="19.5" r="1.35" fill="currentColor" />
+      <circle cx="6" cy="18" r="1.35" fill="currentColor" />
+      <circle cx="4" cy="11.5" r="1.35" fill="currentColor" />
+    </svg>
+  );
+}
+
 
 type Plot = {
   id: string;
@@ -2148,6 +2175,53 @@ export default function PlotMapper({
     }
   }
 
+  function beginBoundaryShape(nextShape: "quad" | "polygon") {
+    setShape(nextShape);
+    setPoints([]);
+    setFrontEdgeIndex("");
+    setBackEdgeIndex("");
+    setDepthEdgeIndex("");
+    setDepth2EdgeIndex("");
+    setEdgeSemanticsDraft("");
+    setSideLayout("four");
+    setEdgeAssignMode(null);
+    setSelectedSemanticEdge(null);
+    setSemanticChainRole(null);
+    setSemanticChainStart(null);
+    frontFirstPendingRef.current = false;
+    setManualPhase("select");
+    setToolMode("select");
+    setCalibrationMode(false);
+  }
+
+  function beginFourCornerBoundary() {
+    beginBoundaryShape("quad");
+  }
+
+  function beginIrregularBoundary() {
+    beginBoundaryShape("polygon");
+  }
+
+  function completeIrregularBoundary() {
+    if (shape !== "polygon")
+      return notify("Boundary complete irregular corner mode me use karein");
+    if (points.length < 3)
+      return notify("Irregular boundary complete karne ke liye kam se kam 3 corners chahiye");
+
+    const nextLayout: PlotSideLayout = points.length === 3 ? "three" : "four";
+    setSideLayout(nextLayout);
+    setManualPhase("details");
+    setSemanticChainRole(null);
+    setSemanticChainStart(null);
+    setSelectedSemanticEdge(null);
+    setEdgeAssignMode(null);
+    if (points.length === 3) {
+      const roles = currentSemanticRoles();
+      roles.depthB = [];
+      commitSemanticRoles(roles, "three");
+    }
+  }
+
   function clearCurrentPoints() {
     setPoints([]);
     setManualPhase("select");
@@ -4142,6 +4216,34 @@ export default function PlotMapper({
               title="Remove every saved clickable boundary; plot details and status stay safe"
             ><Trash2 />Clear all selections</button>
             <strong>{shape === "quad" ? `Plot ${plotId} · ${points.length}/4 corners` : `Plot ${plotId} · ${points.length} corners`}</strong>
+            {!completedProject && (
+              <div className="mapper-inline-shape-tools" aria-label="Plot boundary controls">
+                <button
+                  type="button"
+                  className={shape === "quad" && manualPhase === "select" ? "active" : ""}
+                  disabled={busy}
+                  onClick={beginFourCornerBoundary}
+                  aria-label="4-corner plot"
+                  title="4-corner plot"
+                ><FourCornerIcon /></button>
+                <button
+                  type="button"
+                  className={shape === "polygon" && manualPhase === "select" ? "active" : ""}
+                  disabled={busy}
+                  onClick={beginIrregularBoundary}
+                  aria-label="Irregular corner plot"
+                  title="Irregular corner plot"
+                ><IrregularCornerIcon /></button>
+                <button
+                  type="button"
+                  className="complete"
+                  disabled={busy || manualPhase !== "select" || shape !== "polygon" || points.length < 3}
+                  onClick={completeIrregularBoundary}
+                  aria-label="Boundary complete"
+                  title="Boundary complete"
+                ><CheckCircle2 /></button>
+              </div>
+            )}
             <span>{Math.round(zoom * 100)}%</span>
             <input className="mapper-zoom-range" type="range" min="1" max={MAX_MAPPER_ZOOM} step="0.1" value={zoom} onChange={(event) => zoomAtCanvasCenter(Number(event.target.value))} aria-label="Zoom level" aria-valuetext={`${Math.round(zoom * 100)}%`} />
             <button aria-label="Zoom out" disabled={zoom <= 1} onClick={() => zoomAtCanvasCenter(zoomRef.current - 0.5)}><ZoomOut /></button>
@@ -4799,30 +4901,12 @@ export default function PlotMapper({
 
           {manualPhase === "select" ? <>
             <div className="mapper-mode">
-              <button className={shape === "quad" ? "active" : ""} onClick={() => {
-                setShape("quad");
-                setPoints([]);
-                setFrontEdgeIndex("");
-                setBackEdgeIndex("");
-                setDepthEdgeIndex("");
-                setDepth2EdgeIndex("");
-                setEdgeSemanticsDraft("");
-                setSideLayout("four");
-                setSemanticChainRole(null);
-                setSemanticChainStart(null);
-              }}>Front-first plot · 4 corners</button>
-              <button className={shape === "polygon" ? "active" : ""} onClick={() => {
-                setShape("polygon");
-                setPoints([]);
-                setFrontEdgeIndex("");
-                setBackEdgeIndex("");
-                setDepthEdgeIndex("");
-                setDepth2EdgeIndex("");
-                setEdgeSemanticsDraft("");
-                setSideLayout("four");
-                setSemanticChainRole(null);
-                setSemanticChainStart(null);
-              }}>Irregular · corner taps</button>
+              <button className={shape === "quad" ? "active" : ""} onClick={beginFourCornerBoundary}>
+                <FourCornerIcon />Front-first plot · 4 corners
+              </button>
+              <button className={shape === "polygon" ? "active" : ""} onClick={beginIrregularBoundary}>
+                <IrregularCornerIcon />Irregular · corner taps
+              </button>
             </div>
             <div className="mapper-actions compact">
               <button disabled={!points.length} onClick={undoPoint}><Undo2 />Undo</button>
@@ -4834,18 +4918,7 @@ export default function PlotMapper({
               {shape === "polygon" && <button
                 className="primary"
                 disabled={points.length < 3}
-                onClick={() => {
-                  const nextLayout: PlotSideLayout = points.length === 3 ? "three" : "four";
-                  setSideLayout(nextLayout);
-                  setManualPhase("details");
-                  setSemanticChainRole(null);
-                  setSemanticChainStart(null);
-                  if (points.length === 3) {
-                    const roles = currentSemanticRoles();
-                    roles.depthB = [];
-                    commitSemanticRoles(roles, "three");
-                  }
-                }}
+                onClick={completeIrregularBoundary}
               ><CheckCircle2 />Boundary complete</button>}
             </div>
             <small className="mapper-help">4-corner plot: Tap 1 + Tap 2 road-facing Front boundary ke dono endpoints par karein, phir same direction me clockwise baki 2 corners tap karein. Rekixo automatically Front → Depth A → Back → Depth B bind karega. Existing vertex/edge auto-snap hota hai.</small>
