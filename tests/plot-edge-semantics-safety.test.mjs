@@ -19,7 +19,7 @@ test("customer drawer contract stays Front-left and Depth-bottom", () => {
 
 test("Super Admin has edge-first direct and bulk four-side assignment", () => {
   const mapper = read("app/plot-mapper.tsx");
-  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V1/);
+  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V2_MULTI_EDGE_CHAIN/);
   assert.match(mapper, /selectedSemanticEdge/);
   assert.match(mapper, /assignSelectedSemanticRole/);
   assert.match(mapper, /bulkSemanticMode/);
