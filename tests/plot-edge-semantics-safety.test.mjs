@@ -28,7 +28,7 @@ test("Super Admin has edge-first direct and bulk four-side assignment", () => {
   assert.match(mapper, /applyBulkEdgeDirection/);
   assert.match(mapper, /\["front", "Front"/);
   assert.match(mapper, /\["back", "Back"/);
-  assert.match(mapper, /\["depthA", "Depth A"/);
+  assert.match(mapper, /\["depthA", effectiveSideLayout\(\) === "three" \? "Depth" : "Depth A"/);
   assert.match(mapper, /\["depthB", "Depth B"/);
   assert.match(mapper, /semantic-badge-/);
 });
