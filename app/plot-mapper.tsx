@@ -2176,6 +2176,20 @@ export default function PlotMapper({
   }
 
   function beginBoundaryShape(nextShape: "quad" | "polygon") {
+    // Re-selecting the same mode must never destroy an in-progress boundary.
+    // It only returns the operator to corner selection. Switching shape types
+    // intentionally starts a fresh local boundary, matching the existing flow.
+    if (shape === nextShape && points.length) {
+      setManualPhase("select");
+      setToolMode("select");
+      setCalibrationMode(false);
+      setSemanticChainRole(null);
+      setSemanticChainStart(null);
+      setSelectedSemanticEdge(null);
+      setEdgeAssignMode(null);
+      return;
+    }
+
     setShape(nextShape);
     setPoints([]);
     setFrontEdgeIndex("");
