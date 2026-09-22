@@ -157,6 +157,8 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
       polygonPointCount >= 3 ? polygonPointCount : undefined,
     );
     if (!parsed) return null;
+    // parsePlotSideSemantics preserves optional three/four logical-side layout.
+    // Existing v1 rows without layout stay byte-compatible after read/write.
     edgeSemantics = JSON.stringify(parsed);
   } else if (
     polygonPointCount >= 3 &&
@@ -268,7 +270,7 @@ type EdgeBinding = {
   front: number;
   back: number;
   depthA: number;
-  depthB: number;
+  depthB: number | null;
 };
 
 async function syncMeasurementBindings(
@@ -421,20 +423,24 @@ async function savePlots(
     if (!plot.polygon || !plot.edgeSemantics) continue;
     try {
       const polygon = JSON.parse(plot.polygon) as unknown[];
-      if (!Array.isArray(polygon) || polygon.length < 4) continue;
+      if (!Array.isArray(polygon) || polygon.length < 3) continue;
       const semantics = parsePlotSideSemantics(plot.edgeSemantics, polygon.length);
-      const front = semantics?.roles.front?.[0];
-      const back = semantics?.roles.back?.[0];
-      const depthA = semantics?.roles.depthA?.[0];
-      const depthB = semantics?.roles.depthB?.[0];
-      if (![front, back, depthA, depthB].every(Number.isInteger)) continue;
+      if (!semantics) continue;
+      const layout =
+        semantics.layout === "three" || polygon.length === 3 ? "three" : "four";
+      const front = semantics.roles.front?.[0];
+      const back = semantics.roles.back?.[0];
+      const depthA = semantics.roles.depthA?.[0];
+      const depthB = semantics.roles.depthB?.[0];
+      if (![front, back, depthA].every(Number.isInteger)) continue;
+      if (layout === "four" && !Number.isInteger(depthB)) continue;
       bindings.push({
         id: plot.id,
         pointCount: polygon.length,
         front: Number(front),
         back: Number(back),
         depthA: Number(depthA),
-        depthB: Number(depthB),
+        depthB: layout === "three" ? null : Number(depthB),
       });
     } catch {
       // Binding metadata must never block the canonical plot save.
