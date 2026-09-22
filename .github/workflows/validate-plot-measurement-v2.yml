@@ -63,4 +63,4 @@ jobs:
           grep -q "sqmToSqftFactor" app/api/super-mapper/route.ts
           grep -q "frontFirstFourSideEdges" app/plot-mapper.tsx
           grep -q "REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL" public/project/index.html
-          grep -q "v=64" app/page.tsx
+          grep -q "v=65" app/page.tsx
