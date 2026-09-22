@@ -1699,6 +1699,7 @@ export default function PlotMapper({
     setBackEdgeIndex("");
     setDepth2EdgeIndex("");
     setEdgeSemanticsDraft("");
+    setSideLayout("four");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
     setSemanticChainRole(null);
@@ -2025,6 +2026,7 @@ export default function PlotMapper({
     setBackEdgeIndex("");
     setDepth2EdgeIndex("");
     setEdgeSemanticsDraft("");
+    setSideLayout("four");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
     setSemanticChainRole(null);
@@ -2065,6 +2067,12 @@ export default function PlotMapper({
     if (!source) return notify("Clone करने के लिए पहले कोई mapped plot चाहिए");
     const polygon = parsePolygon(source);
     const semantics = parsePlotSideSemantics(source.edgeSemantics, polygon.length);
+    const clonedLayout: PlotSideLayout =
+      polygon.length === 3
+        ? "three"
+        : semantics?.layout === "three"
+          ? "three"
+          : "four";
     const roleEdge = (role: PlotSideRole, fallback: number | null | undefined) => {
       const semantic = semantics?.roles[role]?.[0];
       return Number.isInteger(semantic)
@@ -2074,20 +2082,29 @@ export default function PlotMapper({
           : "";
     };
     setPoints(polygon.map(([x, y]) => [x, y] as MapperPoint));
-    setShape(polygon.length === 4 ? "quad" : "polygon");
+    setShape(polygon.length === 4 && clonedLayout === "four" ? "quad" : "polygon");
+    setSideLayout(clonedLayout);
     setFrontEdgeIndex(roleEdge("front", source.frontEdgeIndex));
     setBackEdgeIndex(roleEdge("back", source.backEdgeIndex));
     setDepthEdgeIndex(roleEdge("depthA", source.depthEdgeIndex));
-    setDepth2EdgeIndex(roleEdge("depthB", source.depth2EdgeIndex));
+    setDepth2EdgeIndex(
+      clonedLayout === "four" ? roleEdge("depthB", source.depth2EdgeIndex) : "",
+    );
     setEdgeSemanticsDraft(
       semantics
         ? JSON.stringify(semantics)
-        : serializePlotSideSemantics(polygon.length, {
-            ...(Number.isInteger(source.frontEdgeIndex) ? { front: [Number(source.frontEdgeIndex)] } : {}),
-            ...(Number.isInteger(source.backEdgeIndex) ? { back: [Number(source.backEdgeIndex)] } : {}),
-            ...(Number.isInteger(source.depthEdgeIndex) ? { depthA: [Number(source.depthEdgeIndex)] } : {}),
-            ...(Number.isInteger(source.depth2EdgeIndex) ? { depthB: [Number(source.depth2EdgeIndex)] } : {}),
-          }) || "",
+        : serializePlotSideSemantics(
+            polygon.length,
+            {
+              ...(Number.isInteger(source.frontEdgeIndex) ? { front: [Number(source.frontEdgeIndex)] } : {}),
+              ...(Number.isInteger(source.backEdgeIndex) ? { back: [Number(source.backEdgeIndex)] } : {}),
+              ...(Number.isInteger(source.depthEdgeIndex) ? { depthA: [Number(source.depthEdgeIndex)] } : {}),
+              ...(clonedLayout === "four" && Number.isInteger(source.depth2EdgeIndex)
+                ? { depthB: [Number(source.depth2EdgeIndex)] }
+                : {}),
+            },
+            clonedLayout,
+          ) || "",
     );
     setSemanticChainRole(null);
     setSemanticChainStart(null);
@@ -3126,11 +3143,18 @@ export default function PlotMapper({
     if (editingId && id !== editingId && plots.some((plot) => plot.id === id)) {
       return notify(`Plot ${id} inventory में पहले से मौजूद है`);
     }
+    const resolvedSideLayout = effectiveSideLayout();
     const frontValue = front.trim() ? Number(front) : null;
     const backValue = back.trim() ? Number(back) : null;
     const depthValue = depth.trim() ? Number(depth) : null;
-    const depth2Value = depth2.trim() ? Number(depth2) : null;
+    const depth2Value =
+      resolvedSideLayout === "three"
+        ? null
+        : depth2.trim()
+          ? Number(depth2)
+          : null;
     let roleEdges = currentSemanticRoles();
+    if (resolvedSideLayout === "three") roleEdges.depthB = [];
     let edgeValue = roleEdges.front[0] ?? null;
     let backEdgeValue = roleEdges.back[0] ?? null;
     let depthEdgeValue = roleEdges.depthA[0] ?? null;
@@ -3206,10 +3230,14 @@ export default function PlotMapper({
       allRoleEdges.length
     )
       return notify(
-        "Plot corner count badla hai — Front / Back / Depth A / Depth B sides dobara select karein",
+        "Plot corner count badla hai — logical Front / Back / Depth sides dobara select karein",
       );
 
-    const edgeSemantics = serializePlotSideSemantics(points.length, roleEdges);
+    const edgeSemantics = serializePlotSideSemantics(
+      points.length,
+      roleEdges,
+      resolvedSideLayout,
+    );
 
     const unchangedInventoryArea =
       Boolean(existing) && area > 0 && Math.abs(Number(existing?.sqft || 0) - area) < 0.0001;
@@ -3231,7 +3259,7 @@ export default function PlotMapper({
       front: frontValue,
       depth: depthValue,
       back: backValue,
-      depth2: depth2Value,
+      depth2: resolvedSideLayout === "three" ? null : depth2Value,
       dimensionUnit:
         frontValue !== null ||
         backValue !== null ||
@@ -3242,11 +3270,11 @@ export default function PlotMapper({
       frontEdgeIndex: edgeValue,
       depthEdgeIndex: depthEdgeValue,
       backEdgeIndex: backEdgeValue,
-      depth2EdgeIndex: depth2EdgeValue,
+      depth2EdgeIndex: resolvedSideLayout === "three" ? null : depth2EdgeValue,
       frontLabel: existing?.frontLabel || null,
       depthLabel: existing?.depthLabel || null,
       backLabel: existing?.backLabel || null,
-      depth2Label: existing?.depth2Label || null,
+      depth2Label: resolvedSideLayout === "three" ? null : existing?.depth2Label || null,
       sideDimensions: existing?.sideDimensions || null,
       edgeSemantics,
       status: existing?.status || "available",
