@@ -4505,7 +4505,7 @@ export default function PlotMapper({
                   disabled={busy || !shapeReady}
                   onClick={confirmPlot}
                 ><CheckCircle2 />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Confirm ${plotId} →`}</button>
-  
+
                 {manualPhase === "details" && points.length >= 3 && (
                   <div className="plot-side-assigner mapper-side-dock">
                     <div className="plot-side-assigner-head">
@@ -4597,7 +4597,7 @@ export default function PlotMapper({
                     </small>
                   </div>
                 )}
-  
+
               </div>
             </div>
           )}
