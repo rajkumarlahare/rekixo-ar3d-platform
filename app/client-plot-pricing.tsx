@@ -38,6 +38,18 @@ async function jsonResult(response: Response) {
   return data;
 }
 
+function pricingErrorMessage(error: unknown, fallback: string) {
+  if (!(error instanceof Error)) return fallback;
+  const message = String(error.message || "").trim();
+  if (
+    error.name === "TypeError" ||
+    /networkerror|failed to fetch|network request failed|load failed/i.test(message)
+  ) {
+    return "Pricing service se connection nahi ho paaya. Dobara try karein.";
+  }
+  return message || fallback;
+}
+
 function money(value: number, currency = "INR") {
   if (!Number.isFinite(value)) return "—";
   try {
@@ -109,8 +121,7 @@ export default function ClientPlotPricing({
         setPricing(data.pricing || []);
       })
       .catch((error) => {
-        if (active)
-          notify(error instanceof Error ? error.message : "Pricing load nahi hui");
+        if (active) notify(pricingErrorMessage(error, "Pricing load nahi hui"));
       })
       .finally(() => {
         if (active) setLoaded(true);
@@ -191,7 +202,7 @@ export default function ClientPlotPricing({
           : `${selectedIds.length} plot pricing remove ho gayi`,
       );
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Pricing save nahi hui");
+      notify(pricingErrorMessage(error, "Pricing save nahi hui"));
     } finally {
       setBusy(false);
     }

@@ -86,6 +86,14 @@ test("client pricing UI supports single and bulk selection, rate units, fixed pr
   assert.match(clientUi, /Remove Price/);
 });
 
+test("client pricing keeps the shared API path and never exposes raw browser network errors", () => {
+  assert.match(clientUi, /fetch\("\/api\/client\/plot-pricing"/);
+  assert.match(clientUi, /function pricingErrorMessage/);
+  assert.match(clientUi, /networkerror\|failed to fetch\|network request failed\|load failed/i);
+  assert.match(clientUi, /Pricing service se connection nahi ho paaya\. Dobara try karein\./);
+  assert.doesNotMatch(clientUi, /notify\(error instanceof Error \? error\.message : "Pricing load nahi hui"\)/);
+});
+
 test("bulk writes validate selection and record only client pricing audit events", () => {
   assert.match(clientApi, /MAX_SELECTION = 1000/);
   assert.match(clientApi, /project\.client_pricing_updated/);

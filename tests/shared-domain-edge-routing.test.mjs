@@ -13,6 +13,7 @@ test("shared boss domain routes are narrow and never hijack the Vercel root", as
     "${platformHost}/api/public-data*",
     "${platformHost}/api/project-asset/*",
     "${platformHost}/api/admin/*",
+    "${platformHost}/api/client/*",
     "${platformHost}/api/data*",
     "${platformHost}/api/gallery*",
   ]) {
@@ -38,6 +39,21 @@ test("query-bearing Rekixo API routes terminate in wildcard so Cloudflare matche
   assert.doesNotMatch(deploy, /\`\$\{platformHost\}\/api\/public-data\`,/);
   assert.doesNotMatch(deploy, /\`\$\{platformHost\}\/api\/data\`,/);
   assert.doesNotMatch(deploy, /\`\$\{platformHost\}\/api\/gallery\`,/);
+});
+
+test("client-admin feature APIs are explicitly routed to the Generic Client Worker and are private", async () => {
+  const [deploy, worker] = await Promise.all([
+    source("../scripts/prepare-cloudflare-deploy.mjs"),
+    source("../worker/index.ts"),
+  ]);
+
+  assert.ok(
+    deploy.includes("${platformHost}/api/client/*"),
+    "shared-domain client API route missing",
+  );
+  assert.match(worker, /pathname\.startsWith\("\/api\/client"\)/);
+  assert.match(worker, /isSensitiveClientPath\(externalUrl\.pathname\)/);
+  assert.match(worker, /secured\.headers\.set\("cache-control", "no-store"\)/);
 });
 
 test("Rekixo static assets use a native isolated namespace plus compatibility fallback", async () => {

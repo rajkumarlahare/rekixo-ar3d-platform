@@ -57,6 +57,10 @@ const sharedDomainRoutes = platformHost
       `${platformHost}/api/public-geo*`,
       `${platformHost}/api/project-asset/*`,
       `${platformHost}/api/admin/*`,
+      // Client-admin-only feature APIs must stay on the Generic Client Worker.
+      // Without this explicit route, the shared boss/Vercel origin receives
+      // requests such as /api/client/plot-pricing and browser fetch fails.
+      `${platformHost}/api/client/*`,
       `${platformHost}/api/data*`,
       `${platformHost}/api/gallery*`,
     ]
