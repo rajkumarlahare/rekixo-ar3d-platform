@@ -56,6 +56,7 @@ import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
   setPlotSideEdge,
+  type PlotSideLayout,
   type PlotSideRole,
 } from "./plot-side-semantics";
 
@@ -217,12 +218,25 @@ const MOBILE_PUBLIC_DIMENSION = 1600;
 const MOBILE_PUBLIC_PIXELS = 2_000_000;
 const MASTERPLAN_FINALIZE_TIMEOUT_MS = 180_000;
 
-function plotHasFourSideMeasurements(plot: Plot) {
+function resolvedPlotSideLayout(plot: Plot, polygon = parsePolygon(plot)): PlotSideLayout {
+  const parsed = parsePlotSideSemantics(
+    plot.edgeSemantics,
+    polygon.length >= 3 ? polygon.length : undefined,
+  );
+  if (parsed?.layout === "three" || parsed?.layout === "four") return parsed.layout;
+  return polygon.length === 3 ? "three" : "four";
+}
+
+function plotHasRequiredSideMeasurements(plot: Plot) {
+  const polygon = parsePolygon(plot);
+  const layout = resolvedPlotSideLayout(plot, polygon);
   const roles = [
     plot.front != null || Boolean(String(plot.frontLabel || "").trim()),
     plot.back != null || Boolean(String(plot.backLabel || "").trim()),
     plot.depth != null || Boolean(String(plot.depthLabel || "").trim()),
-    plot.depth2 != null || Boolean(String(plot.depth2Label || "").trim()),
+    ...(layout === "four"
+      ? [plot.depth2 != null || Boolean(String(plot.depth2Label || "").trim())]
+      : []),
   ];
   if (roles.every(Boolean)) return true;
 
@@ -231,18 +245,24 @@ function plotHasFourSideMeasurements(plot: Plot) {
     return false;
   const measurements =
     sides.match(/\d+(?:\.\d+)?\s*(?:m\b|ft\b|'|feet\b|meter\b|metre\b)/gi) || [];
-  return measurements.length >= 4;
+  return measurements.length >= (layout === "three" ? 3 : 4);
 }
 
-function plotHasFourSideSemantics(plot: Plot) {
+function plotHasRequiredSideSemantics(plot: Plot) {
   const polygon = parsePolygon(plot);
-  if (polygon.length < 4) return false;
+  if (polygon.length < 3) return false;
   const parsed = parsePlotSideSemantics(plot.edgeSemantics, polygon.length);
+  const layout =
+    parsed?.layout === "three" || parsed?.layout === "four"
+      ? parsed.layout
+      : polygon.length === 3
+        ? "three"
+        : "four";
   if (
     parsed?.roles.front?.length &&
     parsed.roles.back?.length &&
     parsed.roles.depthA?.length &&
-    parsed.roles.depthB?.length
+    (layout === "three" || parsed.roles.depthB?.length)
   ) {
     return true;
   }
@@ -250,7 +270,7 @@ function plotHasFourSideSemantics(plot: Plot) {
     plot.frontEdgeIndex,
     plot.backEdgeIndex,
     plot.depthEdgeIndex,
-    plot.depth2EdgeIndex,
+    ...(layout === "four" ? [plot.depth2EdgeIndex] : []),
   ].map((value) =>
     value == null || String(value).trim() === "" ? null : Number(value),
   );
@@ -261,7 +281,7 @@ function plotHasFourSideSemantics(plot: Plot) {
         Number.isInteger(value) &&
         value >= 0 &&
         value < polygon.length,
-    ) && new Set(indexes).size === 4
+    ) && new Set(indexes).size === indexes.length
   );
 }
 
@@ -271,30 +291,34 @@ function emptyPlotSideRoleEdges(): PlotSideRoleEdges {
   return { front: [], back: [], depthA: [], depthB: [] };
 }
 
-function shortestContiguousEdgeChain(start: number, end: number, pointCount: number) {
+function forwardCornerEdgeChain(
+  startCorner: number,
+  endCorner: number,
+  pointCount: number,
+) {
   if (
-    !Number.isInteger(start) ||
-    !Number.isInteger(end) ||
+    !Number.isInteger(startCorner) ||
+    !Number.isInteger(endCorner) ||
     !Number.isInteger(pointCount) ||
     pointCount < 3 ||
-    start < 0 ||
-    end < 0 ||
-    start >= pointCount ||
-    end >= pointCount
+    startCorner < 0 ||
+    endCorner < 0 ||
+    startCorner >= pointCount ||
+    endCorner >= pointCount ||
+    startCorner === endCorner
   ) return [];
 
-  const walk = (step: 1 | -1) => {
-    const edges: number[] = [start];
-    let cursor = start;
-    for (let guard = 0; guard < pointCount && cursor !== end; guard += 1) {
-      cursor = (cursor + step + pointCount) % pointCount;
-      edges.push(cursor);
-    }
-    return edges;
-  };
-  const forward = walk(1);
-  const backward = walk(-1);
-  return forward.length <= backward.length ? forward : backward;
+  // Explicit click order is the source of truth. Corner 3 → 12 means the
+  // boundary 3→4 ... 11→12. Reverse/wrapped sides are selected by tapping
+  // the corners in the opposite order, so the mapper never guesses shortest.
+  const edges: number[] = [];
+  let cursor = startCorner;
+  for (let guard = 0; guard < pointCount; guard += 1) {
+    if (cursor === endCorner) break;
+    edges.push(cursor);
+    cursor = (cursor + 1) % pointCount;
+  }
+  return cursor === endCorner ? edges : [];
 }
 
 function semanticRoleMidpoint(points: MapperPoint[], edges: number[]) {
@@ -361,9 +385,9 @@ function currentPlotQuality(
     const dimensions = String(plot.dimensions || "").trim();
     if (dimensions) dimensionsComplete += 1;
     if (String(plot.road || "").trim()) roadComplete += 1;
-    const sidesComplete = plotHasFourSideMeasurements(plot);
+    const sidesComplete = plotHasRequiredSideMeasurements(plot);
     if (sidesComplete) fourSidesComplete += 1;
-    const semanticsComplete = plotHasFourSideSemantics(plot);
+    const semanticsComplete = plotHasRequiredSideSemantics(plot);
     if (semanticsComplete) mappedSemanticsComplete += 1;
     if (frontDirections[plot.id] || semanticsComplete) frontDirectionsComplete += 1;
     if (
@@ -944,6 +968,7 @@ export default function PlotMapper({
   // Canonical multi-segment side semantics. Legacy *EdgeIndex fields keep the
   // first/primary edge only so existing projects and older readers stay valid.
   const [edgeSemanticsDraft, setEdgeSemanticsDraft] = useState("");
+  const [sideLayout, setSideLayout] = useState<PlotSideLayout>("four");
   const [semanticChainRole, setSemanticChainRole] = useState<PlotSideRole | null>(null);
   const [semanticChainStart, setSemanticChainStart] = useState<number | null>(null);
   const [bulkSemanticMode, setBulkSemanticMode] = useState(false);
@@ -1006,6 +1031,7 @@ export default function PlotMapper({
     setBackEdgeIndex(String(resolved.back));
     setDepthEdgeIndex(String(resolved.depthA));
     setDepth2EdgeIndex(String(resolved.depthB));
+    setSideLayout("four");
     setEdgeSemanticsDraft(resolved.edgeSemantics);
     setSemanticChainRole(null);
     setSemanticChainStart(null);
