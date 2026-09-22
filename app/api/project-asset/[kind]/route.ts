@@ -70,7 +70,27 @@ export async function GET(
     : kind === "masterplan"
       ? "masterplan"
       : kind;
-  const objectKey = kind === "shareCard" ? `projects/${projectId}/share/card` : `projects/${projectId}/mapper/${objectKind}`;
+
+  let objectKey =
+    kind === "shareCard"
+      ? `projects/${projectId}/share/card`
+      : `projects/${projectId}/mapper/${objectKind}`;
+
+  // New large-masterplan uploads keep the original at a versioned R2 key so a
+  // failed replacement can never destroy the previous source. Old projects still
+  // resolve the historical stable key with zero migration.
+  if (kind === "masterplanOriginal") {
+    const pointer = await env.DB.prepare(
+      "SELECT value FROM settings WHERE project_id=? AND key='masterplanOriginalObjectToken' LIMIT 1",
+    )
+      .bind(projectId)
+      .first<{ value: string }>();
+    const token = String(pointer?.value || "");
+    if (/^[a-zA-Z0-9_-]{12,80}$/.test(token)) {
+      objectKey = `projects/${projectId}/mapper/masterplanOriginal/${token}`;
+    }
+  }
+
   let object = await env.BUCKET.get(objectKey);
   let servedMasterplanSource =
     kind === "masterplan"
