@@ -1946,8 +1946,14 @@ export default function PlotMapper({
   ) {
     const selected = mappedPlots.filter((plot) => bulkSemanticIds.has(plot.id));
     if (!selected.length) return notify("Bulk side ke liye pehle plots select karein");
+    const eligible =
+      kind === "depthB"
+        ? selected.filter((plot) => resolvedPlotSideLayout(plot) === "four")
+        : selected;
+    if (!eligible.length)
+      return notify("Depth B sirf 4-side plots par apply hota hai");
 
-    const payload = selected.map((plot) => {
+    const payload = eligible.map((plot) => {
       const polygon = parsePolygon(plot);
       const edge = edgeIndexForDisplayDirection(polygon, direction, rotation);
       const edgeSemantics = setPlotSideEdge(
