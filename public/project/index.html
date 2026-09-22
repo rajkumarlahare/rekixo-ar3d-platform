@@ -1457,12 +1457,15 @@ rekixoStartPublicBoot();
     if(backRow)backRow.style.display=semantic.back?'flex':'none';
     if(depthRow)depthRow.style.display=semantic.depth?'flex':'none';
     if(depth2Row)depth2Row.style.display=!threeSide&&semantic.depth2?'flex':'none';
-    if(sideRow)sideRow.style.display=semantic.sides?'flex':'none';
+    // A legacy/imported Side Dimensions string can still mention Depth B.
+    // Keep it stored as source evidence, but never surface that stale fourth side
+    // when the mapper explicitly saved this plot as a three-side layout.
+    if(sideRow)sideRow.style.display=!threeSide&&semantic.sides?'flex':'none';
     if(frontValue)frontValue.textContent=semantic.front||'—';
     if(backValue)backValue.textContent=semantic.back||'—';
     if(depthValue)depthValue.textContent=semantic.depth||'—';
     if(depth2Value)depth2Value.textContent=threeSide?'—':semantic.depth2||'—';
-    if(sideValue)sideValue.textContent=semantic.sides||'—'
+    if(sideValue)sideValue.textContent=threeSide?'—':semantic.sides||'—'
   }
   function setLegacyDiagramDimensionsVisible(visible){
     ['depthLine','depthTopTick','depthBottomTick','depthTopGuide','depthBottomGuide','depthText',
