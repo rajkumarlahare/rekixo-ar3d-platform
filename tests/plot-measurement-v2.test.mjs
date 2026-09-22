@@ -78,7 +78,7 @@ test("public drawer prefers edge-specific measurement rows and supports multi-se
   assert.match(api, /edgeMeasurementsByPlot/);
   assert.match(html, /function plotEdgeMeasurementRows/);
   assert.match(html, /function plotEdgeMeasurementValue/);
-  assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V10_THREE_SIDE/);
+  assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL/);
   assert.match(html, /plotEdgeMeasurementValue\(p,role,edge\)\|\|value/);
 });
 
@@ -88,6 +88,6 @@ test("runtime cache is bumped so public clients receive measurement v2", () => {
     "app/preview/[projectId]/page.tsx",
     "app/projects/[slug]/page.tsx",
   ]) {
-    assert.match(read(file), /v=63/);
+    assert.match(read(file), /v=64/);
   }
 });
