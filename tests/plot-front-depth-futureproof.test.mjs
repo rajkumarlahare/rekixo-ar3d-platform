@@ -53,7 +53,7 @@ test("Super Admin mapper keeps measurements independent from edge-first four-sid
   assert.match(mapper, /3 sides · Front \/ Back \/ Depth/);
   assert.match(mapper, /\["front", "Front"/);
   assert.match(mapper, /\["back", "Back"/);
-  assert.match(mapper, /\["depthA", "Depth A"/);
+  assert.match(mapper, /\["depthA", effectiveSideLayout\(\) === "three" \? "Depth" : "Depth A"/);
   assert.match(mapper, /\["depthB", "Depth B"/);
   assert.match(mapper, /Same boundary segment do alag side roles me assign nahi ho sakta/);
   assert.match(mapper, /Plot corner count badla hai/);
