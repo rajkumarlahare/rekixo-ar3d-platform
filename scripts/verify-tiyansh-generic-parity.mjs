@@ -149,7 +149,7 @@ if (phase === "generic" || phase === "post-legacy") {
   assert.equal(projectPage.status, 200, "generic Tiyansh project page failed");
   const html = await projectPage.text();
   assert.match(html, /projectSlug=tiyansh-prime-square/);
-  assert.match(html, /v=63/);
+  assert.match(html, /v=64/);
 }
 
 if (phase === "post-legacy") {
