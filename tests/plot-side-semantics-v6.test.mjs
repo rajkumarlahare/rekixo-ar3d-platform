@@ -43,7 +43,7 @@ test("sheet re-import preserves manual canonical semantics when new columns are 
 
 test("Super Admin exposes edge-first Front Back Depth A Depth B assignment", () => {
   const mapper = read("app/plot-mapper.tsx");
-  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V1/);
+  assert.match(mapper, /REKIXO_IRREGULAR_SIDE_ASSIGNER_V2_MULTI_EDGE_CHAIN/);
   assert.match(mapper, /selectedSemanticEdge/);
   assert.match(mapper, /assignSelectedSemanticRole/);
   assert.match(mapper, /\["front", "Front"/);
@@ -51,6 +51,34 @@ test("Super Admin exposes edge-first Front Back Depth A Depth B assignment", () 
   assert.match(mapper, /\["depthA", "Depth A"/);
   assert.match(mapper, /\["depthB", "Depth B"/);
   assert.match(mapper, /semantic-badge-/);
+});
+
+test("curved irregular sides can group multiple connected polygon edges without schema migration", () => {
+  const mapper = read("app/plot-mapper.tsx");
+  const semantics = read("app/plot-side-semantics.ts");
+  const migration = read("drizzle/0018_rekixo_plot_side_semantics.sql");
+
+  assert.match(mapper, /shortestContiguousEdgeChain/);
+  assert.match(mapper, /semanticChainRole/);
+  assert.match(mapper, /semanticChainStart/);
+  assert.match(mapper, /assignSemanticRoleEdges/);
+  assert.match(mapper, /edges grouped/);
+  assert.match(mapper, /edgeSemanticsDraft/);
+  assert.match(mapper, /serializePlotSideSemantics\(points\.length, roleEdges\)/);
+  assert.match(mapper, /frontEdgeIndex: edgeValue/);
+  assert.match(mapper, /semanticRoleMidpoint/);
+  assert.match(semantics, /roles: Partial<Record<PlotSideRole, number\[\]>>/);
+  assert.doesNotMatch(migration, /DROP|DELETE FROM|UPDATE plots/i);
+});
+
+test("existing single-edge semantics remain valid as one-element role arrays", () => {
+  const semantics = read("app/plot-side-semantics.ts");
+  const resolver = read("app/plot-side-resolver.ts");
+  assert.match(semantics, /else roles\[role\] = \[edge\]/);
+  assert.match(resolver, /front: \[0\]/);
+  assert.match(resolver, /depthA: \[1\]/);
+  assert.match(resolver, /back: \[2\]/);
+  assert.match(resolver, /depthB: \[3\]/);
 });
 
 test("customer irregular diagram uses actual-edge dimensions and no guessed fallback", () => {
