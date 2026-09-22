@@ -3826,20 +3826,21 @@ export default function PlotMapper({
               <div>
                 <b>Plot Data Quality</b>
                 <small>
-                  Customer drawer me Venkatesh-jaisi complete details ke liye har plot ka
-                  Dimensions + Road + Front/Back/Depth A/Depth B hona chahiye.
+                  Customer drawer me complete details ke liye har plot ka Dimensions + Road +
+                  required logical sides hona chahiye. 3-side plot me Front/Back/Depth;
+                  4-side plot me Front/Back/Depth A/Depth B.
                 </small>
               </div>
               <strong>
                 {plotQuality.richDetailReady
                   ? "RICH DETAILS READY"
-                  : `${plotQuality.fourSidesComplete}/${plotQuality.total} FULL SIDES`}
+                  : `${plotQuality.fourSidesComplete}/${plotQuality.total} REQUIRED SIDES`}
               </strong>
             </div>
             <div className="mapper-data-quality-grid">
               <span>Dimensions <b>{plotQuality.dimensionsComplete}/{plotQuality.total}</b></span>
               <span>Road Access <b>{plotQuality.roadComplete}/{plotQuality.total}</b></span>
-              <span>4-side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
+              <span>Required side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
               <span>Front / side binding <b>{plotQuality.frontDirectionsComplete}/{plotQuality.total}</b></span>
               <span>Mapped side semantics <b>{plotQuality.mappedSemanticsComplete}/{plotQuality.total}</b></span>
               {hasMeasurementSheet && <span>Source verified <b>{settings.measurementSheetVerifiedCount || "0"}/{settings.measurementSheetCount || "0"}</b></span>}
@@ -4151,7 +4152,10 @@ export default function PlotMapper({
                           stroke="rgba(255,255,255,0.001)"
                           strokeWidth={30}
                           vectorEffect="non-scaling-stroke"
-                          style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                          style={{
+                            cursor: semanticChainRole ? "default" : "pointer",
+                            pointerEvents: semanticChainRole ? "none" : "stroke",
+                          }}
                           onPointerDown={handleEdgePointerDown}
                           onPointerUp={handleEdgePointerUp}
                         />
@@ -4175,8 +4179,10 @@ export default function PlotMapper({
                   {!calibrationMode && points.length >= 3 && ([
                     ["front", "F", "#22c55e"],
                     ["back", "B", "#60a5fa"],
-                    ["depthA", "D1", "#f59e0b"],
-                    ["depthB", "D2", "#a78bfa"],
+                    ["depthA", effectiveSideLayout() === "three" ? "D" : "D1", "#f59e0b"],
+                    ...(effectiveSideLayout() === "four"
+                      ? [["depthB", "D2", "#a78bfa"] as const]
+                      : []),
                   ] as const).map(([role, badge, color]) => {
                     const edges = currentSemanticRoles()[role];
                     const midpoint = semanticRoleMidpoint(points, edges);
@@ -4239,11 +4245,40 @@ export default function PlotMapper({
                     ),
                   } as React.CSSProperties}
                   data-corner={index + 1}
-                  onPointerDown={(event) => dragHandle(event, index)}
-                  onPointerMove={(event) => moveHandle(event, index)}
-                  onPointerUp={endHandle}
-                  onPointerCancel={endHandle}
-                  aria-label={`Drag corner ${index + 1}`}
+                  onPointerDown={(event) => {
+                    if (semanticChainRole) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      return;
+                    }
+                    dragHandle(event, index);
+                  }}
+                  onPointerMove={(event) => {
+                    if (semanticChainRole) return;
+                    moveHandle(event, index);
+                  }}
+                  onPointerUp={(event) => {
+                    if (semanticChainRole) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleSemanticCornerTap(index);
+                      return;
+                    }
+                    endHandle(event);
+                  }}
+                  onPointerCancel={(event) => {
+                    if (semanticChainRole) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      return;
+                    }
+                    endHandle(event);
+                  }}
+                  aria-label={
+                    semanticChainRole
+                      ? `Choose corner ${index + 1} for side range`
+                      : `Drag corner ${index + 1}`
+                  }
                 />
               ))}
             </div>
@@ -4259,9 +4294,13 @@ export default function PlotMapper({
                 <div>
                   <b>Assign plot sides</b>
                   <span>
-                    {selectedSemanticEdge == null
-                      ? "Boundary ki line tap karein"
-                      : `Edge ${selectedSemanticEdge + 1} selected`}
+                    {semanticChainRole
+                      ? semanticChainStart == null
+                        ? "Role selected · start corner number tap karein"
+                        : `Corner ${semanticChainStart + 1} selected · end corner tap karein`
+                      : selectedSemanticEdge == null
+                        ? "Role button → start corner → end corner"
+                        : `Edge ${selectedSemanticEdge + 1} selected`}
                   </span>
                 </div>
                 {semanticChainRole ? (
@@ -4275,12 +4314,33 @@ export default function PlotMapper({
                   <button type="button" onClick={clearSelectedSemanticRole}>Clear edge role</button>
                 ) : null}
               </div>
+              {shape === "polygon" && (
+                <div className="mapper-actions compact">
+                  <span>
+                    Logical sides: <b>{effectiveSideLayout() === "three" ? "3" : "4"}</b>
+                    {points.length === 3 ? " · triangle auto" : ""}
+                  </span>
+                  <button
+                    type="button"
+                    className={effectiveSideLayout() === "three" ? "primary" : ""}
+                    onClick={() => changeSideLayout("three")}
+                  >3 sides · Front / Back / Depth</button>
+                  <button
+                    type="button"
+                    className={effectiveSideLayout() === "four" ? "primary" : ""}
+                    disabled={points.length === 3}
+                    onClick={() => changeSideLayout("four")}
+                  >4 sides · Front / Back / Depth A / Depth B</button>
+                </div>
+              )}
               <div className="plot-side-role-grid">
                 {([
                   ["front", "Front", frontEdgeIndex, "#22c55e"],
                   ["back", "Back", backEdgeIndex, "#60a5fa"],
-                  ["depthA", "Depth A", depthEdgeIndex, "#f59e0b"],
-                  ["depthB", "Depth B", depth2EdgeIndex, "#a78bfa"],
+                  ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A", depthEdgeIndex, "#f59e0b"],
+                  ...(effectiveSideLayout() === "four"
+                    ? [["depthB", "Depth B", depth2EdgeIndex, "#a78bfa"] as const]
+                    : []),
                 ] as const).map(([role, label, rawEdge, color]) => {
                   const groupedEdges = currentSemanticRoles()[role];
                   const active =
@@ -4289,8 +4349,8 @@ export default function PlotMapper({
                   const chainWaiting =
                     semanticChainRole === role
                       ? semanticChainStart == null
-                        ? "Tap first edge"
-                        : "Tap last edge"
+                        ? "Tap start corner"
+                        : "Tap end corner"
                       : "";
                   return (
                     <button
@@ -4314,10 +4374,11 @@ export default function PlotMapper({
                 })}
               </div>
               <small className="plot-side-assigner-help">
-                Road-facing boundary = Front. Curved side ke liye role button pehle tap karein,
-                phir us side ka first aur last boundary segment tap karein — beech ke connected
-                segments ek hi Front / Back / Depth side group banenge. Single segment ke liye
-                pehle edge tap karke role choose kar sakte hain.
+                Road-facing boundary = Front. Easy range mode: pehle Front / Back / Depth role
+                button tap karein, phir numbered start corner aur end corner tap karein. Example:
+                corner 3 → 12 par click-order me 3→4 se 11→12 tak poori curved boundary ek side
+                banegi. Closing/reverse side ke liye corners usi desired direction me tap karein
+                (jaise 12 → 3). Single straight edge ka old edge-tap workflow bhi valid hai.
               </small>
             </div>
           )}
@@ -4448,6 +4509,7 @@ export default function PlotMapper({
                 setDepthEdgeIndex("");
                 setDepth2EdgeIndex("");
                 setEdgeSemanticsDraft("");
+                setSideLayout("four");
                 setSemanticChainRole(null);
                 setSemanticChainStart(null);
               }}>Front-first plot · 4 corners</button>
@@ -4459,6 +4521,7 @@ export default function PlotMapper({
                 setDepthEdgeIndex("");
                 setDepth2EdgeIndex("");
                 setEdgeSemanticsDraft("");
+                setSideLayout("four");
                 setSemanticChainRole(null);
                 setSemanticChainStart(null);
               }}>Irregular · corner taps</button>
@@ -4470,7 +4533,22 @@ export default function PlotMapper({
                 onClick={clearCurrentSelection}
               >{currentHasSavedBoundary ? "Remove saved boundary" : "Clear"}</button>
               <button onClick={clonePreviousShape}><Copy />Clone previous</button>
-              {shape === "polygon" && <button className="primary" disabled={points.length < 3} onClick={() => setManualPhase("details")}><CheckCircle2 />Boundary complete</button>}
+              {shape === "polygon" && <button
+                className="primary"
+                disabled={points.length < 3}
+                onClick={() => {
+                  const nextLayout: PlotSideLayout = points.length === 3 ? "three" : "four";
+                  setSideLayout(nextLayout);
+                  setManualPhase("details");
+                  setSemanticChainRole(null);
+                  setSemanticChainStart(null);
+                  if (points.length === 3) {
+                    const roles = currentSemanticRoles();
+                    roles.depthB = [];
+                    commitSemanticRoles(roles, "three");
+                  }
+                }}
+              ><CheckCircle2 />Boundary complete</button>}
             </div>
             <small className="mapper-help">4-corner plot: Tap 1 + Tap 2 road-facing Front boundary ke dono endpoints par karein, phir same direction me clockwise baki 2 corners tap karein. Rekixo automatically Front → Depth A → Back → Depth B bind karega. Existing vertex/edge auto-snap hota hai.</small>
           </> : <>
@@ -4481,8 +4559,10 @@ export default function PlotMapper({
               <label><span>Facing / road</span><input value={road} onChange={(event) => setRoad(event.target.value)} placeholder="East face / 40 ft road" /></label>
               <label><span>Front (road side)</span><input type="number" min="0" step="0.01" value={front} onChange={(event) => setFront(event.target.value)} placeholder="18" /></label>
               <label><span>Back</span><input type="number" min="0" step="0.01" value={back} onChange={(event) => setBack(event.target.value)} placeholder="18" /></label>
-              <label><span>Depth A</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
-              <label><span>Depth B</span><input type="number" min="0" step="0.01" value={depth2} onChange={(event) => setDepth2(event.target.value)} placeholder="40" /></label>
+              <label><span>{effectiveSideLayout() === "three" ? "Depth" : "Depth A"}</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
+              {effectiveSideLayout() === "four" && (
+                <label><span>Depth B</span><input type="number" min="0" step="0.01" value={depth2} onChange={(event) => setDepth2(event.target.value)} placeholder="40" /></label>
+              )}
               <label><span>Size unit</span><select value={dimensionUnit} onChange={(event) => setDimensionUnit(event.target.value === "m" ? "m" : "ft")}><option value="ft">ft (feet)</option><option value="m">m (metre)</option></select></label>
             </div>
             <div className="mapper-actions compact">
@@ -4496,7 +4576,7 @@ export default function PlotMapper({
               }}>Dimensions → Front/Depth</button>
               <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
             </div>
-            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular/corner-road exception me Assign plot sides module se Front / Back / Depth A / Depth B verify/correct karein. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
+            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular plot me numbered corner-range se logical sides assign karein. Triangle automatically 3-side mode use karta hai; 4+ corners par 3-side ya 4-side choose kar sakte hain. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
             <div className="mapper-actions">
               <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
               <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
