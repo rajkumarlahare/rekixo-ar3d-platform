@@ -1,8 +1,12 @@
 export type PlotSideRole = "front" | "back" | "depthA" | "depthB";
+export type PlotSideLayout = "three" | "four";
 
 export type PlotSideSemanticsV1 = {
   version: 1;
   pointCount: number;
+  // Optional so every existing saved project remains valid without migration.
+  // "three" means Front + Back + Depth A; Depth B is intentionally N/A.
+  layout?: PlotSideLayout;
   roles: Partial<Record<PlotSideRole, number[]>>;
 };
 
@@ -35,6 +39,7 @@ export function parsePlotSideSemantics(
     const source = parsed as {
       version?: unknown;
       pointCount?: unknown;
+      layout?: unknown;
       roles?: Record<string, unknown>;
     };
     if (Number(source.version) !== 1) return null;
@@ -47,8 +52,12 @@ export function parsePlotSideSemantics(
       const edges = cleanEdges(source.roles?.[role], storedCount);
       if (edges.length) roles[role] = edges;
     }
+    const layout: PlotSideLayout | undefined =
+      source.layout === "three" || source.layout === "four"
+        ? source.layout
+        : undefined;
     return Object.keys(roles).length
-      ? { version: 1, pointCount: storedCount, roles }
+      ? { version: 1, pointCount: storedCount, ...(layout ? { layout } : {}), roles }
       : null;
   } catch {
     return null;
@@ -58,6 +67,7 @@ export function parsePlotSideSemantics(
 export function serializePlotSideSemantics(
   pointCount: number,
   roles: Partial<Record<PlotSideRole, number[]>>,
+  layout?: PlotSideLayout,
 ) {
   if (!Number.isInteger(pointCount) || pointCount < 3 || pointCount > 80)
     return null;
@@ -67,7 +77,12 @@ export function serializePlotSideSemantics(
     if (edges.length) cleaned[role] = edges;
   }
   return Object.keys(cleaned).length
-    ? JSON.stringify({ version: 1, pointCount, roles: cleaned })
+    ? JSON.stringify({
+        version: 1,
+        pointCount,
+        ...(layout === "three" || layout === "four" ? { layout } : {}),
+        roles: cleaned,
+      })
     : null;
 }
 
@@ -91,5 +106,5 @@ export function setPlotSideEdge(
   };
   if (edge == null) delete roles[role];
   else roles[role] = [edge];
-  return serializePlotSideSemantics(pointCount, roles);
+  return serializePlotSideSemantics(pointCount, roles, current?.layout);
 }
