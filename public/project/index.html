@@ -1506,7 +1506,61 @@ rekixoStartPublicBoot();
     }
     legend.hidden=!legend.children.length
   }
-  // REKIXO_PUBLIC_EDGE_DIMENSIONS_V10_THREE_SIDE
+  // REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL
+  function semanticRoleDiagramGeometry(scaledPoints,edges,cx,cy){
+    const pointCount=scaledPoints.length;
+    const valid=[...new Set((Array.isArray(edges)?edges:[])
+      .map(Number)
+      .filter(edge=>Number.isInteger(edge)&&edge>=0&&edge<pointCount))];
+    const offset=17,textGap=9;
+    const segments=[];
+    for(const edge of valid){
+      const a=scaledPoints[edge],b=scaledPoints[(edge+1)%pointCount];
+      if(!a||!b)continue;
+      const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);
+      if(!(length>0))continue;
+      const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+      let nx=-dy/length,ny=dx/length;
+      if((mx-cx)*nx+(my-cy)*ny<0){nx=-nx;ny=-ny}
+      segments.push({
+        edge,a,b,dx,dy,length,nx,ny,
+        x1:a[0]+nx*offset,y1:a[1]+ny*offset,
+        x2:b[0]+nx*offset,y2:b[1]+ny*offset,
+      })
+    }
+    if(!segments.length)return null;
+
+    const total=segments.reduce((sum,segment)=>sum+segment.length,0);
+    let remaining=total/2,middle=segments[segments.length-1],ratio=.5;
+    for(const segment of segments){
+      if(remaining<=segment.length){
+        middle=segment;
+        ratio=segment.length?remaining/segment.length:.5;
+        break
+      }
+      remaining-=segment.length
+    }
+    const mx=middle.a[0]+middle.dx*ratio,my=middle.a[1]+middle.dy*ratio;
+    let angle=Math.atan2(middle.dy,middle.dx)*180/Math.PI;
+    if(angle>90)angle-=180;
+    if(angle<-90)angle+=180;
+
+    const chainStarts=[],chainEnds=[];
+    for(let i=0;i<segments.length;i++){
+      const segment=segments[i],previous=segments[i-1],next=segments[i+1];
+      if(!previous||((previous.edge+1)%pointCount)!==segment.edge)chainStarts.push(segment);
+      if(!next||((segment.edge+1)%pointCount)!==next.edge)chainEnds.push(segment)
+    }
+
+    return{
+      segments,chainStarts,chainEnds,
+      label:{
+        x:mx+middle.nx*(offset+textGap),
+        y:my+middle.ny*(offset+textGap),
+        angle,
+      },
+    }
+  }
   function renderSemanticDiagramEdges(p,scaledPoints,cx,cy){
     const semantics=plotSideSemantics(p),group=q('#semanticEdgeLabels');
     if(!group)return false;
@@ -1523,42 +1577,38 @@ rekixoStartPublicBoot();
       if(dash)line.setAttribute('stroke-dasharray',dash);
       group.appendChild(line);return line
     };
+    const makeTick=(segment,atStart,color)=>{
+      const tick=4,x=atStart?segment.x1:segment.x2,y=atStart?segment.y1:segment.y2;
+      makeLine(x-segment.nx*tick,y-segment.ny*tick,x+segment.nx*tick,y+segment.ny*tick,color,'1.2')
+    };
     for(const [role,title,value,color,dash] of diagramSideSpecs(p)){
-      for(const edge of semantics[role]||[]){
-        const a=scaledPoints[edge],b=scaledPoints[(edge+1)%scaledPoints.length];
-        if(!a||!b)continue;
-        const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy)||1;
-        const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
-        let nx=-dy/length,ny=dx/length;
-        if((mx-cx)*nx+(my-cy)*ny<0){nx=-nx;ny=-ny}
-        const offset=17,tick=4,textGap=9;
-        const x1=a[0]+nx*offset,y1=a[1]+ny*offset;
-        const x2=b[0]+nx*offset,y2=b[1]+ny*offset;
-        makeLine(x1,y1,x2,y2,color,'1.55',dash);
-        makeLine(x1-nx*tick,y1-ny*tick,x1+nx*tick,y1+ny*tick,color,'1.2');
-        makeLine(x2-nx*tick,y2-ny*tick,x2+nx*tick,y2+ny*tick,color,'1.2');
+      const geometry=semanticRoleDiagramGeometry(scaledPoints,semantics[role]||[],cx,cy);
+      if(!geometry)continue;
 
-        const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-        const tx=mx+nx*(offset+textGap),ty=my+ny*(offset+textGap);
-        let angle=Math.atan2(dy,dx)*180/Math.PI;
-        if(angle>90)angle-=180;
-        if(angle<-90)angle+=180;
-        text.setAttribute('x',tx);text.setAttribute('y',ty);
-        text.setAttribute('transform',`rotate(${angle} ${tx} ${ty})`);
-        text.setAttribute('fill',color);
-        text.setAttribute('font-size','9');
-        text.setAttribute('font-weight','900');
-        text.setAttribute('text-anchor','middle');
-        text.setAttribute('dominant-baseline','central');
-        text.setAttribute('paint-order','stroke');
-        text.setAttribute('stroke','#081225');
-        text.setAttribute('stroke-width','3');
-        text.setAttribute('stroke-linejoin','round');
-        const edgeValue=plotEdgeMeasurementValue(p,role,edge)||value;
-        text.textContent=title+(edgeValue?' · '+edgeValue:'');
-        group.appendChild(text);
-        rendered++
-      }
+      // A curved logical side may contain many polygon segments. Draw every
+      // segment so the guide follows the real boundary, but annotate the
+      // logical Front/Back/Depth side only once.
+      for(const segment of geometry.segments)
+        makeLine(segment.x1,segment.y1,segment.x2,segment.y2,color,'1.55',dash);
+      for(const segment of geometry.chainStarts)makeTick(segment,true,color);
+      for(const segment of geometry.chainEnds)makeTick(segment,false,color);
+
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const {x:tx,y:ty,angle}=geometry.label;
+      text.setAttribute('x',tx);text.setAttribute('y',ty);
+      text.setAttribute('transform',`rotate(${angle} ${tx} ${ty})`);
+      text.setAttribute('fill',color);
+      text.setAttribute('font-size','9');
+      text.setAttribute('font-weight','900');
+      text.setAttribute('text-anchor','middle');
+      text.setAttribute('dominant-baseline','central');
+      text.setAttribute('paint-order','stroke');
+      text.setAttribute('stroke','#081225');
+      text.setAttribute('stroke-width','3');
+      text.setAttribute('stroke-linejoin','round');
+      text.textContent=title+(value?' · '+value:'');
+      group.appendChild(text);
+      rendered++
     }
     group.style.display=rendered?'':'none';
     return rendered>0
