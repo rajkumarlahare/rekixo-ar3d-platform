@@ -22,7 +22,7 @@ test('empty, conflicting and stale side indices are safe',()=>{
     points,frontEdgeIndex:0,backEdgeIndex:2,depthEdgeIndex:1,depth2EdgeIndex:3
   });
   assert.equal(JSON.stringify(valid),
-    '{"front":[0],"back":[2],"depthA":[1],"depthB":[3]}');
+    '{"layout":"four","front":[0],"back":[2],"depthA":[1],"depthB":[3]}');
   assert.equal(ctx.plotSideSemantics({
     points,frontEdgeIndex:0,backEdgeIndex:0
   }),null);
@@ -30,6 +30,29 @@ test('empty, conflicting and stale side indices are safe',()=>{
     points,frontEdgeIndex:0,backEdgeIndex:2,
     edgeSemantics:JSON.stringify({version:1,pointCount:5,roles:{front:[0],back:[2]}})
   }),null);
+});
+
+test('three-side semantics omit phantom Depth B and legacy four-side fallback stays intact',()=>{
+  const triangle=[[0,0],[1,0],[0.5,1]];
+  const three=ctx.plotSideSemantics({
+    points:triangle,
+    edgeSemantics:JSON.stringify({
+      version:1,pointCount:3,layout:'three',
+      roles:{front:[0],back:[1],depthA:[2]}
+    })
+  });
+  assert.equal(JSON.stringify(three),
+    '{"layout":"three","front":[0],"back":[1],"depthA":[2],"depthB":[]}');
+
+  const legacy=ctx.plotSideSemantics({
+    points,
+    edgeSemantics:JSON.stringify({
+      version:1,pointCount:4,
+      roles:{front:[0],back:[2],depthA:[1],depthB:[3]}
+    })
+  });
+  assert.equal(legacy.layout,'four');
+  assert.deepEqual(Array.from(legacy.depthB),[3]);
 });
 
 test('both mapper SQL paths save four sides and preserve sales state',()=>{

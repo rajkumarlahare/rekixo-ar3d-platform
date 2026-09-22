@@ -1407,8 +1407,9 @@ rekixoStartPublicBoot();
   }
   function plotSideSemantics(p){
     const validEdge=value=>validPlotSideEdge(value,p.points.length);
+    const inferredLayout=()=>p.points.length===3?'three':'four';
     const distinctRoles=roles=>{
-      const edges=Object.values(roles).flat();
+      const edges=['front','back','depthA','depthB'].flatMap(role=>Array.isArray(roles[role])?roles[role]:[]);
       return new Set(edges).size===edges.length
     };
     const raw=cleanDimensionLabel(p.edgeSemantics);
@@ -1421,27 +1422,31 @@ rekixoStartPublicBoot();
           const list=Array.isArray(roles[name])?roles[name]:[];
           return [...new Set(list.map(validEdge).filter(edge=>edge!==null))]
         };
-        const parsed={front:cleanRole('front'),back:cleanRole('back'),depthA:cleanRole('depthA'),depthB:cleanRole('depthB')};
+        const layout=value.layout==='three'||value.layout==='four'?value.layout:inferredLayout();
+        const parsed={layout,front:cleanRole('front'),back:cleanRole('back'),depthA:cleanRole('depthA'),depthB:layout==='three'?[]:cleanRole('depthB')};
         if(!distinctRoles(parsed))return null;
         if(parsed.front.length)return parsed
       }catch(_){return null}
     }
+    const layout=inferredLayout();
     const measuredRoles={
+      layout,
       front:plotEdgeMeasurementRows(p,'front').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
       back:plotEdgeMeasurementRows(p,'back').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
       depthA:plotEdgeMeasurementRows(p,'depthA').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
-      depthB:plotEdgeMeasurementRows(p,'depthB').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
+      depthB:layout==='three'?[]:plotEdgeMeasurementRows(p,'depthB').map(row=>validEdge(row.edgeIndex)).filter(edge=>edge!==null),
     };
     if(measuredRoles.front.length&&distinctRoles(measuredRoles))return measuredRoles;
     const front=validEdge(p.frontEdgeIndex),back=validEdge(p.backEdgeIndex),
-      depthA=validEdge(p.depthEdgeIndex),depthB=validEdge(p.depth2EdgeIndex);
+      depthA=validEdge(p.depthEdgeIndex),depthB=layout==='three'?null:validEdge(p.depth2EdgeIndex);
     // Missing indices are not edge zero.
-    const roles={front:front===null?[]:[front],back:back===null?[]:[back],
+    const roles={layout,front:front===null?[]:[front],back:back===null?[]:[back],
       depthA:depthA===null?[]:[depthA],depthB:depthB===null?[]:[depthB]};
     return front!==null&&distinctRoles(roles)?roles:null
   }
   function syncFrontDepthFacts(p){
-    const semantic=plotSemanticDimensions(p),
+    const semantic=plotSemanticDimensions(p),semantics=plotSideSemantics(p),
+      threeSide=Boolean(semantics&&semantics.layout==='three'),
       frontRow=q('#frontFactRow'),backRow=q('#backFactRow'),
       depthRow=q('#depthFactRow'),depth2Row=q('#depth2FactRow'),
       sideRow=q('#sideDimensionsRow');
@@ -1451,13 +1456,16 @@ rekixoStartPublicBoot();
     if(frontRow)frontRow.style.display=semantic.front?'flex':'none';
     if(backRow)backRow.style.display=semantic.back?'flex':'none';
     if(depthRow)depthRow.style.display=semantic.depth?'flex':'none';
-    if(depth2Row)depth2Row.style.display=semantic.depth2?'flex':'none';
-    if(sideRow)sideRow.style.display=semantic.sides?'flex':'none';
+    if(depth2Row)depth2Row.style.display=!threeSide&&semantic.depth2?'flex':'none';
+    // A legacy/imported Side Dimensions string can still mention Depth B.
+    // Keep it stored as source evidence, but never surface that stale fourth side
+    // when the mapper explicitly saved this plot as a three-side layout.
+    if(sideRow)sideRow.style.display=!threeSide&&semantic.sides?'flex':'none';
     if(frontValue)frontValue.textContent=semantic.front||'—';
     if(backValue)backValue.textContent=semantic.back||'—';
     if(depthValue)depthValue.textContent=semantic.depth||'—';
-    if(depth2Value)depth2Value.textContent=semantic.depth2||'—';
-    if(sideValue)sideValue.textContent=semantic.sides||'—'
+    if(depth2Value)depth2Value.textContent=threeSide?'—':semantic.depth2||'—';
+    if(sideValue)sideValue.textContent=threeSide?'—':semantic.sides||'—'
   }
   function setLegacyDiagramDimensionsVisible(visible){
     ['depthLine','depthTopTick','depthBottomTick','depthTopGuide','depthBottomGuide','depthText',
@@ -1466,12 +1474,13 @@ rekixoStartPublicBoot();
   }
   const REKIXO_DIAGRAM_DIMENSION_GREY='#94a3b8';
   function diagramSideSpecs(p){
-    const values=plotSemanticDimensions(p);
+    const values=plotSemanticDimensions(p),semantics=plotSideSemantics(p),
+      threeSide=Boolean(semantics&&semantics.layout==='three');
     return [
       ['front','Front',values.front,REKIXO_DIAGRAM_DIMENSION_GREY,''],
       ['back','Back',values.back,REKIXO_DIAGRAM_DIMENSION_GREY,'9 4'],
-      ['depthA','Depth A',values.depth,REKIXO_DIAGRAM_DIMENSION_GREY,'2 4'],
-      ['depthB','Depth B',values.depth2,REKIXO_DIAGRAM_DIMENSION_GREY,'9 3 2 3'],
+      ['depthA',threeSide?'Depth':'Depth A',values.depth,REKIXO_DIAGRAM_DIMENSION_GREY,'2 4'],
+      ...(!threeSide?[['depthB','Depth B',values.depth2,REKIXO_DIAGRAM_DIMENSION_GREY,'9 3 2 3']]:[]),
     ]
   }
   function renderDiagramLegend(p,semantics){
@@ -1497,7 +1506,7 @@ rekixoStartPublicBoot();
     }
     legend.hidden=!legend.children.length
   }
-  // REKIXO_PUBLIC_EDGE_DIMENSIONS_V9
+  // REKIXO_PUBLIC_EDGE_DIMENSIONS_V10_THREE_SIDE
   function renderSemanticDiagramEdges(p,scaledPoints,cx,cy){
     const semantics=plotSideSemantics(p),group=q('#semanticEdgeLabels');
     if(!group)return false;

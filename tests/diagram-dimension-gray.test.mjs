@@ -14,7 +14,8 @@ test("customer diagram semantic dimensions use one neutral grey", () => {
   const block = html.slice(start, end);
   assert.match(block, /\['front','Front',values\.front,REKIXO_DIAGRAM_DIMENSION_GREY/);
   assert.match(block, /\['back','Back',values\.back,REKIXO_DIAGRAM_DIMENSION_GREY/);
-  assert.match(block, /\['depthA','Depth A',values\.depth,REKIXO_DIAGRAM_DIMENSION_GREY/);
+  assert.match(block, /\['depthA',threeSide\?'Depth':'Depth A',values\.depth,REKIXO_DIAGRAM_DIMENSION_GREY/);
   assert.match(block, /\['depthB','Depth B',values\.depth2,REKIXO_DIAGRAM_DIMENSION_GREY/);
+  assert.match(block, /!threeSide/);
   assert.doesNotMatch(block, /#22c55e|#60a5fa|#f59e0b|#a78bfa/i);
 });

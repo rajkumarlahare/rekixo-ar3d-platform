@@ -42,7 +42,8 @@ test("Super Admin warns before incomplete rich-detail CSV is imported", () => {
   assert.match(mapper, /plotSheetPreflight/);
   assert.match(mapper, /complete Front \/ Back \/ Depth measurement/);
   assert.match(mapper, /Plot Data Quality/);
-  assert.match(mapper, /4-side measurements/);
+  assert.match(mapper, /Required side measurements/);
+  assert.match(mapper, /3-side plot me Front\/Back\/Depth/);
   assert.match(mapper, /Front Direction/);
   assert.match(mapper, /plotFrontDirections/);
   assert.match(mapper, /RICH DETAILS READY/);

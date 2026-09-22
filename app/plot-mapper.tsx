@@ -53,9 +53,11 @@ import {
   resolveFourSideEdges,
 } from "./plot-side-resolver";
 import {
+  forwardCornerEdgeChain,
   parsePlotSideSemantics,
   serializePlotSideSemantics,
   setPlotSideEdge,
+  type PlotSideLayout,
   type PlotSideRole,
 } from "./plot-side-semantics";
 
@@ -217,12 +219,25 @@ const MOBILE_PUBLIC_DIMENSION = 1600;
 const MOBILE_PUBLIC_PIXELS = 2_000_000;
 const MASTERPLAN_FINALIZE_TIMEOUT_MS = 180_000;
 
-function plotHasFourSideMeasurements(plot: Plot) {
+function resolvedPlotSideLayout(plot: Plot, polygon = parsePolygon(plot)): PlotSideLayout {
+  const parsed = parsePlotSideSemantics(
+    plot.edgeSemantics,
+    polygon.length >= 3 ? polygon.length : undefined,
+  );
+  if (parsed?.layout === "three" || parsed?.layout === "four") return parsed.layout;
+  return polygon.length === 3 ? "three" : "four";
+}
+
+function plotHasRequiredSideMeasurements(plot: Plot) {
+  const polygon = parsePolygon(plot);
+  const layout = resolvedPlotSideLayout(plot, polygon);
   const roles = [
     plot.front != null || Boolean(String(plot.frontLabel || "").trim()),
     plot.back != null || Boolean(String(plot.backLabel || "").trim()),
     plot.depth != null || Boolean(String(plot.depthLabel || "").trim()),
-    plot.depth2 != null || Boolean(String(plot.depth2Label || "").trim()),
+    ...(layout === "four"
+      ? [plot.depth2 != null || Boolean(String(plot.depth2Label || "").trim())]
+      : []),
   ];
   if (roles.every(Boolean)) return true;
 
@@ -231,18 +246,24 @@ function plotHasFourSideMeasurements(plot: Plot) {
     return false;
   const measurements =
     sides.match(/\d+(?:\.\d+)?\s*(?:m\b|ft\b|'|feet\b|meter\b|metre\b)/gi) || [];
-  return measurements.length >= 4;
+  return measurements.length >= (layout === "three" ? 3 : 4);
 }
 
-function plotHasFourSideSemantics(plot: Plot) {
+function plotHasRequiredSideSemantics(plot: Plot) {
   const polygon = parsePolygon(plot);
-  if (polygon.length < 4) return false;
+  if (polygon.length < 3) return false;
   const parsed = parsePlotSideSemantics(plot.edgeSemantics, polygon.length);
+  const layout =
+    parsed?.layout === "three" || parsed?.layout === "four"
+      ? parsed.layout
+      : polygon.length === 3
+        ? "three"
+        : "four";
   if (
     parsed?.roles.front?.length &&
     parsed.roles.back?.length &&
     parsed.roles.depthA?.length &&
-    parsed.roles.depthB?.length
+    (layout === "three" || parsed.roles.depthB?.length)
   ) {
     return true;
   }
@@ -250,7 +271,7 @@ function plotHasFourSideSemantics(plot: Plot) {
     plot.frontEdgeIndex,
     plot.backEdgeIndex,
     plot.depthEdgeIndex,
-    plot.depth2EdgeIndex,
+    ...(layout === "four" ? [plot.depth2EdgeIndex] : []),
   ].map((value) =>
     value == null || String(value).trim() === "" ? null : Number(value),
   );
@@ -261,7 +282,7 @@ function plotHasFourSideSemantics(plot: Plot) {
         Number.isInteger(value) &&
         value >= 0 &&
         value < polygon.length,
-    ) && new Set(indexes).size === 4
+    ) && new Set(indexes).size === indexes.length
   );
 }
 
@@ -269,32 +290,6 @@ type PlotSideRoleEdges = Record<PlotSideRole, number[]>;
 
 function emptyPlotSideRoleEdges(): PlotSideRoleEdges {
   return { front: [], back: [], depthA: [], depthB: [] };
-}
-
-function shortestContiguousEdgeChain(start: number, end: number, pointCount: number) {
-  if (
-    !Number.isInteger(start) ||
-    !Number.isInteger(end) ||
-    !Number.isInteger(pointCount) ||
-    pointCount < 3 ||
-    start < 0 ||
-    end < 0 ||
-    start >= pointCount ||
-    end >= pointCount
-  ) return [];
-
-  const walk = (step: 1 | -1) => {
-    const edges: number[] = [start];
-    let cursor = start;
-    for (let guard = 0; guard < pointCount && cursor !== end; guard += 1) {
-      cursor = (cursor + step + pointCount) % pointCount;
-      edges.push(cursor);
-    }
-    return edges;
-  };
-  const forward = walk(1);
-  const backward = walk(-1);
-  return forward.length <= backward.length ? forward : backward;
 }
 
 function semanticRoleMidpoint(points: MapperPoint[], edges: number[]) {
@@ -361,9 +356,9 @@ function currentPlotQuality(
     const dimensions = String(plot.dimensions || "").trim();
     if (dimensions) dimensionsComplete += 1;
     if (String(plot.road || "").trim()) roadComplete += 1;
-    const sidesComplete = plotHasFourSideMeasurements(plot);
+    const sidesComplete = plotHasRequiredSideMeasurements(plot);
     if (sidesComplete) fourSidesComplete += 1;
-    const semanticsComplete = plotHasFourSideSemantics(plot);
+    const semanticsComplete = plotHasRequiredSideSemantics(plot);
     if (semanticsComplete) mappedSemanticsComplete += 1;
     if (frontDirections[plot.id] || semanticsComplete) frontDirectionsComplete += 1;
     if (
@@ -944,6 +939,7 @@ export default function PlotMapper({
   // Canonical multi-segment side semantics. Legacy *EdgeIndex fields keep the
   // first/primary edge only so existing projects and older readers stay valid.
   const [edgeSemanticsDraft, setEdgeSemanticsDraft] = useState("");
+  const [sideLayout, setSideLayout] = useState<PlotSideLayout>("four");
   const [semanticChainRole, setSemanticChainRole] = useState<PlotSideRole | null>(null);
   const [semanticChainStart, setSemanticChainStart] = useState<number | null>(null);
   const [bulkSemanticMode, setBulkSemanticMode] = useState(false);
@@ -1006,6 +1002,7 @@ export default function PlotMapper({
     setBackEdgeIndex(String(resolved.back));
     setDepthEdgeIndex(String(resolved.depthA));
     setDepth2EdgeIndex(String(resolved.depthB));
+    setSideLayout("four");
     setEdgeSemanticsDraft(resolved.edgeSemantics);
     setSemanticChainRole(null);
     setSemanticChainStart(null);
@@ -1330,6 +1327,7 @@ export default function PlotMapper({
         shape?: "quad" | "polygon";
         manualPhase?: "select" | "details";
         edgeSemanticsDraft?: string;
+        sideLayout?: PlotSideLayout;
       };
       const restored =
         Array.isArray(draft.points) &&
@@ -1354,6 +1352,13 @@ export default function PlotMapper({
         draft.edgeSemanticsDraft,
         draft.points!.length,
       );
+      const restoredLayout: PlotSideLayout =
+        draft.points!.length === 3
+          ? "three"
+          : restoredSemantics?.layout === "three" || draft.sideLayout === "three"
+            ? "three"
+            : "four";
+      setSideLayout(restoredLayout);
       if (restoredSemantics) {
         setEdgeSemanticsDraft(JSON.stringify(restoredSemantics));
         const restoredRoles: PlotSideRoleEdges = {
@@ -1378,12 +1383,12 @@ export default function PlotMapper({
     try {
       window.localStorage.setItem(
         mappingDraftKey(projectId, plotId),
-        JSON.stringify({ points, shape, manualPhase, edgeSemanticsDraft }),
+        JSON.stringify({ points, shape, manualPhase, edgeSemanticsDraft, sideLayout }),
       );
     } catch {
       // Storage quota/private mode should not block mapping.
     }
-  }, [completedProject, edgeSemanticsDraft, manualPhase, plotId, points, projectId, shape]);
+  }, [completedProject, edgeSemanticsDraft, manualPhase, plotId, points, projectId, shape, sideLayout]);
 
   const mappedPlots = useMemo(() => plots.filter((plot) => parsePolygon(plot).length >= 3), [plots]);
   const plotFrontDirections = useMemo(
@@ -1539,13 +1544,28 @@ export default function PlotMapper({
     setFront(plot.front != null ? String(plot.front) : "");
     setBack(plot.back != null ? String(plot.back) : "");
     setDepth(plot.depth != null ? String(plot.depth) : "");
-    setDepth2(plot.depth2 != null ? String(plot.depth2) : "");
     setDimensionUnit(plot.dimensionUnit === "m" ? "m" : "ft");
+
     const polygon = parsePolygon(plot);
     const semantics = parsePlotSideSemantics(
       plot.edgeSemantics,
       polygon.length >= 3 ? polygon.length : undefined,
     );
+    const resolvedLayout: PlotSideLayout =
+      polygon.length === 3
+        ? "three"
+        : semantics?.layout === "three"
+          ? "three"
+          : "four";
+    setSideLayout(resolvedLayout);
+    setDepth2(
+      resolvedLayout === "three"
+        ? ""
+        : plot.depth2 != null
+          ? String(plot.depth2)
+          : "",
+    );
+
     const frontSemantic = semantics?.roles.front?.[0];
     const backSemantic = semantics?.roles.back?.[0];
     const depthASemantic = semantics?.roles.depthA?.[0];
@@ -1553,12 +1573,18 @@ export default function PlotMapper({
     const canonicalSemantics =
       semantics
         ? JSON.stringify(semantics)
-        : serializePlotSideSemantics(polygon.length, {
-            ...(Number.isInteger(plot.frontEdgeIndex) ? { front: [Number(plot.frontEdgeIndex)] } : {}),
-            ...(Number.isInteger(plot.backEdgeIndex) ? { back: [Number(plot.backEdgeIndex)] } : {}),
-            ...(Number.isInteger(plot.depthEdgeIndex) ? { depthA: [Number(plot.depthEdgeIndex)] } : {}),
-            ...(Number.isInteger(plot.depth2EdgeIndex) ? { depthB: [Number(plot.depth2EdgeIndex)] } : {}),
-          });
+        : serializePlotSideSemantics(
+            polygon.length,
+            {
+              ...(Number.isInteger(plot.frontEdgeIndex) ? { front: [Number(plot.frontEdgeIndex)] } : {}),
+              ...(Number.isInteger(plot.backEdgeIndex) ? { back: [Number(plot.backEdgeIndex)] } : {}),
+              ...(Number.isInteger(plot.depthEdgeIndex) ? { depthA: [Number(plot.depthEdgeIndex)] } : {}),
+              ...(resolvedLayout === "four" && Number.isInteger(plot.depth2EdgeIndex)
+                ? { depthB: [Number(plot.depth2EdgeIndex)] }
+                : {}),
+            },
+            resolvedLayout,
+          );
     setEdgeSemanticsDraft(canonicalSemantics || "");
     setSemanticChainRole(null);
     setSemanticChainStart(null);
@@ -1584,19 +1610,20 @@ export default function PlotMapper({
           : "",
     );
     setDepth2EdgeIndex(
-      Number.isInteger(depthBSemantic)
-        ? String(depthBSemantic)
-        : Number.isInteger(plot.depth2EdgeIndex)
-          ? String(plot.depth2EdgeIndex)
-          : "",
+      resolvedLayout === "four"
+        ? Number.isInteger(depthBSemantic)
+          ? String(depthBSemantic)
+          : Number.isInteger(plot.depth2EdgeIndex)
+            ? String(plot.depth2EdgeIndex)
+            : ""
+        : "",
     );
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
     if (editBoundary && plot.polygon) {
-      const polygon = parsePolygon(plot);
       setPoints(polygon);
       setEditingId(plot.id);
-      setShape(polygon.length === 4 ? "quad" : "polygon");
+      setShape(polygon.length === 4 && resolvedLayout === "four" ? "quad" : "polygon");
       setManualPhase("details");
       setToolMode("select");
       canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1643,6 +1670,7 @@ export default function PlotMapper({
     setBackEdgeIndex("");
     setDepth2EdgeIndex("");
     setEdgeSemanticsDraft("");
+    setSideLayout("four");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
     setSemanticChainRole(null);
@@ -1666,14 +1694,24 @@ export default function PlotMapper({
     return depth2EdgeIndex;
   }
 
+  function effectiveSideLayout(layout: PlotSideLayout = sideLayout): PlotSideLayout {
+    return points.length === 3 ? "three" : layout;
+  }
+
   function currentSemanticRoles(): PlotSideRoleEdges {
     const output = emptyPlotSideRoleEdges();
     const parsed = parsePlotSideSemantics(
       edgeSemanticsDraft,
       points.length >= 3 ? points.length : undefined,
     );
+    const layout = effectiveSideLayout(
+      parsed?.layout === "three" || parsed?.layout === "four"
+        ? parsed.layout
+        : sideLayout,
+    );
     const roles: PlotSideRole[] = ["front", "back", "depthA", "depthB"];
     for (const role of roles) {
+      if (layout === "three" && role === "depthB") continue;
       const semantic = parsed?.roles[role] || [];
       if (semantic.length) {
         output[role] = [...semantic];
@@ -1700,13 +1738,44 @@ export default function PlotMapper({
     setDepth2EdgeIndex(roles.depthB.length ? String(roles.depthB[0]) : "");
   }
 
-  function commitSemanticRoles(roles: PlotSideRoleEdges) {
-    const serialized = serializePlotSideSemantics(points.length, roles) || "";
+  function commitSemanticRoles(
+    roles: PlotSideRoleEdges,
+    layout: PlotSideLayout = sideLayout,
+  ) {
+    const resolvedLayout = effectiveSideLayout(layout);
+    const nextRoles: PlotSideRoleEdges = {
+      front: [...roles.front],
+      back: [...roles.back],
+      depthA: [...roles.depthA],
+      depthB: resolvedLayout === "four" ? [...roles.depthB] : [],
+    };
+    const serialized =
+      serializePlotSideSemantics(points.length, nextRoles, resolvedLayout) || "";
     setEdgeSemanticsDraft(serialized);
-    syncPrimarySemanticEdges(roles);
+    syncPrimarySemanticEdges(nextRoles);
+  }
+
+  function changeSideLayout(next: PlotSideLayout) {
+    const resolved: PlotSideLayout = points.length === 3 ? "three" : next;
+    const roles = currentSemanticRoles();
+    if (resolved === "three") {
+      roles.depthB = [];
+      setDepth2("");
+    }
+    setSideLayout(resolved);
+    commitSemanticRoles(roles, resolved);
+    setSemanticChainRole(null);
+    setSemanticChainStart(null);
+    setSelectedSemanticEdge(null);
+    notify(
+      resolved === "three"
+        ? "3-side mode: Front + Back + Depth. Depth B N/A hai."
+        : "4-side mode: Front + Back + Depth A + Depth B.",
+    );
   }
 
   function assignSemanticRoleEdges(role: PlotSideRole, requestedEdges: number[]) {
+    if (effectiveSideLayout() === "three" && role === "depthB") return;
     const clean = requestedEdges.filter(
       (edge, index, list) =>
         Number.isInteger(edge) &&
@@ -1725,6 +1794,7 @@ export default function PlotMapper({
   }
 
   function beginSemanticChain(role: PlotSideRole) {
+    if (effectiveSideLayout() === "three" && role === "depthB") return;
     setSemanticChainRole(role);
     setSemanticChainStart(null);
     setSelectedSemanticEdge(null);
@@ -1732,30 +1802,21 @@ export default function PlotMapper({
     const label =
       role === "front" ? "Front" :
       role === "back" ? "Back" :
-      role === "depthA" ? "Depth A" : "Depth B";
-    notify(`${label} chain: pehla boundary segment tap karein, phir last segment tap karein`);
+      role === "depthA" ? (effectiveSideLayout() === "three" ? "Depth" : "Depth A") : "Depth B";
+    notify(`${label}: pehla numbered corner tap karein, phir last numbered corner tap karein`);
   }
 
-  function handleSemanticEdgeTap(index: number) {
-    if (index < 0 || index >= points.length) return;
-    if (!semanticChainRole) {
-      setSelectedSemanticEdge(index);
-      setEdgeAssignMode(null);
-      return;
-    }
+  // REKIXO_IRREGULAR_CORNER_RANGE_V3
+  function handleSemanticCornerTap(index: number) {
+    if (!semanticChainRole || index < 0 || index >= points.length) return;
     if (semanticChainStart == null) {
       setSemanticChainStart(index);
-      setSelectedSemanticEdge(index);
-      notify(`Edge ${index + 1} chain start hai — ab isi side ka last edge tap karein`);
+      notify(`Corner ${index + 1} start hai — ab side ka last corner number tap karein`);
       return;
     }
-    const chain = shortestContiguousEdgeChain(
-      semanticChainStart,
-      index,
-      points.length,
-    );
+    const chain = forwardCornerEdgeChain(semanticChainStart, index, points.length);
     if (!chain.length) {
-      notify("Side chain select nahi hui");
+      notify("Start aur end corner alag choose karein");
       return;
     }
     const role = semanticChainRole;
@@ -1763,17 +1824,26 @@ export default function PlotMapper({
     const label =
       role === "front" ? "Front" :
       role === "back" ? "Back" :
-      role === "depthA" ? "Depth A" : "Depth B";
+      role === "depthA" ? (effectiveSideLayout() === "three" ? "Depth" : "Depth A") : "Depth B";
+    const startNumber = semanticChainStart + 1;
+    const endNumber = index + 1;
     setSemanticChainRole(null);
     setSemanticChainStart(null);
     setSelectedSemanticEdge(null);
     notify(
-      `Plot ${plotId}: ${label} = ${chain.length} connected edge${chain.length === 1 ? "" : "s"} grouped`,
+      `Plot ${plotId}: ${label} = corner ${startNumber} → ${endNumber} (${chain.length} segment${chain.length === 1 ? "" : "s"})`,
     );
+  }
+
+  function handleSemanticEdgeTap(index: number) {
+    if (index < 0 || index >= points.length || semanticChainRole) return;
+    setSelectedSemanticEdge(index);
+    setEdgeAssignMode(null);
   }
 
   function chooseSemanticEdge(index: number) {
     if (index < 0 || index >= points.length || !edgeAssignMode) return;
+    if (effectiveSideLayout() === "three" && edgeAssignMode === "depthB") return;
     assignSemanticRoleEdges(edgeAssignMode, [index]);
     const label =
       edgeAssignMode === "front"
@@ -1781,7 +1851,7 @@ export default function PlotMapper({
         : edgeAssignMode === "back"
           ? "Back"
           : edgeAssignMode === "depthA"
-            ? "Depth A"
+            ? effectiveSideLayout() === "three" ? "Depth" : "Depth A"
             : "Depth B";
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
@@ -1790,8 +1860,9 @@ export default function PlotMapper({
     notify(`Plot ${plotId}: ${label} edge ${index + 1} selected`);
   }
 
-  // REKIXO_IRREGULAR_SIDE_ASSIGNER_V2_MULTI_EDGE_CHAIN
+  // REKIXO_IRREGULAR_SIDE_ASSIGNER_V3_CORNER_RANGE
   function assignSelectedSemanticRole(role: PlotSideRole) {
+    if (effectiveSideLayout() === "three" && role === "depthB") return;
     if (
       selectedSemanticEdge == null ||
       selectedSemanticEdge < 0 ||
@@ -1809,11 +1880,10 @@ export default function PlotMapper({
     } else {
       assignSemanticRoleEdges(role, [...roles[role], edge]);
     }
-
     const label =
       role === "front" ? "Front" :
       role === "back" ? "Back" :
-      role === "depthA" ? "Depth A" : "Depth B";
+      role === "depthA" ? (effectiveSideLayout() === "three" ? "Depth" : "Depth A") : "Depth B";
     notify(
       alreadyAssigned
         ? `Plot ${plotId}: Edge ${edge + 1} ${label} group se removed`
@@ -1847,8 +1917,14 @@ export default function PlotMapper({
   ) {
     const selected = mappedPlots.filter((plot) => bulkSemanticIds.has(plot.id));
     if (!selected.length) return notify("Bulk side ke liye pehle plots select karein");
+    const eligible =
+      kind === "depthB"
+        ? selected.filter((plot) => resolvedPlotSideLayout(plot) === "four")
+        : selected;
+    if (!eligible.length)
+      return notify("Depth B sirf 4-side plots par apply hota hai");
 
-    const payload = selected.map((plot) => {
+    const payload = eligible.map((plot) => {
       const polygon = parsePolygon(plot);
       const edge = edgeIndexForDisplayDirection(polygon, direction, rotation);
       const edgeSemantics = setPlotSideEdge(
@@ -1927,6 +2003,7 @@ export default function PlotMapper({
     setBackEdgeIndex("");
     setDepth2EdgeIndex("");
     setEdgeSemanticsDraft("");
+    setSideLayout("four");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
     setSemanticChainRole(null);
@@ -1967,6 +2044,12 @@ export default function PlotMapper({
     if (!source) return notify("Clone करने के लिए पहले कोई mapped plot चाहिए");
     const polygon = parsePolygon(source);
     const semantics = parsePlotSideSemantics(source.edgeSemantics, polygon.length);
+    const clonedLayout: PlotSideLayout =
+      polygon.length === 3
+        ? "three"
+        : semantics?.layout === "three"
+          ? "three"
+          : "four";
     const roleEdge = (role: PlotSideRole, fallback: number | null | undefined) => {
       const semantic = semantics?.roles[role]?.[0];
       return Number.isInteger(semantic)
@@ -1976,20 +2059,29 @@ export default function PlotMapper({
           : "";
     };
     setPoints(polygon.map(([x, y]) => [x, y] as MapperPoint));
-    setShape(polygon.length === 4 ? "quad" : "polygon");
+    setShape(polygon.length === 4 && clonedLayout === "four" ? "quad" : "polygon");
+    setSideLayout(clonedLayout);
     setFrontEdgeIndex(roleEdge("front", source.frontEdgeIndex));
     setBackEdgeIndex(roleEdge("back", source.backEdgeIndex));
     setDepthEdgeIndex(roleEdge("depthA", source.depthEdgeIndex));
-    setDepth2EdgeIndex(roleEdge("depthB", source.depth2EdgeIndex));
+    setDepth2EdgeIndex(
+      clonedLayout === "four" ? roleEdge("depthB", source.depth2EdgeIndex) : "",
+    );
     setEdgeSemanticsDraft(
       semantics
         ? JSON.stringify(semantics)
-        : serializePlotSideSemantics(polygon.length, {
-            ...(Number.isInteger(source.frontEdgeIndex) ? { front: [Number(source.frontEdgeIndex)] } : {}),
-            ...(Number.isInteger(source.backEdgeIndex) ? { back: [Number(source.backEdgeIndex)] } : {}),
-            ...(Number.isInteger(source.depthEdgeIndex) ? { depthA: [Number(source.depthEdgeIndex)] } : {}),
-            ...(Number.isInteger(source.depth2EdgeIndex) ? { depthB: [Number(source.depth2EdgeIndex)] } : {}),
-          }) || "",
+        : serializePlotSideSemantics(
+            polygon.length,
+            {
+              ...(Number.isInteger(source.frontEdgeIndex) ? { front: [Number(source.frontEdgeIndex)] } : {}),
+              ...(Number.isInteger(source.backEdgeIndex) ? { back: [Number(source.backEdgeIndex)] } : {}),
+              ...(Number.isInteger(source.depthEdgeIndex) ? { depthA: [Number(source.depthEdgeIndex)] } : {}),
+              ...(clonedLayout === "four" && Number.isInteger(source.depth2EdgeIndex)
+                ? { depthB: [Number(source.depth2EdgeIndex)] }
+                : {}),
+            },
+            clonedLayout,
+          ) || "",
     );
     setSemanticChainRole(null);
     setSemanticChainStart(null);
@@ -3028,11 +3120,18 @@ export default function PlotMapper({
     if (editingId && id !== editingId && plots.some((plot) => plot.id === id)) {
       return notify(`Plot ${id} inventory में पहले से मौजूद है`);
     }
+    const resolvedSideLayout = effectiveSideLayout();
     const frontValue = front.trim() ? Number(front) : null;
     const backValue = back.trim() ? Number(back) : null;
     const depthValue = depth.trim() ? Number(depth) : null;
-    const depth2Value = depth2.trim() ? Number(depth2) : null;
+    const depth2Value =
+      resolvedSideLayout === "three"
+        ? null
+        : depth2.trim()
+          ? Number(depth2)
+          : null;
     let roleEdges = currentSemanticRoles();
+    if (resolvedSideLayout === "three") roleEdges.depthB = [];
     let edgeValue = roleEdges.front[0] ?? null;
     let backEdgeValue = roleEdges.back[0] ?? null;
     let depthEdgeValue = roleEdges.depthA[0] ?? null;
@@ -3108,10 +3207,14 @@ export default function PlotMapper({
       allRoleEdges.length
     )
       return notify(
-        "Plot corner count badla hai — Front / Back / Depth A / Depth B sides dobara select karein",
+        "Plot corner count badla hai — logical Front / Back / Depth sides dobara select karein",
       );
 
-    const edgeSemantics = serializePlotSideSemantics(points.length, roleEdges);
+    const edgeSemantics = serializePlotSideSemantics(
+      points.length,
+      roleEdges,
+      resolvedSideLayout,
+    );
 
     const unchangedInventoryArea =
       Boolean(existing) && area > 0 && Math.abs(Number(existing?.sqft || 0) - area) < 0.0001;
@@ -3133,7 +3236,7 @@ export default function PlotMapper({
       front: frontValue,
       depth: depthValue,
       back: backValue,
-      depth2: depth2Value,
+      depth2: resolvedSideLayout === "three" ? null : depth2Value,
       dimensionUnit:
         frontValue !== null ||
         backValue !== null ||
@@ -3144,11 +3247,11 @@ export default function PlotMapper({
       frontEdgeIndex: edgeValue,
       depthEdgeIndex: depthEdgeValue,
       backEdgeIndex: backEdgeValue,
-      depth2EdgeIndex: depth2EdgeValue,
+      depth2EdgeIndex: resolvedSideLayout === "three" ? null : depth2EdgeValue,
       frontLabel: existing?.frontLabel || null,
       depthLabel: existing?.depthLabel || null,
       backLabel: existing?.backLabel || null,
-      depth2Label: existing?.depth2Label || null,
+      depth2Label: resolvedSideLayout === "three" ? null : existing?.depth2Label || null,
       sideDimensions: existing?.sideDimensions || null,
       edgeSemantics,
       status: existing?.status || "available",
@@ -3700,20 +3803,21 @@ export default function PlotMapper({
               <div>
                 <b>Plot Data Quality</b>
                 <small>
-                  Customer drawer me Venkatesh-jaisi complete details ke liye har plot ka
-                  Dimensions + Road + Front/Back/Depth A/Depth B hona chahiye.
+                  Customer drawer me complete details ke liye har plot ka Dimensions + Road +
+                  required logical sides hona chahiye. 3-side plot me Front/Back/Depth;
+                  4-side plot me Front/Back/Depth A/Depth B.
                 </small>
               </div>
               <strong>
                 {plotQuality.richDetailReady
                   ? "RICH DETAILS READY"
-                  : `${plotQuality.fourSidesComplete}/${plotQuality.total} FULL SIDES`}
+                  : `${plotQuality.fourSidesComplete}/${plotQuality.total} REQUIRED SIDES`}
               </strong>
             </div>
             <div className="mapper-data-quality-grid">
               <span>Dimensions <b>{plotQuality.dimensionsComplete}/{plotQuality.total}</b></span>
               <span>Road Access <b>{plotQuality.roadComplete}/{plotQuality.total}</b></span>
-              <span>4-side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
+              <span>Required side measurements <b>{plotQuality.fourSidesComplete}/{plotQuality.total}</b></span>
               <span>Front / side binding <b>{plotQuality.frontDirectionsComplete}/{plotQuality.total}</b></span>
               <span>Mapped side semantics <b>{plotQuality.mappedSemanticsComplete}/{plotQuality.total}</b></span>
               {hasMeasurementSheet && <span>Source verified <b>{settings.measurementSheetVerifiedCount || "0"}/{settings.measurementSheetCount || "0"}</b></span>}
@@ -4025,7 +4129,10 @@ export default function PlotMapper({
                           stroke="rgba(255,255,255,0.001)"
                           strokeWidth={30}
                           vectorEffect="non-scaling-stroke"
-                          style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                          style={{
+                            cursor: semanticChainRole ? "default" : "pointer",
+                            pointerEvents: semanticChainRole ? "none" : "stroke",
+                          }}
                           onPointerDown={handleEdgePointerDown}
                           onPointerUp={handleEdgePointerUp}
                         />
@@ -4049,8 +4156,10 @@ export default function PlotMapper({
                   {!calibrationMode && points.length >= 3 && ([
                     ["front", "F", "#22c55e"],
                     ["back", "B", "#60a5fa"],
-                    ["depthA", "D1", "#f59e0b"],
-                    ["depthB", "D2", "#a78bfa"],
+                    ["depthA", effectiveSideLayout() === "three" ? "D" : "D1", "#f59e0b"],
+                    ...(effectiveSideLayout() === "four"
+                      ? [["depthB", "D2", "#a78bfa"] as const]
+                      : []),
                   ] as const).map(([role, badge, color]) => {
                     const edges = currentSemanticRoles()[role];
                     const midpoint = semanticRoleMidpoint(points, edges);
@@ -4113,11 +4222,40 @@ export default function PlotMapper({
                     ),
                   } as React.CSSProperties}
                   data-corner={index + 1}
-                  onPointerDown={(event) => dragHandle(event, index)}
-                  onPointerMove={(event) => moveHandle(event, index)}
-                  onPointerUp={endHandle}
-                  onPointerCancel={endHandle}
-                  aria-label={`Drag corner ${index + 1}`}
+                  onPointerDown={(event) => {
+                    if (semanticChainRole) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      return;
+                    }
+                    dragHandle(event, index);
+                  }}
+                  onPointerMove={(event) => {
+                    if (semanticChainRole) return;
+                    moveHandle(event, index);
+                  }}
+                  onPointerUp={(event) => {
+                    if (semanticChainRole) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleSemanticCornerTap(index);
+                      return;
+                    }
+                    endHandle(event);
+                  }}
+                  onPointerCancel={(event) => {
+                    if (semanticChainRole) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      return;
+                    }
+                    endHandle(event);
+                  }}
+                  aria-label={
+                    semanticChainRole
+                      ? `Choose corner ${index + 1} for side range`
+                      : `Drag corner ${index + 1}`
+                  }
                 />
               ))}
             </div>
@@ -4133,9 +4271,13 @@ export default function PlotMapper({
                 <div>
                   <b>Assign plot sides</b>
                   <span>
-                    {selectedSemanticEdge == null
-                      ? "Boundary ki line tap karein"
-                      : `Edge ${selectedSemanticEdge + 1} selected`}
+                    {semanticChainRole
+                      ? semanticChainStart == null
+                        ? "Role selected · start corner number tap karein"
+                        : `Corner ${semanticChainStart + 1} selected · end corner tap karein`
+                      : selectedSemanticEdge == null
+                        ? "Role button → start corner → end corner"
+                        : `Edge ${selectedSemanticEdge + 1} selected`}
                   </span>
                 </div>
                 {semanticChainRole ? (
@@ -4149,12 +4291,33 @@ export default function PlotMapper({
                   <button type="button" onClick={clearSelectedSemanticRole}>Clear edge role</button>
                 ) : null}
               </div>
+              {shape === "polygon" && (
+                <div className="mapper-actions compact">
+                  <span>
+                    Logical sides: <b>{effectiveSideLayout() === "three" ? "3" : "4"}</b>
+                    {points.length === 3 ? " · triangle auto" : ""}
+                  </span>
+                  <button
+                    type="button"
+                    className={effectiveSideLayout() === "three" ? "primary" : ""}
+                    onClick={() => changeSideLayout("three")}
+                  >3 sides · Front / Back / Depth</button>
+                  <button
+                    type="button"
+                    className={effectiveSideLayout() === "four" ? "primary" : ""}
+                    disabled={points.length === 3}
+                    onClick={() => changeSideLayout("four")}
+                  >4 sides · Front / Back / Depth A / Depth B</button>
+                </div>
+              )}
               <div className="plot-side-role-grid">
                 {([
                   ["front", "Front", frontEdgeIndex, "#22c55e"],
                   ["back", "Back", backEdgeIndex, "#60a5fa"],
-                  ["depthA", "Depth A", depthEdgeIndex, "#f59e0b"],
-                  ["depthB", "Depth B", depth2EdgeIndex, "#a78bfa"],
+                  ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A", depthEdgeIndex, "#f59e0b"],
+                  ...(effectiveSideLayout() === "four"
+                    ? [["depthB", "Depth B", depth2EdgeIndex, "#a78bfa"] as const]
+                    : []),
                 ] as const).map(([role, label, rawEdge, color]) => {
                   const groupedEdges = currentSemanticRoles()[role];
                   const active =
@@ -4163,8 +4326,8 @@ export default function PlotMapper({
                   const chainWaiting =
                     semanticChainRole === role
                       ? semanticChainStart == null
-                        ? "Tap first edge"
-                        : "Tap last edge"
+                        ? "Tap start corner"
+                        : "Tap end corner"
                       : "";
                   return (
                     <button
@@ -4188,10 +4351,11 @@ export default function PlotMapper({
                 })}
               </div>
               <small className="plot-side-assigner-help">
-                Road-facing boundary = Front. Curved side ke liye role button pehle tap karein,
-                phir us side ka first aur last boundary segment tap karein — beech ke connected
-                segments ek hi Front / Back / Depth side group banenge. Single segment ke liye
-                pehle edge tap karke role choose kar sakte hain.
+                Road-facing boundary = Front. Easy range mode: pehle Front / Back / Depth role
+                button tap karein, phir numbered start corner aur end corner tap karein. Example:
+                corner 3 → 12 par click-order me 3→4 se 11→12 tak poori curved boundary ek side
+                banegi. Closing/reverse side ke liye corners usi desired direction me tap karein
+                (jaise 12 → 3). Single straight edge ka old edge-tap workflow bhi valid hai.
               </small>
             </div>
           )}
@@ -4322,6 +4486,7 @@ export default function PlotMapper({
                 setDepthEdgeIndex("");
                 setDepth2EdgeIndex("");
                 setEdgeSemanticsDraft("");
+                setSideLayout("four");
                 setSemanticChainRole(null);
                 setSemanticChainStart(null);
               }}>Front-first plot · 4 corners</button>
@@ -4333,6 +4498,7 @@ export default function PlotMapper({
                 setDepthEdgeIndex("");
                 setDepth2EdgeIndex("");
                 setEdgeSemanticsDraft("");
+                setSideLayout("four");
                 setSemanticChainRole(null);
                 setSemanticChainStart(null);
               }}>Irregular · corner taps</button>
@@ -4344,7 +4510,22 @@ export default function PlotMapper({
                 onClick={clearCurrentSelection}
               >{currentHasSavedBoundary ? "Remove saved boundary" : "Clear"}</button>
               <button onClick={clonePreviousShape}><Copy />Clone previous</button>
-              {shape === "polygon" && <button className="primary" disabled={points.length < 3} onClick={() => setManualPhase("details")}><CheckCircle2 />Boundary complete</button>}
+              {shape === "polygon" && <button
+                className="primary"
+                disabled={points.length < 3}
+                onClick={() => {
+                  const nextLayout: PlotSideLayout = points.length === 3 ? "three" : "four";
+                  setSideLayout(nextLayout);
+                  setManualPhase("details");
+                  setSemanticChainRole(null);
+                  setSemanticChainStart(null);
+                  if (points.length === 3) {
+                    const roles = currentSemanticRoles();
+                    roles.depthB = [];
+                    commitSemanticRoles(roles, "three");
+                  }
+                }}
+              ><CheckCircle2 />Boundary complete</button>}
             </div>
             <small className="mapper-help">4-corner plot: Tap 1 + Tap 2 road-facing Front boundary ke dono endpoints par karein, phir same direction me clockwise baki 2 corners tap karein. Rekixo automatically Front → Depth A → Back → Depth B bind karega. Existing vertex/edge auto-snap hota hai.</small>
           </> : <>
@@ -4355,8 +4536,10 @@ export default function PlotMapper({
               <label><span>Facing / road</span><input value={road} onChange={(event) => setRoad(event.target.value)} placeholder="East face / 40 ft road" /></label>
               <label><span>Front (road side)</span><input type="number" min="0" step="0.01" value={front} onChange={(event) => setFront(event.target.value)} placeholder="18" /></label>
               <label><span>Back</span><input type="number" min="0" step="0.01" value={back} onChange={(event) => setBack(event.target.value)} placeholder="18" /></label>
-              <label><span>Depth A</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
-              <label><span>Depth B</span><input type="number" min="0" step="0.01" value={depth2} onChange={(event) => setDepth2(event.target.value)} placeholder="40" /></label>
+              <label><span>{effectiveSideLayout() === "three" ? "Depth" : "Depth A"}</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
+              {effectiveSideLayout() === "four" && (
+                <label><span>Depth B</span><input type="number" min="0" step="0.01" value={depth2} onChange={(event) => setDepth2(event.target.value)} placeholder="40" /></label>
+              )}
               <label><span>Size unit</span><select value={dimensionUnit} onChange={(event) => setDimensionUnit(event.target.value === "m" ? "m" : "ft")}><option value="ft">ft (feet)</option><option value="m">m (metre)</option></select></label>
             </div>
             <div className="mapper-actions compact">
@@ -4370,7 +4553,7 @@ export default function PlotMapper({
               }}>Dimensions → Front/Depth</button>
               <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
             </div>
-            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular/corner-road exception me Assign plot sides module se Front / Back / Depth A / Depth B verify/correct karein. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
+            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular plot me numbered corner-range se logical sides assign karein. Triangle automatically 3-side mode use karta hai; 4+ corners par 3-side ya 4-side choose kar sakte hain. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
             <div className="mapper-actions">
               <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
               <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
