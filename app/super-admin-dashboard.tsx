@@ -21,6 +21,7 @@ import Project3DLinkManager from "./project-3d-link-manager";
 import ProjectDomainManager from "./project-domain-manager";
 import ProjectPublishPanel from "./project-publish-panel";
 import ProjectProfileManager from "./project-profile-manager";
+import ProjectPublicAccessManager from "./project-public-access-manager";
 import ProjectShareManager from "./project-share-manager";
 import ProjectStatusThemeManager from "./project-status-theme-manager";
 import MotionSwap, { MotionToast } from "./motion-swap";
@@ -206,6 +207,13 @@ export default function SuperAdminDashboard({
         ) : (
           <>
             {projectPicker}
+            {projectId ? (
+              <ProjectPublicAccessManager
+                key={`public-access:${projectId}`}
+                projectId={projectId}
+                notify={notify}
+              />
+            ) : null}
             {!projectId ? (
               <div className="card empty">
                 पहले client project बनाएँ या project चुनें।
