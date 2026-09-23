@@ -2003,7 +2003,7 @@ rekixoStartPublicBoot();
         const joiner=baseLogoQuery?'&':'?';
         projectLogo.onload=()=>{projectLogo.hidden=false;if(mono)mono.style.display='none'};
         projectLogo.onerror=()=>{projectLogo.hidden=true;if(mono)mono.style.display='grid'};
-        projectLogo.src='/api/project-asset/logo'+baseLogoQuery+joiner+'v='+encodeURIComponent(String(s.logoVersion||s.logoName));
+        projectLogo.src='/api/project-asset/logo'+baseLogoQuery+joiner+'variant=public&v='+encodeURIComponent(String(s.logoVersion||s.logoName));
       }else{
         projectLogo.removeAttribute('src');projectLogo.hidden=true;if(mono)mono.style.display='grid';
       }
@@ -2022,7 +2022,7 @@ rekixoStartPublicBoot();
         }
         const miniBaseLogoQuery=window.REKIXO_PROJECT_QUERY||'';
         const miniJoiner=miniBaseLogoQuery?'&':'?';
-        miniProjectLogo.src='/api/project-asset/logo'+miniBaseLogoQuery+miniJoiner+'v='+encodeURIComponent(String(s.logoVersion||s.logoName));
+        miniProjectLogo.src='/api/project-asset/logo'+miniBaseLogoQuery+miniJoiner+'variant=public&v='+encodeURIComponent(String(s.logoVersion||s.logoName));
       }else{
         badgeButton.classList.remove('has-project-logo');
         if(miniProjectLogo instanceof Element)miniProjectLogo.remove();
@@ -2042,6 +2042,7 @@ rekixoStartPublicBoot();
         publicParams.set('variant','public');
         publicParams.set('v',masterVersion);
         const canonicalParams=new URLSearchParams(baseParams);
+        canonicalParams.set('variant','public-canonical');
         canonicalParams.set('v',masterVersion);
         preferredMasterUrl='/api/project-asset/masterplan?'+publicParams.toString();
         canonicalMasterUrl='/api/project-asset/masterplan?'+canonicalParams.toString();

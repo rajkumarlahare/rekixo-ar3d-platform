@@ -13,18 +13,31 @@ async function readProjectMeta(slug: string) {
   const project = await projectBySlug(slug);
   if (!project) return null;
 
-  const rows = await env.DB.prepare(
-    "SELECT key,value FROM settings WHERE project_id=? AND key IN ('projectName','brandName','location','address','logoName','logoVersion','shareTitle','shareDescription','shareImage','shareVersion')",
+  const snapshot = await env.DB.prepare(
+    "SELECT project_name AS projectName FROM project_public_snapshots WHERE project_id=? LIMIT 1",
   )
     .bind(project.id)
-    .all<{ key: string; value: string }>();
+    .first<{ projectName: string }>();
+
+  const rows = snapshot
+    ? await env.DB.prepare(
+        "SELECT key,value FROM published_settings WHERE project_id=? AND key IN ('projectName','brandName','location','address','logoName','logoVersion','shareTitle','shareDescription','shareImage','shareVersion')",
+      )
+        .bind(project.id)
+        .all<{ key: string; value: string }>()
+    : await env.DB.prepare(
+        "SELECT key,value FROM settings WHERE project_id=? AND key IN ('projectName','brandName','location','address','logoName','logoVersion','shareTitle','shareDescription','shareImage','shareVersion')",
+      )
+        .bind(project.id)
+        .all<{ key: string; value: string }>();
 
   const settings: MetaSettings = Object.fromEntries(
     (rows.results || []).map((row) => [row.key, row.value]),
   );
 
+  const publishedProjectName = snapshot?.projectName || project.name;
   const title =
-    settings.shareTitle || settings.projectName || project.name || "Project";
+    settings.shareTitle || settings.projectName || publishedProjectName || "Project";
   const description =
     settings.shareDescription ||
     [settings.brandName, settings.address || settings.location]
@@ -38,7 +51,7 @@ async function readProjectMeta(slug: string) {
   const origin = host ? `${proto}://${host}` : "";
 
   const logoPath = settings.logoName
-    ? `/api/project-asset/logo?projectId=${encodeURIComponent(project.id)}&v=${encodeURIComponent(settings.logoVersion || settings.logoName)}`
+    ? `/api/project-asset/logo?projectId=${encodeURIComponent(project.id)}&variant=public&v=${encodeURIComponent(settings.logoVersion || settings.logoName)}`
     : "";
   const shareImagePath = settings.shareImage
     ? `/projects/${encodeURIComponent(project.slug)}/share-image/${encodeURIComponent(settings.shareVersion || "1")}`

@@ -14,8 +14,9 @@ const publicPage = await readFile(
 test("generic preview and public site can request optimized masterplan with canonical fallback", () => {
   assert.match(route, /wantsPublicMasterplan/);
   assert.match(route, /"masterplanPublic"/);
-  assert.match(route, /"public-optimized"/);
-  assert.match(route, /"canonical-fallback"/);
+  assert.match(route, /"published-public-optimized"/);
+  assert.match(route, /"published-canonical-fallback"/);
+  assert.match(route, /"legacy-canonical-fallback"/);
   assert.match(route, /versionedRequest/);
   assert.doesNotMatch(
     route,
@@ -28,7 +29,11 @@ test("authenticated preview never caches stale masterplan response", () => {
     route,
     /const previewRequest = requestUrl\.searchParams\.get\("preview"\) === "1"/,
   );
-  assert.match(route, /session \|\| previewRequest[\s\S]*\? "no-store"/);
+  assert.match(route, /const authorizedPreview = previewRequest && Boolean\(session\)/);
+  assert.match(
+    route,
+    /authorizedPreview \|\| \(session && !publicVariant\)[\s\S]*\? "no-store"/,
+  );
   assert.match(route, /x-rekixo-masterplan-source/);
 });
 

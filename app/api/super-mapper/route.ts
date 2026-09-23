@@ -14,6 +14,9 @@ import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
 } from "@/modules/plots";
+import {
+  freezeCurrentPublishedAssets,
+} from "@/modules/public-publish-snapshot";
 
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
@@ -547,6 +550,20 @@ export async function POST(request: Request) {
     const objectKey = `projects/${projectId}/mapper/${kind}`;
 
     if (kind === "logo") {
+      // A published customer site must keep the previous logo until Publish Update.
+      try {
+        await freezeCurrentPublishedAssets(projectId, ["logo"]);
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Published logo preserve nahi hua",
+          },
+          { status: 409 },
+        );
+      }
       await env.BUCKET.put(objectKey, file.stream(), {
         httpMetadata: { contentType: file.type || "image/webp" },
       });
@@ -569,6 +586,21 @@ export async function POST(request: Request) {
     }
 
     if (kind === "masterplan") {
+      // Preserve the currently published masterplan before replacing the editable
+      // canonical source. Preview/mapper sees the new source; public stays frozen.
+      try {
+        await freezeCurrentPublishedAssets(projectId, ["masterplan"]);
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Published masterplan preserve nahi hua",
+          },
+          { status: 409 },
+        );
+      }
       const width = Math.round(Number(form.get("mapWidth")));
       const height = Math.round(Number(form.get("mapHeight")));
       const originalWidth = Math.round(Number(form.get("originalWidth")));

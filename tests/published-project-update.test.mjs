@@ -39,8 +39,16 @@ test("republish bumps the public cache key instead of mutating polygon geometry"
   ]);
 
   assert.ok(
-    publishRoute.includes("publish_version=publish_version+1"),
-    "publish/republish must advance publishVersion",
+    publishRoute.includes("const nextVersion = Number(state.publishVersion || 0) + 1"),
+    "publish/republish must calculate the next immutable publishVersion",
+  );
+  assert.ok(
+    publishRoute.includes("publish_version=?"),
+    "publish/republish must move the public pointer to the captured version",
+  );
+  assert.ok(
+    publishRoute.includes("capturePublishedSnapshotStatements"),
+    "publish must freeze structural D1 data before moving the public pointer",
   );
   assert.ok(publicHtml.includes("data.publishVersion"));
   assert.ok(publicHtml.includes("publicParams.set('v',masterVersion)"));
