@@ -65,7 +65,11 @@ test("public masterplan and logo bytes are frozen while mapper preview stays edi
   assert.match(assets, /x-rekixo-publish-asset/);
   assert.match(mapper, /freezeCurrentPublishedAssets\(projectId, \["masterplan"\]\)/);
   assert.match(mapper, /freezeCurrentPublishedAssets\(projectId, \["logo"\]\)/);
+  assert.match(mapper, /Published masterplan preserve nahi hua/);
+  assert.match(mapper, /Published logo preserve nahi hua/);
   assert.match(publicHtml, /variant=public&v=/);
+  assert.match(publicHtml, /public-canonical/);
+  assert.match(assets, /variant === "public-canonical"/);
 });
 
 test("public metadata, share image and 3D link stay on published snapshot", async () => {
