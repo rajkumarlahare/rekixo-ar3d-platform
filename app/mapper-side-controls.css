@@ -9,9 +9,9 @@
     position: fixed !important;
     left: 50% !important;
     right: auto !important;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;
     z-index: 10050 !important;
-    width: min(calc(100vw - 12px), 560px) !important;
+    width: min(calc(100vw - 12px), 860px) !important;
     max-height: min(42dvh, 250px);
     margin: 0 !important;
     padding: 8px !important;
@@ -157,5 +157,59 @@
 
   .mapper-v4-canvas:fullscreen .mapper-side-dock .plot-side-role-grid {
     grid-template-columns: repeat(4,minmax(72px,1fr)) !important;
+  }
+}
+
+
+/* REKIXO_SIDE_DOCK_PARITY_V3
+   The normal mapper uses the same centered/wide semantic-side layout as focus
+   mode while staying inside the normal sticky bottom dock on desktop. */
+.mapper-v4-canvas .mapper-side-dock{
+  width:min(calc(100% - 14px),860px)!important;
+  max-width:860px!important;
+  padding:10px 12px!important;
+  grid-template-columns:minmax(165px,.75fr) minmax(0,2.25fr)!important;
+  gap:12px!important;
+  align-items:center!important;
+  justify-self:center!important;
+}
+.mapper-v4-canvas .mapper-side-dock:has(.plot-side-layout-toggle){
+  grid-template-columns:
+    minmax(150px,.75fr)
+    minmax(170px,.85fr)
+    minmax(0,2.4fr)!important;
+}
+.mapper-v4-canvas .mapper-side-dock .plot-side-role-grid{
+  grid-template-columns:repeat(4,minmax(100px,1fr))!important;
+  gap:8px!important;
+  margin:0!important;
+}
+.mapper-v4-canvas .mapper-side-dock .plot-side-role-grid button{
+  min-width:0;
+  min-height:50px;
+  padding:7px 10px;
+}
+.mapper-v4-canvas .mapper-side-dock .plot-side-role-grid strong{
+  font-size:11px;
+  white-space:nowrap;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+.mapper-v4-canvas .mapper-side-dock .plot-side-role-grid small{
+  font-size:9px;
+  white-space:nowrap;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+@media (max-width:760px){
+  .mapper-v4-canvas .mapper-side-dock,
+  .mapper-v4-canvas .mapper-side-dock:has(.plot-side-layout-toggle){
+    width:min(calc(100vw - 12px),620px)!important;
+    grid-template-columns:1fr!important;
+    gap:7px!important;
+  }
+  .mapper-v4-canvas .mapper-side-dock .plot-side-role-grid{
+    grid-template-columns:repeat(4,minmax(72px,1fr))!important;
   }
 }
