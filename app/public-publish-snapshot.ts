@@ -81,8 +81,8 @@ export async function freezeCurrentPublishedAssets(
     .bind(projectId)
     .first<{ publicStatus: string; publishVersion: number }>();
 
-  const version = Number(project?.publishVersion || 0);
-  if (project?.publicStatus !== "published" || version < 1) return;
+  const version = Number(project?.publishVersion ?? 0);
+  if (project?.publicStatus !== "published" || !Number.isFinite(version) || version < 0) return;
 
   if (kinds.includes("masterplan")) {
     const canonical = canonicalAssetKey(projectId, "masterplan");
