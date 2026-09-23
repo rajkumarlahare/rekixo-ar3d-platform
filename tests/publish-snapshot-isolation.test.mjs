@@ -70,6 +70,7 @@ test("public masterplan and logo bytes are frozen while mapper preview stays edi
   assert.match(publicHtml, /variant=public&v=/);
   assert.match(publicHtml, /public-canonical/);
   assert.match(assets, /variant === "public-canonical"/);
+  assert.match(assets, /share\/cards\/\$\{validShareVersion\}/);
 });
 
 test("public metadata, share image and 3D link stay on published snapshot", async () => {
