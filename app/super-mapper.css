@@ -858,3 +858,17 @@
     min-height:44px;
   }
 }
+
+
+/* REKIXO_FOCUS_CONFIRM_POSITION_V1
+   Keep the save/update action immediately beside Select in fullscreen only. */
+.mapper-focus-primary-action{
+  display:none!important;
+}
+.mapper-v4-canvas:fullscreen .mapper-focus-primary-action{
+  display:flex!important;
+  margin:0!important;
+  border-color:#23835a!important;
+  background:#0f3c2c!important;
+  color:#68e6af!important;
+}
