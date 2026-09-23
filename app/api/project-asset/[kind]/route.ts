@@ -61,9 +61,11 @@ export async function GET(
   const requestUrl = new URL(request.url);
   const previewRequest = requestUrl.searchParams.get("preview") === "1";
   const authorizedPreview = previewRequest && Boolean(session);
-  const publicVariant = requestUrl.searchParams.get("variant") === "public";
+  const variant = requestUrl.searchParams.get("variant") || "";
+  const publicVariant =
+    variant === "public" || variant === "public-canonical";
   const wantsPublicMasterplan =
-    kind === "masterplan" && publicVariant;
+    kind === "masterplan" && variant === "public";
 
   // Mapper/admin requests keep reading the editable canonical objects. Customer
   // requests read immutable bytes captured for the current publishVersion.
