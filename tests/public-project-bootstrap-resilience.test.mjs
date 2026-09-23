@@ -23,7 +23,8 @@ test("bootstrap retries only transient HTTP classes and does not loop permanent 
     /status===0\|\|status===408\|\|status===425\|\|status===429\|\|status>=500/,
   );
   assert.match(html, /if\(status&&!rekixoBootRetryableStatus\(status\)\)break;/);
-  assert.match(html, /const message=status===404/);
+  assert.match(html, /status===404/);
+  assert.match(html, /PROJECT_TEMPORARILY_UNAVAILABLE/);
 });
 
 test("bootstrap has one in-flight run, timeout abort and stale-run protection", () => {
