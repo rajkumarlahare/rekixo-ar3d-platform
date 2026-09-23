@@ -43,6 +43,70 @@ export const plotEdgeMeasurements = sqliteTable("plot_edge_measurements", {
 }));
 
 export const settings = sqliteTable("settings", { projectId:text("project_id").notNull().references(()=>projects.id), key:text("key").notNull(), value:text("value").notNull(), updatedAt:text("updated_at").notNull() },table=>({pk:primaryKey({columns:[table.projectId,table.key]})}));
+
+export const projectPublicSnapshots = sqliteTable("project_public_snapshots", {
+  projectId:text("project_id").primaryKey().references(()=>projects.id,{onDelete:"cascade"}),
+  publishVersion:integer("publish_version").notNull(),
+  projectName:text("project_name").notNull(),
+  engineProjectId:text("engine_project_id"),
+  engineSlug:text("engine_slug"),
+  engineLinkStatus:text("engine_link_status"),
+  enginePublicEnabled:integer("engine_public_enabled",{mode:"boolean"}).notNull().default(false),
+  enginePublicUrl:text("engine_public_url"),
+  createdAt:text("created_at").notNull()
+});
+
+export const publishedPlots = sqliteTable("published_plots", {
+  projectId:text("project_id").notNull().references(()=>projects.id,{onDelete:"cascade"}),
+  id:text("id").notNull(),
+  sqft:real("sqft").notNull(),
+  sqm:real("sqm").notNull(),
+  sqyd:real("sqyd").notNull(),
+  dimensions:text("dimensions").notNull(),
+  road:text("road").notNull(),
+  front:real("front"),
+  depth:real("depth"),
+  back:real("back"),
+  depth2:real("depth2"),
+  dimensionUnit:text("dimension_unit"),
+  frontEdgeIndex:integer("front_edge_index"),
+  depthEdgeIndex:integer("depth_edge_index"),
+  backEdgeIndex:integer("back_edge_index"),
+  depth2EdgeIndex:integer("depth2_edge_index"),
+  frontLabel:text("front_label"),
+  depthLabel:text("depth_label"),
+  backLabel:text("back_label"),
+  depth2Label:text("depth2_label"),
+  sideDimensions:text("side_dimensions"),
+  edgeSemantics:text("edge_semantics"),
+  polygon:text("polygon").notNull().default(""),
+  status:text("status").notNull().default("available"),
+  featured:integer("featured",{mode:"boolean"}).notNull().default(false)
+},table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
+
+export const publishedPlotEdgeMeasurements = sqliteTable("published_plot_edge_measurements", {
+  projectId:text("project_id").notNull().references(()=>projects.id,{onDelete:"cascade"}),
+  plotId:text("plot_id").notNull(),
+  role:text("role").notNull(),
+  segmentIndex:integer("segment_index").notNull().default(0),
+  edgeIndex:integer("edge_index"),
+  pointCount:integer("point_count"),
+  length:real("length"),
+  unit:text("unit"),
+  rawLabel:text("raw_label"),
+  roadFrontage:integer("road_frontage",{mode:"boolean"}).notNull().default(false),
+  roadAccess:text("road_access")
+},table=>({
+  pk:primaryKey({columns:[table.projectId,table.plotId,table.role,table.segmentIndex]}),
+  projectPlotIndex:index("idx_published_edge_measurements_project_plot").on(table.projectId,table.plotId)
+}));
+
+export const publishedSettings = sqliteTable("published_settings", {
+  projectId:text("project_id").notNull().references(()=>projects.id,{onDelete:"cascade"}),
+  key:text("key").notNull(),
+  value:text("value").notNull()
+},table=>({pk:primaryKey({columns:[table.projectId,table.key]})}));
+
 export const plotPricing = sqliteTable("plot_pricing", {
   projectId:text("project_id").notNull().references(()=>projects.id),
   plotId:text("plot_id").notNull(),
