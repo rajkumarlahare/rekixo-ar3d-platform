@@ -4230,6 +4230,14 @@ export default function PlotMapper({
           <div className="mapper-zoombar mapper-v4-toolbar">
             <button className={toolMode === "pan" ? "active" : ""} type="button" onClick={() => { setToolMode("pan"); setCalibrationMode(false); }}><Hand />Pan</button>
             <button className={toolMode === "select" ? "active" : ""} type="button" onClick={enableSelectMode}><Target />Select</button>
+            {!completedProject && (
+              <button
+                type="button"
+                className="primary mapper-focus-confirm mapper-focus-primary-action"
+                disabled={busy || !shapeReady}
+                onClick={confirmPlot}
+              ><CheckCircle2 />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Confirm ${plotId}`}</button>
+            )}
             <strong>{shape === "quad" ? `Plot ${plotId} · ${points.length}/4 corners` : `Plot ${plotId} · ${points.length} corners`}</strong>
             {!completedProject && (
               <div className="mapper-inline-shape-tools" aria-label="Plot boundary controls">
@@ -4292,12 +4300,6 @@ export default function PlotMapper({
                   className={bulkSemanticMode ? "active" : ""}
                   onClick={toggleBulkSidesMode}
                 >Bulk sides</button>
-                <button
-                  type="button"
-                  className="primary mapper-focus-confirm"
-                  disabled={busy || !shapeReady}
-                  onClick={confirmPlot}
-                ><CheckCircle2 />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Confirm ${plotId}`}</button>
               </div>
             )}
 
