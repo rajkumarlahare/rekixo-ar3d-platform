@@ -2278,6 +2278,15 @@ export default function PlotMapper({
     setToolMode("select");
   }
 
+  function toggleBulkSidesMode() {
+    setBulkSemanticMode((value) => !value);
+    setBulkSemanticIds(new Set());
+    setEdgeAssignMode(null);
+    setSelectedSemanticEdge(null);
+    setSemanticChainRole(null);
+    setSemanticChainStart(null);
+  }
+
   function clonePreviousShape() {
     const currentIndex = inventoryPlots.findIndex((plot) => plot.id === plotId);
     const before = currentIndex > 0 ? inventoryPlots.slice(0, currentIndex).reverse() : [];
@@ -4221,14 +4230,6 @@ export default function PlotMapper({
           <div className="mapper-zoombar mapper-v4-toolbar">
             <button className={toolMode === "pan" ? "active" : ""} type="button" onClick={() => { setToolMode("pan"); setCalibrationMode(false); }}><Hand />Pan</button>
             <button className={toolMode === "select" ? "active" : ""} type="button" onClick={enableSelectMode}><Target />Select</button>
-            <button
-              className="mapper-clear-all"
-              type="button"
-              disabled={busy || completedProject || mappedPlots.length === 0}
-              onClick={clearAllSelections}
-              aria-label="Clear all saved plot selections"
-              title="Remove every saved clickable boundary; plot details and status stay safe"
-            ><Trash2 />Clear all selections</button>
             <strong>{shape === "quad" ? `Plot ${plotId} · ${points.length}/4 corners` : `Plot ${plotId} · ${points.length} corners`}</strong>
             {!completedProject && (
               <div className="mapper-inline-shape-tools" aria-label="Plot boundary controls">
@@ -4276,6 +4277,38 @@ export default function PlotMapper({
             >↻ 90°</button>
             <button aria-label="Reset zoom and rotation" title="Reset orientation" onClick={resetMapperView}><RotateCcw /></button>
             <button aria-label="Toggle mapping focus/fullscreen" onClick={toggleMapperFullscreen}><Maximize2 />Focus</button>
+
+            {!completedProject && (
+              <div className="mapper-focus-actions" aria-label="Focus mapping actions">
+                <button type="button" disabled={!points.length} onClick={undoPoint}><Undo2 />Undo</button>
+                <button
+                  type="button"
+                  disabled={busy || (!points.length && !currentHasSavedBoundary)}
+                  onClick={clearCurrentSelection}
+                >{currentHasSavedBoundary ? "Remove saved" : "Clear"}</button>
+                <button type="button" onClick={clonePreviousShape}><Copy />Clone prev</button>
+                <button
+                  type="button"
+                  className={bulkSemanticMode ? "active" : ""}
+                  onClick={toggleBulkSidesMode}
+                >Bulk sides</button>
+                <button
+                  type="button"
+                  className="primary mapper-focus-confirm"
+                  disabled={busy || !shapeReady}
+                  onClick={confirmPlot}
+                ><CheckCircle2 />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Confirm ${plotId}`}</button>
+              </div>
+            )}
+
+            <button
+              className="mapper-clear-all"
+              type="button"
+              disabled={busy || completedProject || mappedPlots.length === 0}
+              onClick={clearAllSelections}
+              aria-label="Clear all saved plot selections"
+              title="Remove every saved clickable boundary; plot details and status stay safe"
+            ><Trash2 />Clear all selections</button>
           </div>
 
           {!imageReady && (
@@ -4708,14 +4741,7 @@ export default function PlotMapper({
                 <button
                   type="button"
                   className={bulkSemanticMode ? "primary" : ""}
-                  onClick={() => {
-                    setBulkSemanticMode((value) => !value);
-                    setBulkSemanticIds(new Set());
-                    setEdgeAssignMode(null);
-                    setSelectedSemanticEdge(null);
-                    setSemanticChainRole(null);
-                    setSemanticChainStart(null);
-                  }}
+                  onClick={toggleBulkSidesMode}
                 >Bulk sides</button>
               </div>
               <div
