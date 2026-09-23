@@ -872,3 +872,118 @@
   background:#0f3c2c!important;
   color:#68e6af!important;
 }
+
+
+/* REKIXO_MAPPER_TOOLBAR_PARITY_V2
+   Normal mapper mode now uses the same consolidated control strip as focus mode.
+   Existing actions/functions are unchanged; only their presentation is unified. */
+.mapper-v4-canvas .mapper-v4-toolbar{
+  width:100%;
+  min-width:100%!important;
+  max-width:100%;
+  display:flex;
+  align-items:center;
+  flex-wrap:nowrap;
+  gap:5px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-x:contain;
+  scrollbar-width:thin;
+}
+.mapper-v4-canvas .mapper-v4-toolbar>button,
+.mapper-v4-canvas .mapper-v4-toolbar>span,
+.mapper-v4-canvas .mapper-v4-toolbar>strong,
+.mapper-v4-canvas .mapper-inline-shape-tools,
+.mapper-v4-canvas .mapper-focus-actions{
+  flex:none;
+}
+.mapper-v4-canvas .mapper-v4-toolbar strong{
+  min-width:auto;
+  margin-right:0!important;
+  white-space:nowrap;
+}
+.mapper-v4-canvas .mapper-inline-shape-tools{
+  margin-right:0!important;
+}
+.mapper-v4-canvas .mapper-focus-primary-action{
+  display:flex!important;
+  margin:0!important;
+  border-color:#23835a!important;
+  background:#0f3c2c!important;
+  color:#68e6af!important;
+}
+.mapper-v4-canvas .mapper-focus-actions{
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.mapper-v4-canvas .mapper-v4-toolbar button{
+  min-height:40px;
+  height:40px;
+  padding:0 8px;
+  white-space:nowrap;
+  font-size:10px;
+}
+.mapper-v4-canvas .mapper-v4-toolbar .mapper-inline-shape-tools button{
+  width:40px;
+  min-width:40px;
+  height:40px;
+  min-height:40px;
+  padding:0;
+}
+.mapper-v4-canvas .mapper-v4-toolbar .mapper-zoom-range{
+  width:clamp(130px,16vw,220px);
+  min-width:130px;
+  max-width:220px;
+  min-height:40px;
+  flex:0 1 220px;
+}
+.mapper-v4-canvas .mapper-focus-confirm{
+  margin:0!important;
+  border-color:#23835a!important;
+  background:#0f3c2c!important;
+  color:#68e6af!important;
+}
+.mapper-v4-canvas .mapper-clear-all{
+  margin-left:8px;
+}
+
+/* Remove the old duplicate lower action controls in both normal and focus mode.
+   The side-role assigner is retained whenever details-phase mapping needs it. */
+.mapper-v4-canvas .mapper-v4-bottom-tools{
+  display:none!important;
+}
+.mapper-v4-canvas .mapper-v4-bottom-action-row>.mapper-confirm-button{
+  display:none!important;
+}
+.mapper-v4-canvas .mapper-v4-bottom-bar:not(.has-side-dock){
+  display:none!important;
+}
+.mapper-v4-canvas .mapper-v4-bottom-bar.has-side-dock{
+  grid-template-rows:auto;
+  padding:7px;
+}
+.mapper-v4-canvas .mapper-v4-bottom-action-row.has-side-dock{
+  grid-template-columns:minmax(0,1fr)!important;
+}
+.mapper-v4-canvas .mapper-side-dock{
+  grid-column:1;
+  min-height:0!important;
+  justify-self:center;
+}
+
+@media (any-pointer:coarse), (hover:none){
+  .mapper-v4-canvas .mapper-v4-toolbar button{
+    min-height:44px;
+    height:44px;
+  }
+  .mapper-v4-canvas .mapper-v4-toolbar .mapper-inline-shape-tools button{
+    width:44px;
+    min-width:44px;
+    height:44px;
+    min-height:44px;
+  }
+  .mapper-v4-canvas .mapper-v4-toolbar .mapper-zoom-range{
+    min-height:44px;
+  }
+}
