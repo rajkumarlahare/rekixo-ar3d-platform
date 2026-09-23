@@ -19,12 +19,17 @@ async function readProjectMeta(slug: string) {
     .bind(project.id)
     .first<{ projectName: string }>();
 
-  const settingSource = snapshot ? "published_settings" : "settings";
-  const rows = await env.DB.prepare(
-    `SELECT key,value FROM ${settingSource} WHERE project_id=? AND key IN ('projectName','brandName','location','address','logoName','logoVersion','shareTitle','shareDescription','shareImage','shareVersion')`,
-  )
-    .bind(project.id)
-    .all<{ key: string; value: string }>();
+  const rows = snapshot
+    ? await env.DB.prepare(
+        "SELECT key,value FROM published_settings WHERE project_id=? AND key IN ('projectName','brandName','location','address','logoName','logoVersion','shareTitle','shareDescription','shareImage','shareVersion')",
+      )
+        .bind(project.id)
+        .all<{ key: string; value: string }>()
+    : await env.DB.prepare(
+        "SELECT key,value FROM settings WHERE project_id=? AND key IN ('projectName','brandName','location','address','logoName','logoVersion','shareTitle','shareDescription','shareImage','shareVersion')",
+      )
+        .bind(project.id)
+        .all<{ key: string; value: string }>();
 
   const settings: MetaSettings = Object.fromEntries(
     (rows.results || []).map((row) => [row.key, row.value]),
