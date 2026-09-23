@@ -2042,6 +2042,7 @@ rekixoStartPublicBoot();
         publicParams.set('variant','public');
         publicParams.set('v',masterVersion);
         const canonicalParams=new URLSearchParams(baseParams);
+        canonicalParams.set('variant','public-canonical');
         canonicalParams.set('v',masterVersion);
         preferredMasterUrl='/api/project-asset/masterplan?'+publicParams.toString();
         canonicalMasterUrl='/api/project-asset/masterplan?'+canonicalParams.toString();
