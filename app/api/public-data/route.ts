@@ -338,10 +338,33 @@ export async function GET(request: Request) {
         ? await publicProject3DLinkFromSnapshot(snapshot)
         : await publicProject3DLink(projectId);
 
-    const edgeMeasurementsByPlot = new Map<string, typeof edgeMeasurementRows>();
+    const edgeMeasurementsByPlot = new Map<
+      string,
+      Array<{
+        role: string;
+        segmentIndex: number;
+        edgeIndex: number | null;
+        pointCount: number | null;
+        length: number | null;
+        unit: string | null;
+        rawLabel: string | null;
+        roadFrontage: number | boolean;
+        roadAccess: string | null;
+      }>
+    >();
     for (const item of edgeMeasurementRows) {
       const list = edgeMeasurementsByPlot.get(item.plotId) || [];
-      list.push(item);
+      list.push({
+        role: item.role,
+        segmentIndex: item.segmentIndex,
+        edgeIndex: item.edgeIndex,
+        pointCount: item.pointCount,
+        length: item.length,
+        unit: item.unit,
+        rawLabel: item.rawLabel,
+        roadFrontage: item.roadFrontage,
+        roadAccess: item.roadAccess,
+      });
       edgeMeasurementsByPlot.set(item.plotId, list);
     }
 
