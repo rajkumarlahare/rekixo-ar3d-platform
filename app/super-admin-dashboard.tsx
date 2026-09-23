@@ -209,9 +209,7 @@ export default function SuperAdminDashboard({
             <span>{subtitle}</span>
           </div>
 
-          <MotionSwap
-            motionKey={`${tab}:${tab === "clients" ? "clients" : projectId || "none"}`}
-          >
+          <MotionSwap motionKey={`${tab}:${tab === "clients" ? "clients" : projectId || "none"}`}>
             <div className="super-motion-panel">
               {tab === "clients" ? (
                 <>
@@ -243,27 +241,17 @@ export default function SuperAdminDashboard({
                         projectId={projectId}
                         notify={notify}
                       />
-                      <ProjectPublishPanel
-                        projectId={projectId}
-                        notify={notify}
-                      />
+                      <ProjectPublishPanel projectId={projectId} notify={notify} />
                     </>
                   ) : tab === "mapper" ? (
                     <>
-                      <PlotMapper
-                        key={projectId}
-                        projectId={projectId}
-                        notify={notify}
-                      />
+                      <PlotMapper key={projectId} projectId={projectId} notify={notify} />
                       <ProjectStatusThemeManager
                         key={`status-theme:${projectId}`}
                         projectId={projectId}
                         notify={notify}
                       />
-                      <ProjectPublishPanel
-                        projectId={projectId}
-                        notify={notify}
-                      />
+                      <ProjectPublishPanel projectId={projectId} notify={notify} />
                     </>
                   ) : tab === "geo" ? (
                     <>
@@ -273,11 +261,7 @@ export default function SuperAdminDashboard({
                         projects={projects}
                         notify={notify}
                       />
-                      <GeoMapper
-                        key={projectId}
-                        projectId={projectId}
-                        notify={notify}
-                      />
+                      <GeoMapper key={projectId} projectId={projectId} notify={notify} />
                     </>
                   ) : tab === "three-d" ? (
                     <Project3DLinkManager
@@ -292,10 +276,7 @@ export default function SuperAdminDashboard({
                         projectId={projectId}
                         notify={notify}
                       />
-                      <ProjectPublishPanel
-                        projectId={projectId}
-                        notify={notify}
-                      />
+                      <ProjectPublishPanel projectId={projectId} notify={notify} />
                     </>
                   )}
                 </>
