@@ -116,6 +116,40 @@ export async function freezeCurrentPublishedAssets(
   }
 }
 
+export async function freezeCurrentPublishedShareCard(projectId: string) {
+  const project = await env.DB.prepare(
+    "SELECT public_status AS publicStatus FROM projects WHERE id=? AND status='active' LIMIT 1",
+  )
+    .bind(projectId)
+    .first<{ publicStatus: string }>();
+  if (project?.publicStatus !== "published") return;
+
+  const publishedVersion = await env.DB.prepare(
+    "SELECT value FROM published_settings WHERE project_id=? AND key='shareVersion' LIMIT 1",
+  )
+    .bind(projectId)
+    .first<{ value: string }>();
+  const version = String(publishedVersion?.value || "").trim();
+  if (!/^\d{1,20}$/.test(version)) return;
+
+  const destination = `projects/${projectId}/share/cards/${version}`;
+  if (await env.BUCKET.head(destination)) return;
+
+  const source = await env.BUCKET.get(`projects/${projectId}/share/card`);
+  if (!source) return;
+
+  await env.BUCKET.put(destination, source.body, {
+    httpMetadata: {
+      contentType:
+        source.httpMetadata?.contentType || "application/octet-stream",
+    },
+    customMetadata: {
+      source: "rekixo-publish-snapshot",
+      version,
+    },
+  });
+}
+
 export async function promotePublishedAssets(
   projectId: string,
   publishVersion: number,
