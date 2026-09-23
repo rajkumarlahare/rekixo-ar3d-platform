@@ -4,6 +4,10 @@ import { writeAudit } from "@/modules/audit";
 import { activeProjectDomain } from "@/modules/domains";
 import { currentProjectLinks } from "@/modules/projects";
 import { missingRequiredProjectContact } from "@/modules/projects";
+import {
+  capturePublishedSnapshotStatements,
+  promotePublishedAssets,
+} from "@/modules/public-publish-snapshot";
 
 const denied = () => Response.json({ error: "Super Admin access required" }, { status: 403 });
 const LEGACY_PROJECT = "tiyansh-prime-square";
@@ -249,15 +253,36 @@ export async function POST(request: Request) {
         { error: "Project publish-ready nahi hai", reasons: state.reasons },
         { status: 409 },
       );
-    await env.DB.prepare(
-      "UPDATE projects SET public_status='published',published_at=?,publish_version=publish_version+1,updated_at=? WHERE id=?",
-    )
-      .bind(now, now, projectId)
-      .run();
+    const nextVersion = Number(state.publishVersion || 0) + 1;
+    try {
+      // Freeze the exact masterplan/logo bytes before the D1 publish pointer moves.
+      // Orphaned versioned R2 objects are harmless if the following D1 transaction
+      // fails; the same version is overwritten on the next publish attempt.
+      await promotePublishedAssets(projectId, nextVersion);
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Published assets snapshot nahi bana",
+        },
+        { status: 409 },
+      );
+    }
+
+    await env.DB.batch([
+      ...capturePublishedSnapshotStatements(projectId, nextVersion, now),
+      env.DB.prepare(
+        "UPDATE projects SET public_status='published',published_at=?,publish_version=?,updated_at=? WHERE id=?",
+      ).bind(now, nextVersion, now, projectId),
+    ]);
     await writeAudit(actor, "project.published", projectId, null, {
       mapped: state.mapped,
       total: state.total,
       previousVersion: state.publishVersion,
+      publishVersion: nextVersion,
+      structuralSnapshot: true,
       detailQualityWarnings: state.warnings,
     });
   } else {
