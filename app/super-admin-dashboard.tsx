@@ -131,7 +131,7 @@ export default function SuperAdminDashboard({
 
   return (
     <div className="super-shell">
-      <header className="super-header">
+      <aside className="super-sidebar">
         <div className="super-brand">
           <span>
             <ShieldCheck />
@@ -140,23 +140,6 @@ export default function SuperAdminDashboard({
             <b>REKIXO</b>
             <small>SUPER ADMIN</small>
           </div>
-        </div>
-        <div className="super-account">
-          <div>
-            <b>{user.name}</b>
-            <small>{user.email}</small>
-          </div>
-          <a href="/api/admin/logout">
-            <LogOut /> Sign out
-          </a>
-        </div>
-      </header>
-
-      <main className="super-content">
-        <div className="super-title">
-          <p>REKIXO OPERATIONS</p>
-          <h1>{title}</h1>
-          <span>{subtitle}</span>
         </div>
 
         <nav className="super-tabs">
@@ -197,81 +180,130 @@ export default function SuperAdminDashboard({
             <Share2 /> Share Builder
           </button>
         </nav>
+      </aside>
 
-        <MotionSwap motionKey={`${tab}:${tab === "clients" ? "clients" : projectId || "none"}`}><div className="super-motion-panel">
-        {tab === "clients" ? (
-          <>
-            <ClientAdminManager notify={notify} />
-            <ProjectDomainManager notify={notify} />
-          </>
-        ) : (
-          <>
-            {projectPicker}
-            {projectId ? (
-              <ProjectPublicAccessManager
-                key={`public-access:${projectId}`}
-                projectId={projectId}
-                notify={notify}
-              />
-            ) : null}
-            {!projectId ? (
-              <div className="card empty">
-                पहले client project बनाएँ या project चुनें।
-              </div>
-            ) : tab === "profile" ? (
-              <>
-                <ProjectProfileManager
-                  key={projectId}
-                  projectId={projectId}
-                  notify={notify}
-                />
-                <ProjectCustomerActionsManager
-                  key={`customer-actions:${projectId}`}
-                  projectId={projectId}
-                  notify={notify}
-                />
-                <ProjectPublishPanel projectId={projectId} notify={notify} />
-              </>
-            ) : tab === "mapper" ? (
-              <>
-                <PlotMapper key={projectId} projectId={projectId} notify={notify} />
-                <ProjectStatusThemeManager
-                  key={`status-theme:${projectId}`}
-                  projectId={projectId}
-                  notify={notify}
-                />
-                <ProjectPublishPanel projectId={projectId} notify={notify} />
-              </>
-            ) : tab === "geo" ? (
-              <>
-                <GeoLabClone
-                  key={`geo-lab:${projectId}`}
-                  projectId={projectId}
-                  projects={projects}
-                  notify={notify}
-                />
-                <GeoMapper key={projectId} projectId={projectId} notify={notify} />
-              </>
-            ) : tab === "three-d" ? (
-              <Project3DLinkManager
-                key={`3d-link:${projectId}`}
-                projectId={projectId}
-                notify={notify}
-              />
+      <section className="super-workspace">
+        <header className="super-header">
+          <div className="super-header-context">
+            {tab === "clients" ? (
+              <span className="super-top-label">REKIXO OPERATIONS</span>
             ) : (
-              <>
-                <ProjectShareManager
-                  key={projectId}
-                  projectId={projectId}
-                  notify={notify}
-                />
-                <ProjectPublishPanel projectId={projectId} notify={notify} />
-              </>
+              projectPicker
             )}
-          </>
-        )}
-        </div></MotionSwap>
-      </main>
+          </div>
+
+          <div className="super-account">
+            <div>
+              <b>{user.name}</b>
+              <small>{user.email}</small>
+            </div>
+            <a href="/api/admin/logout">
+              <LogOut /> Sign out
+            </a>
+          </div>
+        </header>
+
+        <main className="super-content">
+          <div className="super-title">
+            <h1>{title}</h1>
+            <span>{subtitle}</span>
+          </div>
+
+          <MotionSwap
+            motionKey={`${tab}:${tab === "clients" ? "clients" : projectId || "none"}`}
+          >
+            <div className="super-motion-panel">
+              {tab === "clients" ? (
+                <>
+                  <ClientAdminManager notify={notify} />
+                  <ProjectDomainManager notify={notify} />
+                </>
+              ) : (
+                <>
+                  {projectId ? (
+                    <ProjectPublicAccessManager
+                      key={`public-access:${projectId}`}
+                      projectId={projectId}
+                      notify={notify}
+                    />
+                  ) : null}
+                  {!projectId ? (
+                    <div className="card empty">
+                      पहले client project बनाएँ या project चुनें।
+                    </div>
+                  ) : tab === "profile" ? (
+                    <>
+                      <ProjectProfileManager
+                        key={projectId}
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                      <ProjectCustomerActionsManager
+                        key={`customer-actions:${projectId}`}
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                      <ProjectPublishPanel
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                    </>
+                  ) : tab === "mapper" ? (
+                    <>
+                      <PlotMapper
+                        key={projectId}
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                      <ProjectStatusThemeManager
+                        key={`status-theme:${projectId}`}
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                      <ProjectPublishPanel
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                    </>
+                  ) : tab === "geo" ? (
+                    <>
+                      <GeoLabClone
+                        key={`geo-lab:${projectId}`}
+                        projectId={projectId}
+                        projects={projects}
+                        notify={notify}
+                      />
+                      <GeoMapper
+                        key={projectId}
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                    </>
+                  ) : tab === "three-d" ? (
+                    <Project3DLinkManager
+                      key={`3d-link:${projectId}`}
+                      projectId={projectId}
+                      notify={notify}
+                    />
+                  ) : (
+                    <>
+                      <ProjectShareManager
+                        key={projectId}
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                      <ProjectPublishPanel
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </MotionSwap>
+        </main>
+      </section>
 
       <MotionToast message={toast} />
     </div>
