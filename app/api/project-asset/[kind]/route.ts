@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getAdminSession } from "@/modules/auth";
 import { publicProjectId } from "@/modules/projects";
+import { publishedAssetKey } from "@/modules/public-publish-snapshot";
 
 const PUBLIC_KINDS = new Set(["masterplan", "logo", "shareCard"]);
 const ADMIN_KINDS = new Set(["sourcePdf"]);
@@ -58,23 +59,49 @@ export async function GET(
   if (!projectId) return new Response("Not found", { status: 404 });
 
   const requestUrl = new URL(request.url);
+  const previewRequest = requestUrl.searchParams.get("preview") === "1";
+  const authorizedPreview = previewRequest && Boolean(session);
+  const publicVariant = requestUrl.searchParams.get("variant") === "public";
   const wantsPublicMasterplan =
-    kind === "masterplan" && requestUrl.searchParams.get("variant") === "public";
+    kind === "masterplan" && publicVariant;
 
-  // The mapper always keeps the canonical high-detail object. Public/preview 2D
-  // may explicitly request the lighter derivative produced from the SAME upload.
-  // The browser checks its aspect ratio before exposing polygons and falls back to
-  // canonical if an old/stale derivative is ever encountered.
+  // Mapper/admin requests keep reading the editable canonical objects. Customer
+  // requests read immutable bytes captured for the current publishVersion.
+  const shouldServePublished =
+    (kind === "masterplan" || kind === "logo") &&
+    !authorizedPreview &&
+    (!session || publicVariant);
+
   const objectKind = wantsPublicMasterplan
     ? "masterplanPublic"
     : kind === "masterplan"
       ? "masterplan"
       : kind;
 
+  let publishVersion = 0;
+  if (shouldServePublished) {
+    const published = await env.DB.prepare(
+      "SELECT public_status AS publicStatus,publish_version AS publishVersion FROM projects WHERE id=? AND status='active' LIMIT 1",
+    )
+      .bind(projectId)
+      .first<{ publicStatus: string; publishVersion: number }>();
+    if (published?.publicStatus === "published") {
+      publishVersion = Number(published.publishVersion || 0);
+    }
+  }
+
   let objectKey =
     kind === "shareCard"
       ? `projects/${projectId}/share/card`
       : `projects/${projectId}/mapper/${objectKind}`;
+
+  if (publishVersion > 0 && (objectKind === "masterplan" || objectKind === "masterplanPublic" || objectKind === "logo")) {
+    objectKey = publishedAssetKey(
+      projectId,
+      publishVersion,
+      objectKind as "masterplan" | "masterplanPublic" | "logo",
+    );
+  }
 
   // New large-masterplan uploads keep the original at a versioned R2 key so a
   // failed replacement can never destroy the previous source. Old projects still
@@ -92,14 +119,38 @@ export async function GET(
   }
 
   let object = await env.BUCKET.get(objectKey);
+  let servedPublishedSnapshot = Boolean(object && publishVersion > 0);
   let servedMasterplanSource =
     kind === "masterplan"
       ? wantsPublicMasterplan
-        ? "public-optimized"
-        : "canonical"
+        ? "published-public-optimized"
+        : "published-canonical"
       : objectKind;
 
-  if (!object && wantsPublicMasterplan) {
+  if (!object && publishVersion > 0 && wantsPublicMasterplan) {
+    object = await env.BUCKET.get(
+      publishedAssetKey(projectId, publishVersion, "masterplan"),
+    );
+    if (object) servedMasterplanSource = "published-canonical-fallback";
+  }
+
+  // Backward compatibility for projects published before versioned R2 snapshots
+  // existed. The next asset edit freezes this canonical object before replacing it.
+  if (!object && shouldServePublished) {
+    servedPublishedSnapshot = false;
+    const fallbackKind = wantsPublicMasterplan ? "masterplanPublic" : objectKind;
+    object = await env.BUCKET.get(
+      `projects/${projectId}/mapper/${fallbackKind}`,
+    );
+    if (!object && wantsPublicMasterplan) {
+      object = await env.BUCKET.get(`projects/${projectId}/mapper/masterplan`);
+      servedMasterplanSource = "legacy-canonical-fallback";
+    } else if (kind === "masterplan") {
+      servedMasterplanSource = wantsPublicMasterplan
+        ? "legacy-public-fallback"
+        : "legacy-canonical-fallback";
+    }
+  } else if (!object && wantsPublicMasterplan) {
     object = await env.BUCKET.get(`projects/${projectId}/mapper/masterplan`);
     servedMasterplanSource = "canonical-fallback";
   } else if (!object && kind === "masterplan") {
@@ -114,12 +165,11 @@ export async function GET(
   }
   if (!object) return new Response("Not found", { status: 404 });
 
-  const previewRequest = requestUrl.searchParams.get("preview") === "1";
   const versionedRequest = requestUrl.searchParams.has("v");
   const headers = new Headers({
     "content-type": object.httpMetadata?.contentType || "application/octet-stream",
     "cache-control":
-      session || previewRequest
+      authorizedPreview || (session && !publicVariant)
         ? "no-store"
         : kind === "masterplan" && wantsPublicMasterplan && versionedRequest
           ? "public,max-age=31536000,immutable"
@@ -135,6 +185,12 @@ export async function GET(
     "x-content-type-options": "nosniff",
   });
   headers.set("x-rekixo-project", projectId);
+  if (shouldServePublished) {
+    headers.set(
+      "x-rekixo-publish-asset",
+      servedPublishedSnapshot ? "snapshot" : "legacy-fallback",
+    );
+  }
   if (kind === "masterplan") {
     headers.set("x-rekixo-masterplan-source", servedMasterplanSource);
   }
