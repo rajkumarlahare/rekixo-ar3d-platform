@@ -18,12 +18,17 @@ async function shareAsset(slug: string, version: string) {
   )
     .bind(project.id)
     .first<{ ok: number }>();
-  const settingSource = snapshot ? "published_settings" : "settings";
-  const rows = await env.DB.prepare(
-    `SELECT key,value FROM ${settingSource} WHERE project_id=? AND key IN ('shareImage','shareVersion')`,
-  )
-    .bind(project.id)
-    .all<{ key: string; value: string }>();
+  const rows = snapshot
+    ? await env.DB.prepare(
+        "SELECT key,value FROM published_settings WHERE project_id=? AND key IN ('shareImage','shareVersion')",
+      )
+        .bind(project.id)
+        .all<{ key: string; value: string }>()
+    : await env.DB.prepare(
+        "SELECT key,value FROM settings WHERE project_id=? AND key IN ('shareImage','shareVersion')",
+      )
+        .bind(project.id)
+        .all<{ key: string; value: string }>();
 
   const settings = Object.fromEntries(
     (rows.results || []).map((row) => [row.key, row.value]),
