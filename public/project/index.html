@@ -792,7 +792,7 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
 <body>
 <section class="rekixo-boot-error" id="rekixoBootError" role="alert" aria-live="assertive" aria-atomic="true">
   <div class="rekixo-boot-error-card">
-    <h1 class="rekixo-boot-error-title">Project load nahi hua</h1>
+    <h1 class="rekixo-boot-error-title" id="rekixoBootErrorTitle">Project load nahi hua</h1>
     <p class="rekixo-boot-error-text" id="rekixoBootErrorText">Internet check karke dobara try karein.</p>
     <button class="rekixo-boot-retry" id="rekixoBootRetry" type="button">Try Again</button>
   </div>
@@ -981,13 +981,15 @@ const rekixoBootSleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const rekixoBootRetryableStatus=status=>
   status===0||status===408||status===425||status===429||status>=500;
 
-function rekixoBootState(state,message=''){
+function rekixoBootState(state,message='',title=''){
   const root=document.documentElement;
   root.classList.remove('rekixo-project-loading','rekixo-project-error');
   if(state==='loading')root.classList.add('rekixo-project-loading');
   if(state==='error'){
     root.classList.add('rekixo-project-error');
+    const heading=document.getElementById('rekixoBootErrorTitle');
     const text=document.getElementById('rekixoBootErrorText');
+    if(heading)heading.textContent=title||'Project load nahi hua';
     if(text&&message)text.textContent=message;
   }
 }
@@ -1003,8 +1005,11 @@ async function rekixoFetchPublicData(){
       headers:{accept:'application/json'},
     });
     if(!response.ok){
+      let payload=null;
+      try{payload=await response.json()}catch(_){}
       const error=new Error('public-data-http-'+response.status);
       error.status=response.status;
+      error.code=payload&&typeof payload==='object'?String(payload.code||''):'';
       throw error;
     }
     const data=await response.json();
@@ -1054,16 +1059,24 @@ async function rekixoStartPublicBoot(){
       if(run!==REKIXO_BOOT_RUN)return;
       lastError=error;
       const status=Number(error&&error.status)||0;
+      if(error&&error.code==='PROJECT_TEMPORARILY_UNAVAILABLE')break;
       if(status&&!rekixoBootRetryableStatus(status))break;
     }
   }
 
   if(run!==REKIXO_BOOT_RUN)return;
   const status=Number(lastError&&lastError.status)||0;
-  const message=status===404
-    ? 'Project abhi available nahi hai. Link ya publish status check karein.'
-    : 'Project data load nahi hua. Internet check karke Try Again karein.';
-  rekixoBootState('error',message);
+  const code=String(lastError&&lastError.code||'');
+  const temporarilyUnavailable=code==='PROJECT_TEMPORARILY_UNAVAILABLE';
+  const title=temporarilyUnavailable
+    ? 'Project Temporarily Unavailable'
+    : 'Project load nahi hua';
+  const message=temporarilyUnavailable
+    ? 'This project is temporarily unavailable. Please try again later.'
+    : status===404
+      ? 'Project abhi available nahi hai. Link ya publish status check karein.'
+      : 'Project data load nahi hua. Internet check karke Try Again karein.';
+  rekixoBootState('error',message,title);
 }
 
 const rekixoBootRetryButton=document.getElementById('rekixoBootRetry');
