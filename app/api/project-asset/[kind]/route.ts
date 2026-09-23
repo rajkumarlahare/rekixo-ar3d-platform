@@ -176,7 +176,7 @@ export async function GET(
     "cache-control":
       authorizedPreview || (session && !publicVariant)
         ? "no-store"
-        : kind === "masterplan" && wantsPublicMasterplan && versionedRequest
+        : kind === "masterplan" && publicVariant && versionedRequest
           ? "public,max-age=31536000,immutable"
           : kind === "masterplan"
             ? "public,max-age=0,must-revalidate"
