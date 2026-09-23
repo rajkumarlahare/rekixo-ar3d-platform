@@ -92,9 +92,16 @@ export async function GET(
     }
   }
 
+  const requestedAssetVersion = requestUrl.searchParams.get("v") || "";
+  const validShareVersion = /^\d{1,20}$/.test(requestedAssetVersion)
+    ? requestedAssetVersion
+    : "";
+
   let objectKey =
     kind === "shareCard"
-      ? `projects/${projectId}/share/card`
+      ? validShareVersion
+        ? `projects/${projectId}/share/cards/${validShareVersion}`
+        : `projects/${projectId}/share/card`
       : `projects/${projectId}/mapper/${objectKind}`;
 
   if (publishVersion !== null && (objectKind === "masterplan" || objectKind === "masterplanPublic" || objectKind === "logo")) {
@@ -128,6 +135,13 @@ export async function GET(
         ? "published-public-optimized"
         : "published-canonical"
       : objectKind;
+
+  // Versioned share-card URLs are the public immutable contract. Older projects
+  // may not have the versioned object yet; canonical fallback is safe because
+  // share-image replacement freezes the currently published version first.
+  if (!object && kind === "shareCard" && validShareVersion) {
+    object = await env.BUCKET.get(`projects/${projectId}/share/card`);
+  }
 
   if (!object && publishVersion !== null && wantsPublicMasterplan) {
     object = await env.BUCKET.get(
