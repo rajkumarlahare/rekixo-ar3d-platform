@@ -33,7 +33,6 @@ test("select mode keeps tap-to-corner but converts a real drag into pan", () => 
   assert.match(mapper, /const shouldPan =\s*!calibrationMode/);
   assert.match(mapper, /tapStartRef\.current = null/);
   assert.match(mapper, /Date\.now\(\) < suppressTapUntilRef\.current/);
-  assert.match(mapper, /SELECT: tap = corner/);
 });
 
 test("two fingers pinch-zoom and pan are committed together once per paint frame", () => {

@@ -4329,7 +4329,6 @@ export default function PlotMapper({
               <button type="button" onClick={retryMasterplanLoad}>Retry masterplan</button>
             </div>
           )}
-          <div className="mapper-pan-hint">{toolMode === "pan" ? `PAN: 1 finger drag = move · 2 fingers pinch = zoom + move · ↺/↻ 90° = local mapper view only. Current: ${rotationDegrees}°.` : `SELECT: tap = corner · खाली जगह drag = move · 2 fingers pinch = zoom + move. Rotation ${rotationDegrees}° सिर्फ mapper view है; website और saved polygon geometry canonical coordinates में रहती है.`}</div>
           <div
             ref={imageWrapRef}
             className="mapper-image-wrap mapper-image-v2"
