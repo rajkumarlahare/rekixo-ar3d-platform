@@ -551,7 +551,19 @@ export async function POST(request: Request) {
 
     if (kind === "logo") {
       // A published customer site must keep the previous logo until Publish Update.
-      await freezeCurrentPublishedAssets(projectId, ["logo"]);
+      try {
+        await freezeCurrentPublishedAssets(projectId, ["logo"]);
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Published logo preserve nahi hua",
+          },
+          { status: 409 },
+        );
+      }
       await env.BUCKET.put(objectKey, file.stream(), {
         httpMetadata: { contentType: file.type || "image/webp" },
       });
@@ -576,7 +588,19 @@ export async function POST(request: Request) {
     if (kind === "masterplan") {
       // Preserve the currently published masterplan before replacing the editable
       // canonical source. Preview/mapper sees the new source; public stays frozen.
-      await freezeCurrentPublishedAssets(projectId, ["masterplan"]);
+      try {
+        await freezeCurrentPublishedAssets(projectId, ["masterplan"]);
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Published masterplan preserve nahi hua",
+          },
+          { status: 409 },
+        );
+      }
       const width = Math.round(Number(form.get("mapWidth")));
       const height = Math.round(Number(form.get("mapHeight")));
       const originalWidth = Math.round(Number(form.get("originalWidth")));
