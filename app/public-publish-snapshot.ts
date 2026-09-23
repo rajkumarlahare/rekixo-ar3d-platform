@@ -95,24 +95,39 @@ export async function freezeCurrentPublishedAssets(
       publishedCanonical,
       false,
     );
-    if (frozenCanonical) {
-      const frozenPublic = await copyR2Object(
-        publicCanonical,
-        publishedPublic,
-        false,
+    if (!frozenCanonical) {
+      throw new Error(
+        "Current published masterplan missing hai; safe replacement blocked",
       );
-      if (!frozenPublic) {
-        await copyR2Object(canonical, publishedPublic, false);
-      }
+    }
+    const frozenPublic = await copyR2Object(
+      publicCanonical,
+      publishedPublic,
+      false,
+    );
+    if (!frozenPublic) {
+      await copyR2Object(canonical, publishedPublic, false);
     }
   }
 
   if (kinds.includes("logo")) {
-    await copyR2Object(
-      canonicalAssetKey(projectId, "logo"),
-      publishedAssetKey(projectId, version, "logo"),
-      false,
-    );
+    const publishedLogo = await env.DB.prepare(
+      "SELECT value FROM published_settings WHERE project_id=? AND key='logoName' LIMIT 1",
+    )
+      .bind(projectId)
+      .first<{ value: string }>();
+    if (String(publishedLogo?.value || "").trim()) {
+      const frozenLogo = await copyR2Object(
+        canonicalAssetKey(projectId, "logo"),
+        publishedAssetKey(projectId, version, "logo"),
+        false,
+      );
+      if (!frozenLogo) {
+        throw new Error(
+          "Current published logo missing hai; safe replacement blocked",
+        );
+      }
+    }
   }
 }
 
@@ -136,7 +151,11 @@ export async function freezeCurrentPublishedShareCard(projectId: string) {
   if (await env.BUCKET.head(destination)) return;
 
   const source = await env.BUCKET.get(`projects/${projectId}/share/card`);
-  if (!source) return;
+  if (!source) {
+    throw new Error(
+      "Current published share card missing hai; safe replacement blocked",
+    );
+  }
 
   await env.BUCKET.put(destination, source.body, {
     httpMetadata: {
