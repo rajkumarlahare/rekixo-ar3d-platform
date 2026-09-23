@@ -78,7 +78,7 @@ export async function GET(
       ? "masterplan"
       : kind;
 
-  let publishVersion = 0;
+  let publishVersion: number | null = null;
   if (shouldServePublished) {
     const published = await env.DB.prepare(
       "SELECT public_status AS publicStatus,publish_version AS publishVersion FROM projects WHERE id=? AND status='active' LIMIT 1",
@@ -86,7 +86,7 @@ export async function GET(
       .bind(projectId)
       .first<{ publicStatus: string; publishVersion: number }>();
     if (published?.publicStatus === "published") {
-      publishVersion = Number(published.publishVersion || 0);
+      publishVersion = Number(published.publishVersion ?? 0);
     }
   }
 
@@ -95,7 +95,7 @@ export async function GET(
       ? `projects/${projectId}/share/card`
       : `projects/${projectId}/mapper/${objectKind}`;
 
-  if (publishVersion > 0 && (objectKind === "masterplan" || objectKind === "masterplanPublic" || objectKind === "logo")) {
+  if (publishVersion !== null && (objectKind === "masterplan" || objectKind === "masterplanPublic" || objectKind === "logo")) {
     objectKey = publishedAssetKey(
       projectId,
       publishVersion,
@@ -119,7 +119,7 @@ export async function GET(
   }
 
   let object = await env.BUCKET.get(objectKey);
-  let servedPublishedSnapshot = Boolean(object && publishVersion > 0);
+  let servedPublishedSnapshot = Boolean(object && publishVersion !== null);
   let servedMasterplanSource =
     kind === "masterplan"
       ? wantsPublicMasterplan
@@ -127,7 +127,7 @@ export async function GET(
         : "published-canonical"
       : objectKind;
 
-  if (!object && publishVersion > 0 && wantsPublicMasterplan) {
+  if (!object && publishVersion !== null && wantsPublicMasterplan) {
     object = await env.BUCKET.get(
       publishedAssetKey(projectId, publishVersion, "masterplan"),
     );
