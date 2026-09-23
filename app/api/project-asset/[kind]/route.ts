@@ -131,7 +131,10 @@ export async function GET(
     object = await env.BUCKET.get(
       publishedAssetKey(projectId, publishVersion, "masterplan"),
     );
-    if (object) servedMasterplanSource = "published-canonical-fallback";
+    if (object) {
+      servedPublishedSnapshot = true;
+      servedMasterplanSource = "published-canonical-fallback";
+    }
   }
 
   // Backward compatibility for projects published before versioned R2 snapshots
