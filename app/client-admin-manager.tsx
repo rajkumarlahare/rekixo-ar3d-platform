@@ -443,10 +443,7 @@ export default function ClientAdminManager({
       const response = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          action: "restore_project",
-          projectId: project.id,
-        }),
+        body:JSON.stringify({action:"restore_project",projectId:project.id}),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
