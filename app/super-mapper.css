@@ -567,3 +567,118 @@
     justify-content:center;
   }
 }
+
+
+/* REKIXO_SUPER_ADMIN_COLLAPSIBLE_LISTS_V1
+   Long owner-only lists stay collapsed until requested and reveal paged content. */
+.super-collapsible-card{
+  overflow:hidden;
+}
+.super-shell .rekixo-domain-manager.super-collapsible-card{
+  padding:24px;
+}
+.super-collapsible-card.is-collapsed .super-collapsible-head{
+  margin-bottom:0;
+}
+.super-collapsible-head{
+  gap:16px;
+}
+.super-collapsible-head>div:first-child{
+  min-width:0;
+}
+.super-collapsible-meta{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  flex:none;
+}
+.super-collapsible-meta>b{
+  min-width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:11px;
+  background:#12263f;
+  color:#82a8dc;
+  font-size:12px;
+  font-weight:900;
+}
+.super-collapse-toggle{
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  flex:none;
+  border:1px solid #2b3d58;
+  border-radius:11px;
+  background:#0c192a;
+  color:#aebbd0;
+  cursor:pointer;
+  transition:
+    border-color .18s ease,
+    background-color .18s ease,
+    color .18s ease;
+}
+.super-collapse-toggle:hover{
+  border-color:#655fe8;
+  background:#121d35;
+  color:#fff;
+}
+.super-collapse-toggle svg{
+  width:18px;
+  height:18px;
+  transition:transform .22s ease;
+}
+.super-collapsible-card.is-open .super-collapse-toggle svg{
+  transform:rotate(180deg);
+}
+.super-collapsible-body{
+  min-width:0;
+  animation:rekixo-super-list-reveal .24s ease both;
+}
+@keyframes rekixo-super-list-reveal{
+  from{opacity:0;transform:translateY(-7px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.super-load-more{
+  min-height:42px;
+  width:100%;
+  margin-top:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #2b3d58;
+  border-radius:11px;
+  background:#0c192a;
+  color:#bdc9da;
+  font-size:12px;
+  font-weight:850;
+  cursor:pointer;
+}
+.super-load-more:hover:not(:disabled){
+  border-color:#655fe8;
+  background:#121d35;
+  color:#fff;
+}
+.super-load-more:disabled{
+  opacity:.55;
+  cursor:wait;
+}
+.super-collapsible-card .rekixo-domain-projects{
+  margin-top:2px;
+}
+@media(max-width:680px){
+  .super-shell .rekixo-domain-manager.super-collapsible-card{
+    padding:16px;
+  }
+  .super-collapsible-head{
+    align-items:flex-start;
+  }
+  .super-collapsible-meta{
+    margin-left:auto;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .super-collapsible-body{animation:none}
+  .super-collapse-toggle svg{transition:none}
+}
