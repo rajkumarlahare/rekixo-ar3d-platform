@@ -223,7 +223,19 @@ export async function POST(request: Request) {
 
     // Existing published social previews stay byte-stable until Publish Update.
     // This mainly backfills projects that predate versioned share-card snapshots.
-    await freezeCurrentPublishedShareCard(projectId);
+    try {
+      await freezeCurrentPublishedShareCard(projectId);
+    } catch (error) {
+      return Response.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Published share card preserve nahi hua",
+        },
+        { status: 409 },
+      );
+    }
 
     const version = String(Date.now());
     const [bytes, sourceBytes] = await Promise.all([
