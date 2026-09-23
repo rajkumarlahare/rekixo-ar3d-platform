@@ -727,3 +727,21 @@
     min-width:0;
   }
 }
+
+
+/* REKIXO_MAPPER_TEMPLATE_BUTTON_ALIGNMENT_V1
+   UI-only: neutralize the global .primary top margin inside mapper template actions. */
+.super-shell .mapper-source-actions{
+  align-items:center;
+}
+.super-shell .mapper-source-actions>button{
+  height:38px;
+  min-height:38px;
+  margin:0!important;
+  align-self:center;
+}
+.super-shell .mapper-source-actions>button svg{
+  width:15px;
+  height:15px;
+  flex:0 0 15px;
+}
