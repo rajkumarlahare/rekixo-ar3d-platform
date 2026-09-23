@@ -22,13 +22,69 @@ const slugify=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]+/g,"-").rep
 const clientAdminUrl=(slug="",adminHost?:string|null)=>slug?currentProjectLinks(slug,null,adminHost).adminUrl:`https://${clientFallbackHost()}/admin/login`;
 const isGeoLab=async(projectId:string)=>Boolean(await env.DB.prepare("SELECT 1 FROM projects WHERE id=? AND kind='geo_lab' AND status!='deleted' LIMIT 1").bind(projectId).first());
 
-export async function GET(){
+export async function GET(request:Request){
   const actor=await requireSuperAdmin();if(!actor)return unauthorized();
+  const url=new URL(request.url),section=String(url.searchParams.get("section")||"").trim();
+  const readPage=(name:string,fallback:number,max:number)=>{const value=Number(url.searchParams.get(name));return Number.isFinite(value)?Math.max(0,Math.min(max,Math.floor(value))):fallback};
+  const projectQuery="SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' GROUP BY p.id ORDER BY p.created_at DESC";
+  const archivedQuery="SELECT p.id,p.name,p.kind,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status='deleted' GROUP BY p.id ORDER BY p.deleted_at DESC,p.updated_at DESC";
+
+  if(section==="summary"){
+    const [projects,archived,userCount,auditCount]=await Promise.all([
+      env.DB.prepare(projectQuery).all<ProjectRow>(),
+      env.DB.prepare(archivedQuery).all(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted'").first<{total:number}>(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM audit_logs").first<{total:number}>(),
+    ]);
+    return Response.json({
+      projects:projects.results.map(project=>({...project,loginMode:project.loginMode==="mobile"?"mobile":"email"})),
+      archivedProjects:archived.results,
+      userCount:Number(userCount?.total||0),
+      auditCount:Number(auditCount?.total||0),
+      clientAdminUrl:clientAdminUrl(),
+    },{headers:{"cache-control":"no-store"}});
+  }
+
+  if(section==="clients"){
+    const limit=Math.max(1,readPage("limit",8,50)),offset=readPage("offset",0,1_000_000);
+    const [result,total]=await Promise.all([
+      env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC LIMIT ? OFFSET ?").bind(limit,offset).all<UserRow>(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted'").first<{total:number}>(),
+    ]);
+    return Response.json({
+      users:result.results.map(user=>({
+        ...user,
+        loginType:user.loginType==="mobile"?"mobile":"email",
+        loginId:user.loginId||user.email,
+        email:user.loginType==="mobile"?null:user.email,
+        adminUrl:clientAdminUrl(user.projectSlug,user.adminHost),
+      })),
+      total:Number(total?.total||0),
+      nextOffset:offset+result.results.length,
+      hasMore:offset+result.results.length<Number(total?.total||0),
+      clientAdminUrl:clientAdminUrl(),
+    },{headers:{"cache-control":"no-store"}});
+  }
+
+  if(section==="audits"){
+    const limit=Math.max(1,readPage("limit",10,50)),offset=readPage("offset",0,1_000_000);
+    const [audits,total]=await Promise.all([
+      env.DB.prepare("SELECT action,actor_email AS actorEmail,project_id AS projectId,target_id AS targetId,created_at AS createdAt FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?").bind(limit,offset).all(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM audit_logs").first<{total:number}>(),
+    ]);
+    return Response.json({
+      audits:audits.results,
+      total:Number(total?.total||0),
+      nextOffset:offset+audits.results.length,
+      hasMore:offset+audits.results.length<Number(total?.total||0),
+    },{headers:{"cache-control":"no-store"}});
+  }
+
   const [result,projects,audits,archived]=await Promise.all([
     env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC").all<UserRow>(),
-    env.DB.prepare("SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' GROUP BY p.id ORDER BY p.created_at DESC").all<ProjectRow>(),
+    env.DB.prepare(projectQuery).all<ProjectRow>(),
     env.DB.prepare("SELECT action,actor_email AS actorEmail,project_id AS projectId,target_id AS targetId,created_at AS createdAt FROM audit_logs ORDER BY created_at DESC LIMIT 50").all(),
-    env.DB.prepare("SELECT p.id,p.name,p.kind,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status='deleted' GROUP BY p.id ORDER BY p.deleted_at DESC,p.updated_at DESC").all()
+    env.DB.prepare(archivedQuery).all()
   ]);
   return Response.json({
     users:result.results.map(user=>({
