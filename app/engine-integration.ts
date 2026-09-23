@@ -114,8 +114,12 @@ export async function project3DLink(platformProjectId: string): Promise<Project3
   return row ? { ...row, publicEnabled: Boolean(row.publicEnabled) } : null;
 }
 
-export async function publicProject3DLink(platformProjectId: string) {
-  const link = await project3DLink(platformProjectId);
+type PublicProject3DLinkInput = Pick<
+  Project3DLink,
+  "engineProjectId" | "engineSlug" | "status" | "publicEnabled" | "publicUrl"
+>;
+
+async function resolvePublicProject3DLink(link: PublicProject3DLinkInput | null) {
   if (!link || link.status !== "active" || !link.publicEnabled) return null;
 
   // Fail closed: public Platform UI exposes 3D only while the Engine confirms
@@ -131,4 +135,31 @@ export async function publicProject3DLink(platformProjectId: string) {
     name: engine.project.name,
     url: link.publicUrl,
   };
+}
+
+export async function publicProject3DLink(platformProjectId: string) {
+  return resolvePublicProject3DLink(await project3DLink(platformProjectId));
+}
+
+export async function publicProject3DLinkFromSnapshot(link: {
+  engineProjectId: string | null;
+  engineSlug: string | null;
+  engineLinkStatus: string | null;
+  enginePublicEnabled: number | boolean | null;
+  enginePublicUrl: string | null;
+}) {
+  if (
+    !link.engineProjectId ||
+    !link.engineSlug ||
+    !link.enginePublicUrl
+  )
+    return null;
+
+  return resolvePublicProject3DLink({
+    engineProjectId: link.engineProjectId,
+    engineSlug: link.engineSlug,
+    status: link.engineLinkStatus === "active" ? "active" : "disabled",
+    publicEnabled: Boolean(link.enginePublicEnabled),
+    publicUrl: link.enginePublicUrl,
+  });
 }
