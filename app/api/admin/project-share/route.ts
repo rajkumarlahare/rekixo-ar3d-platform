@@ -4,6 +4,7 @@ import { writeAudit } from "@/modules/audit";
 import { activeProjectDomain } from "@/modules/domains";
 import { currentProjectLinks } from "@/modules/projects";
 import { GLOBAL_SHARE_BRAND, SHARE_TEMPLATE } from "@/modules/sharing";
+import { freezeCurrentPublishedShareCard } from "@/modules/public-publish-snapshot";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
@@ -219,6 +220,10 @@ export async function POST(request: Request) {
         { error: "Original share image JPG, PNG ya WebP me aur 8 MB se chhoti honi chahiye" },
         { status: 400 },
       );
+
+    // Existing published social previews stay byte-stable until Publish Update.
+    // This mainly backfills projects that predate versioned share-card snapshots.
+    await freezeCurrentPublishedShareCard(projectId);
 
     const version = String(Date.now());
     const [bytes, sourceBytes] = await Promise.all([
