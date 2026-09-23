@@ -987,3 +987,135 @@
     min-height:44px;
   }
 }
+
+
+/* REKIXO_CLEAR_ALL_CONFIRMATION_V1
+   Safe confirmation layer for the destructive mapper bulk-clear action. */
+.mapper-clear-confirm-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:2147483000;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  background:rgba(2,8,17,.78);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+.mapper-clear-confirm-dialog{
+  width:min(92vw,460px);
+  border:1px solid #5b2b36;
+  border-radius:18px;
+  background:
+    linear-gradient(180deg,rgba(20,29,44,.99),rgba(8,17,30,.99));
+  box-shadow:
+    0 28px 80px rgba(0,0,0,.55),
+    0 0 0 1px rgba(255,255,255,.025) inset;
+  padding:20px;
+  color:#edf3fb;
+}
+.mapper-clear-confirm-head{
+  display:flex;
+  align-items:center;
+  gap:13px;
+}
+.mapper-clear-confirm-icon{
+  width:44px;
+  height:44px;
+  flex:0 0 44px;
+  display:grid;
+  place-items:center;
+  border:1px solid #7a3544;
+  border-radius:13px;
+  background:#32151d;
+  color:#ff7f94;
+}
+.mapper-clear-confirm-icon svg{
+  width:21px;
+  height:21px;
+}
+.mapper-clear-confirm-head>div{
+  min-width:0;
+}
+.mapper-clear-confirm-head small{
+  display:block;
+  margin-bottom:4px;
+  color:#d26d7f;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.14em;
+}
+.mapper-clear-confirm-head h3{
+  margin:0;
+  color:#fff;
+  font-size:19px;
+  line-height:1.2;
+}
+.mapper-clear-confirm-dialog p{
+  margin:16px 0 18px;
+  color:#aab8cb;
+  font-size:12px;
+  line-height:1.6;
+}
+.mapper-clear-confirm-dialog p b{
+  color:#fff;
+}
+.mapper-clear-confirm-actions{
+  display:grid;
+  grid-template-columns:1fr 1.35fr;
+  gap:9px;
+}
+.mapper-clear-confirm-actions button{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  border:1px solid #30425d;
+  border-radius:11px;
+  background:#0d1a2b;
+  color:#cad5e5;
+  padding:0 14px;
+  font-size:11px;
+  font-weight:900;
+  cursor:pointer;
+}
+.mapper-clear-confirm-actions button:hover:not(:disabled){
+  border-color:#526781;
+  color:#fff;
+}
+.mapper-clear-confirm-actions button.danger{
+  border-color:#8e3345;
+  background:#451923;
+  color:#ff9aaa;
+}
+.mapper-clear-confirm-actions button.danger:hover:not(:disabled){
+  border-color:#c14b61;
+  background:#5a202d;
+  color:#ffd7de;
+}
+.mapper-clear-confirm-actions button svg{
+  width:15px;
+  height:15px;
+}
+.mapper-clear-confirm-actions button:disabled{
+  opacity:.55;
+  cursor:wait;
+}
+
+@media(max-width:520px){
+  .mapper-clear-confirm-backdrop{
+    padding:14px;
+  }
+  .mapper-clear-confirm-dialog{
+    width:min(100%,430px);
+    padding:17px;
+    border-radius:15px;
+  }
+  .mapper-clear-confirm-actions{
+    grid-template-columns:1fr;
+  }
+  .mapper-clear-confirm-actions button{
+    min-height:48px;
+  }
+}

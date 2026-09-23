@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -1091,6 +1092,7 @@ export default function PlotMapper({
   // metadata/CSS mismatch from ever stretching the masterplan.
   const [naturalImageSize, setNaturalImageSize] = useState<{ width: number; height: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [clearAllConfirmOpen, setClearAllConfirmOpen] = useState(false);
   const [headerAddress, setHeaderAddress] = useState("");
   const [areaFactorText, setAreaFactorText] = useState("10.7639");
   const [settingsReady, setSettingsReady] = useState(false);
@@ -1166,6 +1168,15 @@ export default function PlotMapper({
   useEffect(() => {
     pointsRef.current = points;
   }, [points]);
+
+  useEffect(() => {
+    if (!clearAllConfirmOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) setClearAllConfirmOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [busy, clearAllConfirmOpen]);
 
   useEffect(() => {
     if (!frontFirstPendingRef.current || shape !== "quad" || points.length !== 4) return;
@@ -3583,14 +3594,22 @@ export default function PlotMapper({
     }
   }
 
+  function requestClearAllSelections() {
+    if (!mappedPlots.length) {
+      notify("Clear करने के लिए कोई saved selection नहीं है");
+      return;
+    }
+    setClearAllConfirmOpen(true);
+  }
+
   async function clearAllSelections() {
     const mappedCount = mappedPlots.length;
-    if (!mappedCount) return notify("Clear करने के लिए कोई saved selection नहीं है");
-    const confirmed = window.confirm(
-      `${mappedCount} saved plot selections हटाएँ? सिर्फ clickable polygon boundaries हटेंगी; plot details और status सुरक्षित रहेंगे।`,
-    );
-    if (!confirmed) return;
+    if (!mappedCount) {
+      setClearAllConfirmOpen(false);
+      return notify("Clear करने के लिए कोई saved selection नहीं है");
+    }
 
+    setClearAllConfirmOpen(false);
     setBusy(true);
     try {
       const response = await fetch("/api/super-mapper", {
@@ -4307,11 +4326,58 @@ export default function PlotMapper({
               className="mapper-clear-all"
               type="button"
               disabled={busy || completedProject || mappedPlots.length === 0}
-              onClick={clearAllSelections}
+              onClick={requestClearAllSelections}
               aria-label="Clear all saved plot selections"
               title="Remove every saved clickable boundary; plot details and status stay safe"
             ><Trash2 />Clear all selections</button>
           </div>
+
+          {clearAllConfirmOpen && (
+            <div
+              className="mapper-clear-confirm-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !busy) {
+                  setClearAllConfirmOpen(false);
+                }
+              }}
+            >
+              <div
+                className="mapper-clear-confirm-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mapper-clear-confirm-title"
+                aria-describedby="mapper-clear-confirm-description"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="mapper-clear-confirm-head">
+                  <span className="mapper-clear-confirm-icon"><AlertTriangle /></span>
+                  <div>
+                    <small>DESTRUCTIVE ACTION</small>
+                    <h3 id="mapper-clear-confirm-title">Clear all selections?</h3>
+                  </div>
+                </div>
+                <p id="mapper-clear-confirm-description">
+                  <b>{mappedPlots.length}</b> saved plot {mappedPlots.length === 1 ? "boundary" : "boundaries"} हटेंगी।
+                  Plot details और status सुरक्षित रहेंगे।
+                </p>
+                <div className="mapper-clear-confirm-actions">
+                  <button
+                    type="button"
+                    autoFocus
+                    disabled={busy}
+                    onClick={() => setClearAllConfirmOpen(false)}
+                  >Cancel</button>
+                  <button
+                    type="button"
+                    className="danger"
+                    disabled={busy}
+                    onClick={() => void clearAllSelections()}
+                  ><Trash2 />{busy ? "Clearing…" : `Clear ${mappedPlots.length} selections`}</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {!imageReady && (
             <div className="mapper-loading">
