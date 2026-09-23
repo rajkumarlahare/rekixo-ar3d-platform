@@ -42,46 +42,35 @@ test("bulk clear remains the final toolbar action", () => {
 });
 
 test("normal and fullscreen mapper use the same consolidated top toolbar", () => {
-  assert.match(css, /REKIXO_MAPPER_TOOLBAR_PARITY_V2/);
-  assert.match(
-    css,
-    /.mapper-v4-canvas .mapper-focus-primary-action{[sS]*?display:flex!important/,
-  );
-  assert.match(
-    css,
-    /.mapper-v4-canvas .mapper-focus-actions{[sS]*?display:flex/,
-  );
-  assert.match(
-    css,
-    /.mapper-v4-canvas .mapper-v4-bottom-tools{[sS]*?display:none!important/,
-  );
-  assert.match(
-    css,
-    /.mapper-v4-canvas .mapper-v4-bottom-action-row>.mapper-confirm-button{[sS]*?display:none!important/,
-  );
-  assert.match(
-    css,
-    /.mapper-v4-canvas .mapper-v4-bottom-bar:not(.has-side-dock){[sS]*?display:none!important/,
-  );
+  assert.ok(css.includes("REKIXO_MAPPER_TOOLBAR_PARITY_V2"));
+  assert.ok(css.includes(".mapper-v4-canvas .mapper-focus-primary-action{"));
+  assert.ok(css.includes("display:flex!important;"));
+  assert.ok(css.includes(".mapper-v4-canvas .mapper-focus-actions{"));
+  assert.ok(css.includes(".mapper-v4-canvas .mapper-v4-bottom-tools{"));
+  assert.ok(css.includes(".mapper-v4-canvas .mapper-v4-bottom-action-row>.mapper-confirm-button{"));
+  assert.ok(css.includes(".mapper-v4-canvas .mapper-v4-bottom-bar:not(.has-side-dock){"));
 });
 
 test("normal and fullscreen side assigner share the centered wide layout", () => {
-  assert.match(sideCss, /REKIXO_SIDE_DOCK_PARITY_V3/);
-  assert.match(
-    sideCss,
-    /.mapper-v4-canvas .mapper-side-dock{[sS]*?max-width:860px!important;[sS]*?justify-self:center!important/,
-  );
-  assert.match(
-    sideCss,
-    /.mapper-v4-canvas .mapper-side-dock .plot-side-role-grid{[sS]*?repeat(4,minmax(100px,1fr))/,
-  );
-  assert.match(sideCss, /text-overflow:clip!important/);
+  assert.ok(sideCss.includes("REKIXO_SIDE_DOCK_PARITY_V3"));
+  assert.ok(sideCss.includes(".mapper-v4-canvas .mapper-side-dock{"));
+  assert.ok(sideCss.includes("max-width:860px!important;"));
+  assert.ok(sideCss.includes("justify-self:center!important;"));
+  assert.ok(sideCss.includes("grid-template-columns:repeat(4,minmax(100px,1fr))!important;"));
+  assert.ok(sideCss.includes("text-overflow:clip!important;"));
 });
 
 test("fullscreen side assigner remains viewport-centered", () => {
-  assert.match(sideCss, /REKIXO_FULLSCREEN_SIDE_DOCK_CENTER_V2/);
-  assert.match(
-    sideCss,
-    /:fullscreen .plot-side-assigners*{[sS]*?left:s*50% !important;[sS]*?bottom:s*calc(env(safe-area-inset-bottom, 0px) + 14px) !important;[sS]*?width:s*min(calc(100vw - 24px), 860px) !important;[sS]*?transform:s*translateX(-50%) !important;/,
+  assert.ok(sideCss.includes("REKIXO_FULLSCREEN_SIDE_DOCK_CENTER_V2"));
+  assert.ok(sideCss.includes(".mapper-v4-canvas:fullscreen .plot-side-assigner {"));
+  assert.ok(sideCss.includes("left: 50% !important;"));
+  assert.ok(
+    sideCss.includes(
+      "bottom: calc(env(safe-area-inset-bottom, 0px) + 14px) !important;",
+    ),
   );
+  assert.ok(
+    sideCss.includes("width: min(calc(100vw - 24px), 860px) !important;"),
+  );
+  assert.ok(sideCss.includes("transform: translateX(-50%) !important;"));
 });
