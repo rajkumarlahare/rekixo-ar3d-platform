@@ -682,3 +682,48 @@
   .super-collapsible-body{animation:none}
   .super-collapse-toggle svg{transition:none}
 }
+
+
+/* REKIXO_CLIENT_ACCESS_FORM_ALIGNMENT_V1
+   UI-only alignment: keep the second form row level and surface submit opposite the title. */
+.super-shell .client-create-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:20px;
+  margin-bottom:24px;
+}
+.super-shell .client-create-head .section-title{
+  min-width:0;
+  margin-bottom:0;
+}
+.super-shell .client-create-submit{
+  min-width:210px;
+  min-height:44px;
+  flex:none;
+  margin:0;
+  padding:0 20px;
+  align-self:flex-start;
+}
+.super-shell .client-create-form{
+  align-items:start;
+}
+.super-shell .client-create-form>label{
+  min-width:0;
+}
+@media(max-width:900px){
+  .super-shell .client-create-head{
+    align-items:center;
+  }
+}
+@media(max-width:680px){
+  .super-shell .client-create-head{
+    align-items:stretch;
+    flex-direction:column;
+    gap:16px;
+  }
+  .super-shell .client-create-submit{
+    width:100%;
+    min-width:0;
+  }
+}
