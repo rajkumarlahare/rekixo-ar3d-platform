@@ -45,32 +45,77 @@ function links(slug: string, publicHost?: string | null, adminHost?: string | nu
   return currentProjectLinks(slug, publicHost, adminHost);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const actor = await requireSuperAdmin();
   if (!actor) return denied();
 
-  const [projectsResult, domainsResult] = await Promise.all([
-    env.DB.prepare(
-      "SELECT id,name,slug,kind,status,public_status AS publicStatus,publish_version AS publishVersion,public_host AS publicHost,admin_host AS adminHost,created_at AS createdAt,updated_at AS updatedAt FROM projects WHERE status!='deleted' ORDER BY created_at DESC",
-    ).all<{
-      id: string;
-      name: string;
-      slug: string;
-      kind: string;
-      status: string;
-      publicStatus: string;
-      publishVersion: number;
-      publicHost: string | null;
-      adminHost: string | null;
-      createdAt: string;
-      updatedAt: string;
-    }>(),
-    env.DB.prepare(
-      "SELECT host,project_id AS projectId,kind,public_primary AS publicPrimary,admin_primary AS adminPrimary,status FROM project_domains ORDER BY created_at ASC",
-    ).all<DomainRow>(),
-  ]);
+  const url = new URL(request.url);
+  const summaryOnly = url.searchParams.get("summary") === "1";
+  const limitRaw = Number(url.searchParams.get("limit"));
+  const offsetRaw = Number(url.searchParams.get("offset"));
+  const paged = Number.isFinite(limitRaw) && limitRaw > 0;
+  const limit = paged ? Math.max(1, Math.min(50, Math.floor(limitRaw))) : 0;
+  const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
 
-  const domains = domainsResult.results;
+  if (summaryOnly) {
+    const total = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM projects WHERE status!='deleted'",
+    ).first<{ total: number }>();
+    return Response.json(
+      { total: Number(total?.total || 0) },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  const projectSql =
+    "SELECT id,name,slug,kind,status,public_status AS publicStatus,publish_version AS publishVersion,public_host AS publicHost,admin_host AS adminHost,created_at AS createdAt,updated_at AS updatedAt FROM projects WHERE status!='deleted' ORDER BY created_at DESC";
+  const projectsResult = paged
+    ? await env.DB.prepare(`${projectSql} LIMIT ? OFFSET ?`).bind(limit, offset).all<{
+        id: string;
+        name: string;
+        slug: string;
+        kind: string;
+        status: string;
+        publicStatus: string;
+        publishVersion: number;
+        publicHost: string | null;
+        adminHost: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }>()
+    : await env.DB.prepare(projectSql).all<{
+        id: string;
+        name: string;
+        slug: string;
+        kind: string;
+        status: string;
+        publicStatus: string;
+        publishVersion: number;
+        publicHost: string | null;
+        adminHost: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }>();
+
+  const projectIds = projectsResult.results.map((project) => project.id);
+  let domains: DomainRow[] = [];
+  if (projectIds.length) {
+    if (paged) {
+      const placeholders = projectIds.map(() => "?").join(",");
+      const domainResult = await env.DB.prepare(
+        `SELECT host,project_id AS projectId,kind,public_primary AS publicPrimary,admin_primary AS adminPrimary,status FROM project_domains WHERE project_id IN (${placeholders}) ORDER BY created_at ASC`,
+      )
+        .bind(...projectIds)
+        .all<DomainRow>();
+      domains = domainResult.results;
+    } else {
+      const domainResult = await env.DB.prepare(
+        "SELECT host,project_id AS projectId,kind,public_primary AS publicPrimary,admin_primary AS adminPrimary,status FROM project_domains ORDER BY created_at ASC",
+      ).all<DomainRow>();
+      domains = domainResult.results;
+    }
+  }
+
   const projects = projectsResult.results.map((project) => {
     const rows = domains.filter((item) => item.projectId === project.id);
     const knownHosts = new Set(rows.map((row) => row.host));
@@ -116,9 +161,22 @@ export async function GET() {
     };
   });
 
+  const total = paged
+    ? Number(
+        (
+          await env.DB.prepare(
+            "SELECT COUNT(*) AS total FROM projects WHERE status!='deleted'",
+          ).first<{ total: number }>()
+        )?.total || 0,
+      )
+    : projects.length;
+
   return Response.json(
     {
       projects,
+      total,
+      nextOffset: offset + projects.length,
+      hasMore: paged ? offset + projects.length < total : false,
       platformHost: clientPlatformHost() || null,
       fallbackHost: clientFallbackHost() || null,
       sharedAdminHost: sharedAdminHost() || null,
