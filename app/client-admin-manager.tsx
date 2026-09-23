@@ -472,17 +472,31 @@ export default function ClientAdminManager({
   return (
     <section className="client-admins">
       <div className="card client-create-card">
-        <div className="section-title">
-          <UserPlus />
-          <div>
-            <h2>Create client access</h2>
-            <p>
-              Existing project में staff admin जोड़ें या नया client project
-              बनाइए।
-            </p>
+        <div className="client-create-head">
+          <div className="section-title">
+            <UserPlus />
+            <div>
+              <h2>Create client access</h2>
+              <p>
+                Existing project में staff admin जोड़ें या नया client project
+                बनाइए।
+              </p>
+            </div>
           </div>
+          <button
+            type="submit"
+            form="client-access-form"
+            className="primary client-create-submit"
+            disabled={busy === "create"}
+          >
+            {busy === "create" ? "Creating…" : "Create Client Access"}
+          </button>
         </div>
-        <form className="client-create-form" onSubmit={create}>
+        <form
+          id="client-access-form"
+          className="client-create-form"
+          onSubmit={create}
+        >
           <label>
             <span>Existing project (optional)</span>
             <select
@@ -561,9 +575,6 @@ export default function ClientAdminManager({
               placeholder="admin.client.com"
             />
           </label>
-          <button className="primary" disabled={busy === "create"}>
-            {busy === "create" ? "Creating…" : "Create Client Access"}
-          </button>
         </form>
       </div>
 
