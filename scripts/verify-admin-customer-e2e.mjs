@@ -52,6 +52,7 @@ async function adminJourney(browser) {
   await page.waitForSelector(".super-shell");
 
   const upload = await context.request.post(`${base}/api/super-mapper`, {
+    headers: { origin: base },
     multipart: {
       projectId,
       kind: "masterplan",
