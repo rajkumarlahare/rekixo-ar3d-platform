@@ -48,7 +48,7 @@ export async function GET(request:Request){
   if(section==="project_options"){
     const limit=Math.max(1,readPage("limit",20,50));
     const q=String(url.searchParams.get("q")||"").trim().toLowerCase().slice(0,80);
-    const pattern=`%${q.replace(/[%_]/g,"")} %`.replace(" %","%");
+    const pattern=`%${q.replace(/[%_]/g,"")}%`;
     const result=q
       ? await env.DB.prepare(
           "SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' AND (lower(p.name) LIKE ? OR lower(p.id) LIKE ? OR lower(p.slug) LIKE ?) GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?",
