@@ -72,13 +72,20 @@ async function adminJourney(browser) {
   await page.screenshot({ path: path.join(artifactDir, "admin-desktop-before-map.png"), fullPage: true });
 
   await page.getByRole("button", { name: "Select", exact: true }).click();
+  await page.waitForSelector(".mapper-v4-canvas.select-mode");
   await page.getByRole("button", { name: "4-corner plot" }).click();
+  await page.waitForSelector(".mapper-v4-canvas.select-mode");
   const svg = page.locator(".mapper-image-wrap svg").first();
   const box = await svg.boundingBox();
   assert.ok(box && box.width > 40 && box.height > 40, "mapper SVG visible");
-  for (const [x, y] of [[.22,.22],[.46,.22],[.46,.48],[.22,.48]]) {
-    await page.mouse.click(box.x + box.width * x, box.y + box.height * y);
-    await page.waitForTimeout(90);
+  const corners = [[.22,.22],[.46,.22],[.46,.48],[.22,.48]];
+  for (let index = 0; index < corners.length; index += 1) {
+    const [x, y] = corners[index];
+    await svg.click({ position: { x: box.width * x, y: box.height * y } });
+    await page.waitForFunction(
+      (minimum) => document.querySelectorAll(".mapper-point-handle").length >= minimum,
+      index + 1,
+    );
   }
   await page.waitForFunction(() => document.querySelectorAll(".mapper-point-handle").length === 4);
   await page.waitForFunction(() => {
