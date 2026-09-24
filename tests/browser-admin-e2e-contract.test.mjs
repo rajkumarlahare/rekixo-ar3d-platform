@@ -28,7 +28,7 @@ test("Phase 11 journey covers login mapping semantics preview publish and custom
   assert.match(journey,/Publish Website/);
   assert.match(journey,/document\.fullscreenElement/);
   assert.match(journey,/admin-mobile-mapper\.png/);
-  assert.match(journey,/customer-\\$\\{target\.name\\}\\.png/);
+  assert.ok(journey.includes("customer-${target.name}.png"));
   assert.match(journey,/name: "desktop"/);
   assert.match(journey,/name: "mobile"/);
   assert.match(journey,/\/projects\/\$\{projectSlug\}/);
