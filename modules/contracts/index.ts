@@ -1,4 +1,4 @@
-export const PLATFORM_MODULE_CONTRACT_VERSION = 1 as const;
+export const PLATFORM_MODULE_CONTRACT_VERSION = 2 as const;
 
 export const PLATFORM_MODULES = [
   "auth",
@@ -10,6 +10,7 @@ export const PLATFORM_MODULES = [
   "geo",
   "pricing",
   "sharing",
+  "project-assets",
   "db",
   "super-admin",
   "client-admin",

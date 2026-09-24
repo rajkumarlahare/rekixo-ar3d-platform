@@ -8,3 +8,4 @@ export { default as ProjectProfileManager } from "@/app/project-profile-manager"
 export { default as ProjectShareManager } from "@/app/project-share-manager";
 export { default as ProjectStatusThemeManager } from "@/app/project-status-theme-manager";
 export { default as ProjectCustomerActionsManager } from "@/app/project-customer-actions-manager";
+export { default as ProjectAssetsManager } from "@/app/project-assets-manager";

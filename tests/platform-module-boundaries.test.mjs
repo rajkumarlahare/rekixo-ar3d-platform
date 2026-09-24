@@ -16,6 +16,7 @@ const moduleNames = [
   "geo",
   "pricing",
   "sharing",
+  "project-assets",
   "db",
   "super-admin",
   "client-admin",
@@ -57,6 +58,7 @@ const sharedImplementationBasenames = new Set([
   "google-maps-config",
   "share-branding",
   "share-branding-logo",
+  "project-assets-export",
   "admin-dashboard",
   "super-admin-dashboard",
 ]);

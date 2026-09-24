@@ -19,6 +19,7 @@ The route tree remains under Next/Vinext's required `app/` directory. This stage
 - `geo` — geo models, calibration, public manifest/image configuration.
 - `pricing` — pricing-sheet parsing and expansion.
 - `sharing` — project share branding contract.
+- `project-assets` — Super Admin read-only project export manifest and streaming ZIP recovery contract. It may read project-scoped D1/R2 data but must not mutate tenant state or cross the AR3D Engine binary boundary.
 - `db` — D1 access and schema facade.
 - `super-admin` — Super Admin UI composition surface.
 - `client-admin` — Client Admin UI composition surface.

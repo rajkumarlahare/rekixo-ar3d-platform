@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Archive,
   ExternalLink,
   Globe2,
   LogOut,
@@ -22,6 +23,7 @@ import ProjectDomainManager from "./project-domain-manager";
 import ProjectPublishPanel from "./project-publish-panel";
 import ProjectProfileManager from "./project-profile-manager";
 import ProjectPublicAccessManager from "./project-public-access-manager";
+import ProjectAssetsManager from "./project-assets-manager";
 import ProjectShareManager from "./project-share-manager";
 import ProjectStatusThemeManager from "./project-status-theme-manager";
 import MotionSwap, { MotionToast } from "./motion-swap";
@@ -34,7 +36,7 @@ type Project = {
   adminCount: number;
 };
 
-type WorkspaceTab = "clients" | "profile" | "mapper" | "geo" | "three-d" | "share";
+type WorkspaceTab = "clients" | "profile" | "mapper" | "geo" | "three-d" | "share" | "assets";
 
 export default function SuperAdminDashboard({
   user,
@@ -130,7 +132,9 @@ export default function SuperAdminDashboard({
             ? "Geo Mapper"
             : tab === "three-d"
               ? "3D Engine Integration"
-              : "Share Preview Builder";
+              : tab === "share"
+                ? "Share Preview Builder"
+                : "Project Assets";
   const subtitle =
     tab === "clients"
       ? "Create projects, assign client access and manage domains."
@@ -142,7 +146,9 @@ export default function SuperAdminDashboard({
             ? "Project boundaries, GPS control points aur GIS exchange data ko isolated Geo workspace me manage karein."
             : tab === "three-d"
               ? "Platform project ko isolated Rekixo AR3D Engine project se safely link karein."
-              : "Har project ka branded WhatsApp / social link preview ek jagah se manage karein.";
+              : tab === "share"
+                ? "Har project ka branded WhatsApp / social link preview ek jagah se manage karein."
+                : "Selected project ka recovery-ready working data, source assets aur published snapshot safely export karein.";
 
   return (
     <div className="super-shell">
@@ -194,6 +200,12 @@ export default function SuperAdminDashboard({
           >
             <Share2 /> Share Builder
           </button>
+          <button
+            className={tab === "assets" ? "active" : ""}
+            onClick={() => setTab("assets")}
+          >
+            <Archive /> Project Assets
+          </button>
         </nav>
       </aside>
 
@@ -233,7 +245,7 @@ export default function SuperAdminDashboard({
                 </>
               ) : (
                 <>
-                  {projectId ? (
+                  {projectId && tab !== "assets" ? (
                     <ProjectPublicAccessManager
                       key={`public-access:${projectId}`}
                       projectId={projectId}
@@ -281,6 +293,12 @@ export default function SuperAdminDashboard({
                   ) : tab === "three-d" ? (
                     <Project3DLinkManager
                       key={`3d-link:${projectId}`}
+                      projectId={projectId}
+                      notify={notify}
+                    />
+                  ) : tab === "assets" ? (
+                    <ProjectAssetsManager
+                      key={`assets:${projectId}`}
                       projectId={projectId}
                       notify={notify}
                     />
