@@ -75,6 +75,6 @@ test("admin and preview requests keep canonical private behavior", () => {
     assets,
     /"cache-control":[\s\S]*mode === "admin"[\s\S]*\? "no-store"/,
   );
-  assert.match(gallery, /mode === "admin"/);
+  assert.match(gallery, /mode: "admin"/);
   assert.match(gallery, /"private, no-store"/);
 });
