@@ -61,7 +61,7 @@ test("first-login password change UI and API are synchronized to 8+ policy", asy
   assert.doesNotMatch(form, /12\+ characters/);
 });
 
-test("hashing and login throttling remain outside this patch", async () => {
+test("hashing stays strong and login throttling is bounded by identifier plus IP", async () => {
   const [auth, login] = await Promise.all([
     source("../app/admin-auth.ts"),
     source("../app/api/admin/login/route.ts"),
@@ -69,5 +69,10 @@ test("hashing and login throttling remain outside this patch", async () => {
   assert.match(auth, /PBKDF2/);
   assert.match(auth, /iterations:100000/);
   assert.match(auth, /SHA-256/);
-  assert.match(login, /WINDOW=15\*60\*1000,MAX=5/);
+  assert.match(login, /const WINDOW=15\*60\*1000/);
+  assert.match(login, /const IDENTIFIER_MAX=5/);
+  assert.match(login, /const IP_MAX=20/);
+  assert.match(login, /DELETE FROM login_attempts WHERE window_start < \?/);
+  assert.match(login, /digestKey\("ip"/);
+  assert.match(login, /digestKey\("ip\+identifier"/);
 });

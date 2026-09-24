@@ -57,19 +57,17 @@ test("last-admin removal archives project without destructive R2 or project-data
   assert.match(users, /recoverable:true/);
 });
 
-test("archived projects have an explicit restore path that stays domainless and access-disabled", () => {
+test("archived projects restore saved access snapshots while legacy archives stay fail closed", () => {
   assert.match(users, /action==="restore_project"/);
-  assert.match(users, /status='active',deleted_at=NULL/);
+  assert.match(users, /restoreArchivedProject/);
+  assert.match(users, /project_archive_access_snapshot/);
+  assert.match(users, /accessRestored:false/);
+  assert.match(users, /session_version=session_version\+1/);
   assert.match(users, /archivedProjects/);
   assert.match(manager, /Recoverable projects/);
   assert.match(manager, /action:"restore_project"/);
-  assert.match(manager, /Project restored; admin access dobara enable karein/);
-  const restoreSlice = users.slice(
-    users.indexOf('if(action==="restore_project")'),
-    users.indexOf('const current=await env.DB.prepare'),
-  );
-  assert.doesNotMatch(restoreSlice, /UPDATE project_domains SET status='active'/);
-  assert.doesNotMatch(restoreSlice, /UPDATE admin_users SET status='active'/);
+  assert.match(manager, /data\.accessRestored\?/);
+  assert.match(manager, /legacy access disabled hai/);
 });
 
 test("staff toggle mirrors compatibility membership status without changing auth semantics", () => {

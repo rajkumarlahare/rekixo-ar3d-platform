@@ -45,9 +45,8 @@ async function authorizedAssetAccess(request: Request, kind: string) {
       variant === "public-canonical");
 
   // Mapper preview requests are authenticated admin requests even when they ask
-  // for the optimized public masterplan bytes via variant=public. Resolve this
-  // before explicit-public routing, otherwise a draft project's Super Admin
-  // preview is incorrectly forced through published-only publicProjectId().
+  // for optimized public masterplan bytes. Resolve preview before public routing
+  // so a draft project's authenticated preview never requires published state.
   if (previewRequest && session?.role === "super_admin") {
     const projectId = requested ? await activeProjectId(requested) : null;
     return projectId
@@ -257,6 +256,11 @@ export async function GET(
   }
   if (!object) return new Response("Not found", { status: 404 });
 
+  // Published versioned masterplan/logo responses are immutable by design. The
+  // public-site kill switch is checked above on every origin request, but bytes
+  // already stored in a browser/CDN immutable cache cannot be recalled. Runtime
+  // shells revalidate and gallery bytes are no-store so revocation-sensitive
+  // surfaces still return to origin promptly.
   const versionedRequest = requestUrl.searchParams.has("v");
   const headers = new Headers({
     "content-type": object.httpMetadata?.contentType || "application/octet-stream",

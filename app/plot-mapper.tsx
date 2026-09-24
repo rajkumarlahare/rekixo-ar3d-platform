@@ -1246,6 +1246,12 @@ export default function PlotMapper({
     );
   }
 
+  function announceMapperDataUpdated() {
+    window.dispatchEvent(
+      new CustomEvent("rekixo:mapper-data-updated", { detail: { projectId } }),
+    );
+  }
+
   async function persistMapperSettings(next: Record<string, string>) {
     const response = await fetch("/api/super-mapper", {
       method: "POST",
@@ -2158,6 +2164,7 @@ export default function PlotMapper({
       });
       await apiResult(response);
       await reload();
+      announceMapperDataUpdated();
       setBulkSemanticIds(new Set());
       const roleLabel =
         kind === "front" ? "Front" :
@@ -2261,21 +2268,28 @@ export default function PlotMapper({
     }
   }
 
-  function clearCurrentPoints() {
-    setPoints([]);
-    setManualPhase("select");
-    setEditingId("");
+  function resetGeometryDerivedSideAssignments() {
+    // Side measurements are business/source data and remain untouched. These
+    // values are polygon-edge bindings, so any geometry mutation must make the
+    // operator/re-resolver establish them again instead of reusing stale edges.
     setFrontEdgeIndex("");
     setDepthEdgeIndex("");
     setBackEdgeIndex("");
     setDepth2EdgeIndex("");
     setEdgeSemanticsDraft("");
-    setSideLayout("four");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
     setSemanticChainRole(null);
     setSemanticChainStart(null);
     frontFirstPendingRef.current = false;
+  }
+
+  function clearCurrentPoints() {
+    setPoints([]);
+    setManualPhase("select");
+    setEditingId("");
+    resetGeometryDerivedSideAssignments();
+    setSideLayout("four");
     setToolMode("select");
     try {
       window.localStorage.removeItem(mappingDraftKey(projectId, plotId));
@@ -2299,6 +2313,7 @@ export default function PlotMapper({
 
   function undoPoint() {
     setPoints((current) => current.slice(0, -1));
+    resetGeometryDerivedSideAssignments();
     setManualPhase("select");
     setToolMode("select");
   }
@@ -2319,54 +2334,20 @@ export default function PlotMapper({
       [...inventoryPlots].reverse().find((plot) => plot.id !== plotId && parsePolygon(plot).length >= 3);
     if (!source) return notify("Clone करने के लिए पहले कोई mapped plot चाहिए");
     const polygon = parsePolygon(source);
-    const semantics = parsePlotSideSemantics(source.edgeSemantics, polygon.length);
     const clonedLayout: PlotSideLayout =
-      polygon.length === 3
-        ? "three"
-        : semantics?.layout === "three"
-          ? "three"
-          : "four";
-    const roleEdge = (role: PlotSideRole, fallback: number | null | undefined) => {
-      const semantic = semantics?.roles[role]?.[0];
-      return Number.isInteger(semantic)
-        ? String(semantic)
-        : Number.isInteger(fallback)
-          ? String(fallback)
-          : "";
-    };
+      polygon.length === 3 ? "three" : effectiveSideLayout();
+
+    // Clone geometry only. Measurements currently loaded for the target plot
+    // remain untouched, while source-plot edge bindings must never cross plots.
     setPoints(polygon.map(([x, y]) => [x, y] as MapperPoint));
     setShape(polygon.length === 4 && clonedLayout === "four" ? "quad" : "polygon");
     setSideLayout(clonedLayout);
-    setFrontEdgeIndex(roleEdge("front", source.frontEdgeIndex));
-    setBackEdgeIndex(roleEdge("back", source.backEdgeIndex));
-    setDepthEdgeIndex(roleEdge("depthA", source.depthEdgeIndex));
-    setDepth2EdgeIndex(
-      clonedLayout === "four" ? roleEdge("depthB", source.depth2EdgeIndex) : "",
-    );
-    setEdgeSemanticsDraft(
-      semantics
-        ? JSON.stringify(semantics)
-        : serializePlotSideSemantics(
-            polygon.length,
-            {
-              ...(Number.isInteger(source.frontEdgeIndex) ? { front: [Number(source.frontEdgeIndex)] } : {}),
-              ...(Number.isInteger(source.backEdgeIndex) ? { back: [Number(source.backEdgeIndex)] } : {}),
-              ...(Number.isInteger(source.depthEdgeIndex) ? { depthA: [Number(source.depthEdgeIndex)] } : {}),
-              ...(clonedLayout === "four" && Number.isInteger(source.depth2EdgeIndex)
-                ? { depthB: [Number(source.depth2EdgeIndex)] }
-                : {}),
-            },
-            clonedLayout,
-          ) || "",
-    );
-    setSemanticChainRole(null);
-    setSemanticChainStart(null);
-    frontFirstPendingRef.current = false;
+    resetGeometryDerivedSideAssignments();
     setManualPhase("details");
     setEditingId("");
     setToolMode("select");
     canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    notify(`Plot ${source.id} shape clone हुआ — handles drag करके ${plotId} पर fit करें`);
+    notify(`Plot ${source.id} geometry clone हुआ — ${plotId} की measurements सुरक्षित हैं; Front / Back / Depth side bindings target के हिसाब से select करें`);
   }
 
   function downloadPlotSheetTemplate() {
@@ -2667,6 +2648,7 @@ export default function PlotMapper({
         notify("Project logo save ho gaya — customer site aur Client Admin me sync hoga");
       } else notify("Technical PDF reference save हो गया");
       await reload();
+      announceMapperDataUpdated();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload नहीं हुआ";
       notify(
@@ -3334,6 +3316,7 @@ export default function PlotMapper({
     flushPendingHandleFrame();
     if (draggingPointRef.current !== null) {
       setPoints(pointsRef.current.map(([x, y]) => [x, y] as MapperPoint));
+      resetGeometryDerivedSideAssignments();
     }
     draggingPointRef.current = null;
     if (loupeRef.current) loupeRef.current.style.display = "none";
@@ -3467,17 +3450,18 @@ export default function PlotMapper({
       depth2EdgeValue === null &&
       points.length >= 4
     ) {
-      const frontFirst = shape === "quad" ? frontFirstFourSideEdges(points.length) : null;
+      // Do not fabricate "edge 0 = Front" for cloned or edited geometry.
+      // Fresh front-first tapping already commits semantics through the dedicated
+      // effect; fallback resolution here may only use target-specific metadata.
       const storedDirection = plotFrontDirections[id];
       const resolved =
-        frontFirst ||
-        (storedDirection
+        storedDirection
           ? resolveFourSideEdges(
               points,
               storedDirection,
               normalizeQuarterTurn(settings.publicRotation),
             )
-          : null);
+          : null;
       if (resolved) {
         const parsed = parsePlotSideSemantics(resolved.edgeSemantics, points.length);
         roleEdges = {
@@ -3597,6 +3581,7 @@ export default function PlotMapper({
       const verified = await verifyPlotPersistence(saved);
       setPlots(verified.plots);
       setLastVerifiedId(verified.plot.id);
+      announceMapperDataUpdated();
       try {
         window.localStorage.removeItem(mappingDraftKey(projectId, verified.plot.id));
       } catch {
@@ -3623,20 +3608,24 @@ export default function PlotMapper({
     if (!confirm(`Plot ${plot.id} की saved clickable boundary हटाएँ? Plot details/status सुरक्षित रहेंगे।`)) return;
     setBusy(true);
     try {
-      const cleared: Plot = { ...plot, polygon: "" };
       const response = await fetch("/api/super-mapper", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId, plot: cleared }),
+        body: JSON.stringify({
+          projectId,
+          action: "clear_plot_boundary",
+          plot: { id: plot.id },
+        }),
       });
       const result = await apiResult(response);
-      const saved = (result.plot || cleared) as Plot;
+      const saved = result.plot as Plot;
 
       // Clearing a mapped plot is also a persistent mutation. Do not tell the
       // operator it is gone until a second no-cache read confirms polygon="".
       const verified = await verifyPlotPersistence(saved);
       setPlots(verified.plots);
       setLastVerifiedId(verified.plot.id);
+      announceMapperDataUpdated();
       setPoints([]);
       setEditingId("");
       setManualPhase("select");
@@ -3647,7 +3636,7 @@ export default function PlotMapper({
         // Local draft cleanup is best-effort; server data is already verified.
       }
       loadPlotDetails({ ...verified.plot, polygon: "" }, false);
-      notify(`Plot ${verified.plot.id} boundary SERVER VERIFIED removed ✓; details/status सुरक्षित हैं`);
+      notify(`Plot ${verified.plot.id} boundary SERVER VERIFIED removed ✓; side bindings reset · details/status सुरक्षित हैं`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "Boundary नहीं हटी");
     } finally {
@@ -3692,6 +3681,7 @@ export default function PlotMapper({
       setToolMode("select");
       setLastVerifiedId("");
       setExcludedAutoIds(new Set());
+      announceMapperDataUpdated();
       try {
         for (const plot of plots) {
           window.localStorage.removeItem(mappingDraftKey(projectId, plot.id));
@@ -3777,6 +3767,13 @@ export default function PlotMapper({
     try {
       const payload = pending.map(({ plot, points: polygon }) => ({
         ...plot,
+        // CAD auto-match creates new geometry. Preserve source measurements,
+        // but force geometry-derived side bindings to be resolved for this polygon.
+        frontEdgeIndex: null,
+        backEdgeIndex: null,
+        depthEdgeIndex: null,
+        depth2EdgeIndex: null,
+        edgeSemantics: null,
         polygon: JSON.stringify(
           polygon.map(([x, y]) => [
             Math.max(0, Math.min(1, x)),
@@ -3793,6 +3790,7 @@ export default function PlotMapper({
       const saved = (result.plots || []) as Plot[];
       const byId = new Map(saved.map((plot) => [plot.id, plot]));
       setPlots((current) => current.map((plot) => byId.get(plot.id) || plot));
+      announceMapperDataUpdated();
       notify(`${saved.length} plots एक साथ 2D + 3D clickable publish हुए`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "Auto publish नहीं हुआ");

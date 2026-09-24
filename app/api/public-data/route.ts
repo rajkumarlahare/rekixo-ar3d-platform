@@ -135,6 +135,7 @@ function contactSettingPlaceholders() {
 export async function GET(request: Request) {
   try {
     const db = getDb();
+    const requestUrl = new URL(request.url);
     const previewId = await previewProjectId(request);
     const projectId = previewId || (await publicProjectId(request));
     if (!projectId) {
@@ -188,6 +189,8 @@ export async function GET(request: Request) {
           .first<PublishedSnapshot>()
       : null;
 
+    const structuralOnly =
+      !previewId && requestUrl.searchParams.get("view") === "structure";
     const snapshotReady =
       !previewId &&
       Boolean(snapshot) &&
@@ -200,18 +203,6 @@ export async function GET(request: Request) {
         project.publishVersion,
       );
     }
-
-    const currentPlotPromise = db.select().from(plots).where(
-      and(eq(plots.projectId, projectId), eq(plots.inventoryActive, true)),
-    );
-    const currentEdgePromise = db
-      .select()
-      .from(plotEdgeMeasurements)
-      .where(eq(plotEdgeMeasurements.projectId, projectId));
-    const currentSettingsPromise = db
-      .select()
-      .from(settings)
-      .where(eq(settings.projectId, projectId));
 
     const plotPromise = snapshotReady
       ? env.DB.prepare(
@@ -231,7 +222,9 @@ export async function GET(request: Request) {
           .bind(projectId)
           .all<PublishedPlot>()
           .then((result) => result.results)
-      : currentPlotPromise;
+      : db.select().from(plots).where(
+          and(eq(plots.projectId, projectId), eq(plots.inventoryActive, true)),
+        );
 
     const edgePromise = snapshotReady
       ? env.DB.prepare(
@@ -247,7 +240,10 @@ export async function GET(request: Request) {
           .bind(projectId)
           .all<PublishedEdgeMeasurement>()
           .then((result) => result.results)
-      : currentEdgePromise;
+      : db
+          .select()
+          .from(plotEdgeMeasurements)
+          .where(eq(plotEdgeMeasurements.projectId, projectId));
 
     const settingPromise = snapshotReady
       ? env.DB.prepare(
@@ -256,24 +252,31 @@ export async function GET(request: Request) {
           .bind(projectId)
           .all<{ key: string; value: string }>()
           .then((result) => result.results)
-      : currentSettingsPromise;
+      : db
+          .select()
+          .from(settings)
+          .where(eq(settings.projectId, projectId));
 
-    const liveStatusPromise = snapshotReady
-      ? env.DB.prepare("SELECT id,status FROM plots WHERE project_id=?")
+    const liveStatusPromise = structuralOnly
+      ? Promise.resolve([] as Array<{ id: string; status: string }>)
+      : snapshotReady
+        ? env.DB.prepare("SELECT id,status FROM plots WHERE project_id=?")
           .bind(projectId)
           .all<{ id: string; status: string }>()
           .then((result) => result.results)
-      : Promise.resolve([] as Array<{ id: string; status: string }>);
+        : Promise.resolve([] as Array<{ id: string; status: string }>);
 
-    const liveContactPromise = snapshotReady
-      ? env.DB.prepare(
+    const liveContactPromise = structuralOnly
+      ? Promise.resolve([] as Array<{ key: string; value: string }>)
+      : snapshotReady
+        ? env.DB.prepare(
           `SELECT key,value FROM settings
            WHERE project_id=? AND key IN (${contactSettingPlaceholders()})`,
         )
           .bind(projectId, ...PROJECT_CONTACT_KEYS)
           .all<{ key: string; value: string }>()
           .then((result) => result.results)
-      : Promise.resolve([] as Array<{ key: string; value: string }>);
+        : Promise.resolve([] as Array<{ key: string; value: string }>);
 
     const [
       plotRows,
@@ -289,11 +292,13 @@ export async function GET(request: Request) {
       settingPromise,
       liveStatusPromise,
       liveContactPromise,
-      db
-        .select({ id: gallery.id, caption: gallery.caption, filename: gallery.filename })
-        .from(gallery)
-        .where(eq(gallery.projectId, projectId))
-        .orderBy(desc(gallery.sortOrder)),
+      structuralOnly
+        ? Promise.resolve([] as Array<{ id: string; caption: string; filename: string }>)
+        : db
+            .select({ id: gallery.id, caption: gallery.caption, filename: gallery.filename })
+            .from(gallery)
+            .where(eq(gallery.projectId, projectId))
+            .orderBy(desc(gallery.sortOrder)),
       activeProjectDomain(projectId, "admin"),
     ]);
 
@@ -307,13 +312,15 @@ export async function GET(request: Request) {
     const liveContactSettings = Object.fromEntries(
       liveContactRows.map((item) => [item.key, item.value]),
     );
-    const effectivePublicSettings = withProjectContactFallbacks({
-      ...publicSettings,
-      ...liveContactSettings,
-    });
+    const effectivePublicSettings = structuralOnly
+      ? publicSettings
+      : withProjectContactFallbacks({
+          ...publicSettings,
+          ...liveContactSettings,
+        });
 
     const pricingEnabled = publicSettings.pricingEnabled === "1";
-    const pricingRows = pricingEnabled
+    const pricingRows = pricingEnabled && !structuralOnly
       ? await db
           .select()
           .from(plotPricing)
@@ -410,11 +417,16 @@ export async function GET(request: Request) {
           };
         }),
         settings: effectivePublicSettings,
-        gallery: galleryRows,
+        gallery: structuralOnly ? [] : galleryRows,
       },
       {
         headers: {
-          "cache-control": "no-store",
+          "cache-control":
+            structuralOnly &&
+            snapshotReady &&
+            Number(requestUrl.searchParams.get("pv")) === Number(project.publishVersion || 0)
+              ? "public,max-age=31536000,immutable"
+              : "no-store",
           "x-rekixo-project": projectId,
           "x-rekixo-publish-version": String(project.publishVersion || 0),
           "x-rekixo-publish-snapshot": snapshotReady ? "1" : "0",

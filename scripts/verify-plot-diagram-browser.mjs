@@ -37,10 +37,11 @@ try{
         const bounds=box.getBoundingClientRect();
         const svg=box.querySelector('svg').getBoundingClientRect();
         const cards=[...document.querySelectorAll('.diagram-side')];
-        const rects=cards.map(c=>c.getBoundingClientRect());
+        const visibleCards=cards.filter(c=>c.getClientRects().length>0);
+        const rects=visibleCards.map(c=>c.getBoundingClientRect());
         return {
           overflow:box.scrollWidth>box.clientWidth+1||
-            cards.some(c=>c.scrollWidth>c.clientWidth+1),
+            visibleCards.some(c=>c.scrollWidth>c.clientWidth+1),
           outside:rects.some(r=>r.left<bounds.left-1||r.right>bounds.right+1||
             r.bottom>bounds.bottom+1||r.top<svg.bottom-1),
           overlap:rects.some((a,i)=>rects.slice(i+1).some(b=>
@@ -55,8 +56,11 @@ try{
       assert.equal(result.overflow,false,width+' '+fixture.id+' overflow');
       assert.equal(result.outside,false,width+' '+fixture.id+' clipping');
       assert.equal(result.overlap,false,width+' '+fixture.id+' overlap');
-      assert.equal(result.texts,0);
-      assert.equal(result.edges,['RECT','NARROW'].includes(fixture.id)?4:0);
+      // V11 (2026-09-23) intentionally renders one SVG label plus
+      // one offset segment and two endpoint ticks for each logical side.
+      const semanticFixture=['RECT','NARROW'].includes(fixture.id);
+      assert.equal(result.texts,semanticFixture?4:0);
+      assert.equal(result.edges,semanticFixture?12:0);
       for(const [role,key] of [['front','frontLabel'],['back','backLabel'],
         ['depthA','depthLabel'],['depthB','depth2Label']]){
         if(fixture[key])assert.equal(result.values.find(v=>v[0]===role)?.[1],

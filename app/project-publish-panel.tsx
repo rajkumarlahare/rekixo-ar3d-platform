@@ -73,6 +73,7 @@ export default function ProjectPublishPanel({
     };
     const events = [
       "rekixo:mapper-settings-updated",
+      "rekixo:mapper-data-updated",
       "rekixo:share-profile-updated",
       "rekixo:project-profile-updated",
     ] as const;

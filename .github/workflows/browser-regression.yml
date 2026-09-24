@@ -1,0 +1,86 @@
+name: Browser E2E and Visual Regression
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+
+jobs:
+  browser-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install isolated browser tooling
+        run: npm install --prefix /tmp/rekixo-browser --no-package-lock playwright@1.55.0
+      - name: Install Chromium
+        run: /tmp/rekixo-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Public runtime desktop/mobile E2E
+        run: node scripts/verify-public-runtime-e2e.mjs
+        env:
+          PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
+      - name: Existing diagram visual regression
+        run: node scripts/verify-plot-diagram-browser.mjs
+        env:
+          PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
+      - name: Full Super Admin to customer E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-full-admin-e2e.mjs
+          mv drizzle/0024_mangal_raj_park_measurement_backfill.sql /tmp/0024_mangal_raj_park_measurement_backfill.sql
+          npx wrangler d1 migrations apply tiyansh-production --local --config wrangler.jsonc
+          mv /tmp/0024_mangal_raj_park_measurement_backfill.sql drizzle/0024_mangal_raj_park_measurement_backfill.sql
+          npx wrangler d1 execute tiyansh-production --local --config wrangler.jsonc --file=artifacts/full-admin-e2e/seed.sql
+
+          # The installed local workerd trails the production compatibility date.
+          # Change only this disposable CI checkout; production wrangler.jsonc is untouched.
+          cp wrangler.jsonc /tmp/wrangler.phase11.production.jsonc
+          sed -i 's/"compatibility_date": "2026-09-06"/"compatibility_date": "2026-05-22"/' wrangler.jsonc
+
+          SERVER_PID=""
+          stop_server() {
+            if [ -n "${SERVER_PID}" ]; then
+              # Wrangler spawns workerd as a child process. Kill the whole process
+              # group so a stale child cannot keep the old PANEL_MODE/port alive.
+              kill -TERM -- "-${SERVER_PID}" 2>/dev/null || kill "${SERVER_PID}" 2>/dev/null || true
+              wait "${SERVER_PID}" 2>/dev/null || true
+            fi
+            SERVER_PID=""
+          }
+          trap stop_server EXIT
+
+          setsid npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/super-server.log 2>&1 &
+          SERVER_PID=$!
+          node scripts/wait-http.mjs http://localhost:4173/admin/login
+          E2E_STAGE=admin E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
+          stop_server
+
+          sed -i 's/^PANEL_MODE=super$/PANEL_MODE=client/' .dev.vars
+          setsid npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4174 > artifacts/full-admin-e2e/client-server.log 2>&1 &
+          SERVER_PID=$!
+          node scripts/wait-http.mjs http://localhost:4174/projects/phase-11-e2e
+          E2E_STAGE=customer E2E_BASE_URL=http://localhost:4174 node scripts/verify-admin-customer-e2e.mjs
+          stop_server
+          cp /tmp/wrangler.phase11.production.jsonc wrangler.jsonc
+          trap - EXIT
+        env:
+          PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-regression-screenshots
+          path: artifacts/
+          if-no-files-found: ignore

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getDb } from "@/modules/db";
 import { gallery, plots, settings } from "@/modules/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 import { sameOrigin, validAdminSession } from "@/modules/auth";
 import { isClientEditableSettingKey, pickClientVisibleSettings, validClientPlotStatus } from "@/modules/auth";
 import { writeAudit } from "@/modules/audit";
@@ -21,13 +21,53 @@ export async function GET(request: Request) {
       return Response.json({ error: "Project required" }, { status: 400 });
     }
 
+    const url = new URL(request.url);
+    const section = String(url.searchParams.get("section") || "").trim();
+    if (section === "plots") {
+      const limitRaw = Number(url.searchParams.get("limit") || 100);
+      const offsetRaw = Number(url.searchParams.get("offset") || 0);
+      const limit = Math.max(1, Math.min(200, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 100));
+      const offset = Math.max(0, Math.min(1_000_000, Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0));
+      const q = String(url.searchParams.get("q") || "").trim().slice(0, 80);
+      const pattern = `%${q.replace(/[%_]/g, "")}%`;
+      const where = q
+        ? and(eq(plots.projectId, projectId), like(plots.id, pattern))
+        : eq(plots.projectId, projectId);
+      const [pageRows,totalRow,statusRows] = await Promise.all([
+        db.select().from(plots).where(where).limit(limit).offset(offset),
+        q
+          ? env.DB.prepare("SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND id LIKE ?").bind(projectId, pattern).first<{ total: number }>()
+          : env.DB.prepare("SELECT COUNT(*) AS total FROM plots WHERE project_id=?").bind(projectId).first<{ total: number }>(),
+        env.DB.prepare("SELECT status,COUNT(*) AS total FROM plots WHERE project_id=? GROUP BY status").bind(projectId).all<{ status: string; total: number }>(),
+      ]);
+      const counts = { available: 0, booked: 0, sold: 0 };
+      for (const row of statusRows.results) {
+        const status = row.status === "booked" || row.status === "sold" ? row.status : "available";
+        counts[status] += Number(row.total || 0);
+      }
+      const total = Number(totalRow?.total || 0);
+      return Response.json(
+        {
+          projectId,
+          plots: pageRows,
+          total,
+          counts,
+          nextOffset: offset + pageRows.length,
+          hasMore: offset + pageRows.length < total,
+        },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
+
     const [project, plotRows, settingRows, galleryRows] = await Promise.all([
       env.DB.prepare(
         "SELECT name,public_host AS publicHost,admin_host AS adminHost FROM projects WHERE id=? AND status!='deleted' LIMIT 1",
       )
         .bind(projectId)
         .first<{ name: string; publicHost: string | null; adminHost: string | null }>(),
-      db.select().from(plots).where(eq(plots.projectId, projectId)),
+      section === "meta"
+        ? Promise.resolve([])
+        : db.select().from(plots).where(eq(plots.projectId, projectId)),
       db.select().from(settings).where(eq(settings.projectId, projectId)),
       db
         .select()

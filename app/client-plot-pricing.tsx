@@ -3,13 +3,6 @@
 import { Check, IndianRupee, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type Plot = {
-  id: string;
-  sqft: number;
-  sqm: number;
-  sqyd: number;
-};
-
 type PricingRow = {
   plotId: string;
   pricingType: "rate" | "fixed";
@@ -19,12 +12,24 @@ type PricingRow = {
   currency: string;
 };
 
+type Plot = {
+  id: string;
+  sqft: number;
+  sqm: number;
+  sqyd: number;
+  pricing?: PricingRow | null;
+};
+
 type PricingResponse = {
   enabled?: boolean;
   editable?: boolean;
-  pricing?: PricingRow[];
+  plots?: Plot[];
+  total?: number;
+  pricedCount?: number;
   error?: string;
 };
+
+const PRICING_PAGE_SIZE = 100;
 
 const UNIT_LABELS = {
   sqyd: "Sq. Yards",
@@ -79,64 +84,83 @@ function samePricing(rows: PricingRow[]) {
 }
 
 export default function ClientPlotPricing({
-  plots,
   notify,
 }: {
-  plots: Plot[];
   notify: (message: string) => void;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [editable, setEditable] = useState(false);
-  const [pricing, setPricing] = useState<PricingRow[]>([]);
+  const [plots, setPlots] = useState<Plot[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pricedCount, setPricedCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedPlotData, setSelectedPlotData] = useState<Record<string, Plot>>({});
   const [query, setQuery] = useState("");
   const [pricingType, setPricingType] = useState<"rate" | "fixed">("rate");
   const [unit, setUnit] = useState<"sqyd" | "sqft" | "sqm">("sqyd");
   const [rate, setRate] = useState("");
   const [fixedPrice, setFixedPrice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const pricingByPlot = useMemo(
-    () => new Map(pricing.map((row) => [row.plotId, row])),
-    [pricing],
+  const pageCount = Math.max(1, Math.ceil(total / PRICING_PAGE_SIZE));
+  const selectedPlots = useMemo(
+    () =>
+      selectedIds
+        .map((plotId) => selectedPlotData[plotId])
+        .filter((plot): plot is Plot => Boolean(plot)),
+    [selectedIds, selectedPlotData],
   );
-  const filteredPlots = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return needle
-      ? plots.filter((plot) => plot.id.toLowerCase().includes(needle))
-      : plots;
-  }, [plots, query]);
-  const selectedPlots = useMemo(() => {
-    const selected = new Set(selectedIds);
-    return plots.filter((plot) => selected.has(plot.id));
-  }, [plots, selectedIds]);
 
   useEffect(() => {
-    let active = true;
-    fetch("/api/client/plot-pricing", { cache: "no-store" })
-      .then(jsonResult)
-      .then((data) => {
-        if (!active) return;
-        setEditable(Boolean(data.enabled && data.editable));
-        setPricing(data.pricing || []);
-      })
-      .catch((error) => {
-        if (active) notify(pricingErrorMessage(error, "Pricing load nahi hui"));
-      })
-      .finally(() => {
-        if (active) setLoaded(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, [notify]);
+    setPage(0);
+  }, [query]);
 
-  function applySelection(next: string[]) {
-    const unique = [...new Set(next)];
-    setSelectedIds(unique);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        limit: String(PRICING_PAGE_SIZE),
+        offset: String(page * PRICING_PAGE_SIZE),
+      });
+      if (query.trim()) params.set("q", query.trim());
+
+      fetch(`/api/client/plot-pricing?${params.toString()}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(jsonResult)
+        .then((data) => {
+          setEditable(Boolean(data.enabled && data.editable));
+          setPlots(data.plots || []);
+          setTotal(Number(data.total || 0));
+          setPricedCount(Number(data.pricedCount || 0));
+        })
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          notify(pricingErrorMessage(error, "Pricing load nahi hui"));
+        })
+        .finally(() => setLoaded(true));
+    }, query.trim() ? 220 : 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [notify, page, query, refreshKey]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, Math.max(0, pageCount - 1)));
+  }, [pageCount]);
+
+  function applySelection(nextPlots: Plot[]) {
+    const unique = [...new Map(nextPlots.map((plot) => [plot.id, plot])).values()];
+    setSelectedIds(unique.map((plot) => plot.id));
+    setSelectedPlotData(Object.fromEntries(unique.map((plot) => [plot.id, plot])));
 
     const rows = unique
-      .map((plotId) => pricingByPlot.get(plotId))
+      .map((plot) => plot.pricing)
       .filter((row): row is PricingRow => Boolean(row));
     if (rows.length !== unique.length) return;
 
@@ -148,12 +172,30 @@ export default function ClientPlotPricing({
     setFixedPrice(shared.fixedPrice ? String(shared.fixedPrice) : "");
   }
 
-  function togglePlot(plotId: string) {
-    applySelection(
-      selectedIds.includes(plotId)
-        ? selectedIds.filter((id) => id !== plotId)
-        : [...selectedIds, plotId],
-    );
+  function togglePlot(plot: Plot) {
+    if (selectedIds.includes(plot.id)) {
+      const nextIds = selectedIds.filter((id) => id !== plot.id);
+      const nextData = { ...selectedPlotData };
+      delete nextData[plot.id];
+      setSelectedIds(nextIds);
+      setSelectedPlotData(nextData);
+      return;
+    }
+    const nextIds = [...selectedIds, plot.id];
+    const nextData = { ...selectedPlotData, [plot.id]: plot };
+    setSelectedIds(nextIds);
+    setSelectedPlotData(nextData);
+
+    const rows = nextIds
+      .map((plotId) => nextData[plotId]?.pricing)
+      .filter((row): row is PricingRow => Boolean(row));
+    if (rows.length !== nextIds.length) return;
+    const shared = samePricing(rows);
+    if (!shared) return;
+    setPricingType(shared.pricingType);
+    setUnit(shared.unit);
+    setRate(shared.rate ? String(shared.rate) : "");
+    setFixedPrice(shared.fixedPrice ? String(shared.fixedPrice) : "");
   }
 
   function previewFor(plot: Plot) {
@@ -194,8 +236,8 @@ export default function ClientPlotPricing({
             : {}),
         }),
       });
-      const data = await jsonResult(response);
-      setPricing(data.pricing || []);
+      await jsonResult(response);
+      setRefreshKey((value) => value + 1);
       notify(
         action === "apply"
           ? `${selectedIds.length} plot pricing save ho gayi`
@@ -228,7 +270,7 @@ export default function ClientPlotPricing({
           </small>
         </div>
         <span>
-          <IndianRupee /> {pricing.length} priced
+          <IndianRupee /> {pricedCount} priced
         </span>
       </div>
 
@@ -241,11 +283,8 @@ export default function ClientPlotPricing({
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <button
-          type="button"
-          onClick={() => applySelection(filteredPlots.map((plot) => plot.id))}
-        >
-          Select visible ({filteredPlots.length})
+        <button type="button" onClick={() => applySelection(plots)}>
+          Select page ({plots.length})
         </button>
         <button type="button" onClick={() => applySelection([])}>
           Clear selection
@@ -253,23 +292,18 @@ export default function ClientPlotPricing({
       </div>
 
       <div className="client-pricing-plot-list">
-        {filteredPlots.map((plot) => {
-          const row = pricingByPlot.get(plot.id);
+        {plots.map((plot) => {
+          const row = plot.pricing || null;
           const checked = selectedIds.includes(plot.id);
           return (
-            <label
-              key={plot.id}
-              className={checked ? "selected" : ""}
-            >
+            <label key={plot.id} className={checked ? "selected" : ""}>
               <input
                 type="checkbox"
                 checked={checked}
-                onChange={() => togglePlot(plot.id)}
+                onChange={() => togglePlot(plot)}
               />
               <b>{plot.id}</b>
-              <span>
-                {plot.sqyd.toLocaleString("en-IN")} Sq.Yd
-              </span>
+              <span>{plot.sqyd.toLocaleString("en-IN")} Sq.Yd</span>
               <em>
                 {row
                   ? row.pricingType === "fixed"
@@ -281,6 +315,31 @@ export default function ClientPlotPricing({
           );
         })}
       </div>
+
+      {total > PRICING_PAGE_SIZE ? (
+        <div className="admin-list-pager">
+          <button
+            type="button"
+            disabled={page === 0}
+            onClick={() => setPage((current) => Math.max(0, current - 1))}
+          >
+            Previous
+          </button>
+          <span>
+            Page {page + 1} / {pageCount} · {page * PRICING_PAGE_SIZE + 1}-
+            {Math.min(total, (page + 1) * PRICING_PAGE_SIZE)} of {total}
+          </span>
+          <button
+            type="button"
+            disabled={page + 1 >= pageCount}
+            onClick={() =>
+              setPage((current) => Math.min(pageCount - 1, current + 1))
+            }
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
 
       <div className="client-pricing-form">
         <div className="client-pricing-selected">

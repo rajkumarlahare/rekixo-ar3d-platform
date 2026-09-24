@@ -6,6 +6,7 @@ const PRICING_ENABLED_KEY = "pricingEnabled";
 const CLIENT_PRICING_EDIT_KEY = "clientPricingEditEnabled";
 const PRICING_SOURCE_KEY = "pricingLastEditSource";
 const MAX_SELECTION = 1000;
+const MAX_PAGE_SIZE = 100;
 
 type PricingRow = {
   plotId: string;
@@ -14,6 +15,18 @@ type PricingRow = {
   rate: number | null;
   fixedPrice: number | null;
   currency: string;
+};
+
+type PricingPlotRow = {
+  id: string;
+  sqft: number;
+  sqm: number;
+  sqyd: number;
+  pricingType: "rate" | "fixed" | null;
+  unit: "sqyd" | "sqft" | "sqm" | null;
+  rate: number | null;
+  fixedPrice: number | null;
+  currency: string | null;
 };
 
 const denied = () =>
@@ -31,15 +44,6 @@ async function permission(projectId: string) {
     enabled,
     editable: enabled && values[CLIENT_PRICING_EDIT_KEY] === "1",
   };
-}
-
-async function pricingRows(projectId: string) {
-  const rows = await env.DB.prepare(
-    "SELECT plot_id AS plotId,pricing_type AS pricingType,unit,rate,fixed_price AS fixedPrice,currency FROM plot_pricing WHERE project_id=? ORDER BY plot_id",
-  )
-    .bind(projectId)
-    .all<PricingRow>();
-  return rows.results;
 }
 
 function settingUpsert(projectId: string, key: string, value: string, now: string) {
@@ -66,7 +70,23 @@ function cleanPlotIds(value: unknown) {
   ];
 }
 
-export async function GET() {
+async function existingPlotIds(projectId: string, plotIds: string[]) {
+  const found = new Set<string>();
+  // Keep well below D1/SQLite variable limits and never scan the full inventory.
+  for (let index = 0; index < plotIds.length; index += 80) {
+    const batch = plotIds.slice(index, index + 80);
+    const placeholders = batch.map(() => "?").join(",");
+    const rows = await env.DB.prepare(
+      `SELECT id FROM plots WHERE project_id=? AND id IN (${placeholders})`,
+    )
+      .bind(projectId, ...batch)
+      .all<{ id: string }>();
+    for (const row of rows.results) found.add(row.id);
+  }
+  return found;
+}
+
+export async function GET(request: Request) {
   const session = await validAdminSession();
   if (!session) return denied();
   if (session.role !== "client_admin")
@@ -74,12 +94,70 @@ export async function GET() {
 
   const projectId = session.projectId;
   const access = await permission(projectId);
+  if (!access.enabled || !access.editable) {
+    return Response.json(
+      { enabled: access.enabled, editable: access.editable, plots: [], total: 0, pricedCount: 0 },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  const url = new URL(request.url);
+  const limitRaw = Number(url.searchParams.get("limit") || MAX_PAGE_SIZE);
+  const offsetRaw = Number(url.searchParams.get("offset") || 0);
+  const limit = Math.max(1, Math.min(MAX_PAGE_SIZE, Number.isFinite(limitRaw) ? Math.floor(limitRaw) : MAX_PAGE_SIZE));
+  const offset = Math.max(0, Math.min(1_000_000, Number.isFinite(offsetRaw) ? Math.floor(offsetRaw) : 0));
+  const q = String(url.searchParams.get("q") || "").trim().slice(0, 80);
+  const pattern = `%${q.replace(/[%_]/g, "")}%`;
+  const filterSql = q ? " AND p.id LIKE ?" : "";
+  const rowBindings = q
+    ? [projectId, pattern, limit, offset]
+    : [projectId, limit, offset];
+  const countBindings = q ? [projectId, pattern] : [projectId];
+
+  const [rows, totalRow, pricedRow] = await Promise.all([
+    env.DB.prepare(
+      `SELECT p.id,p.sqft,p.sqm,p.sqyd,
+        pp.pricing_type AS pricingType,pp.unit,pp.rate,
+        pp.fixed_price AS fixedPrice,pp.currency
+       FROM plots p
+       LEFT JOIN plot_pricing pp
+         ON pp.project_id=p.project_id AND pp.plot_id=p.id
+       WHERE p.project_id=?${filterSql}
+       ORDER BY p.id
+       LIMIT ? OFFSET ?`,
+    ).bind(...rowBindings).all<PricingPlotRow>(),
+    env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM plots p WHERE p.project_id=?${filterSql}`,
+    ).bind(...countBindings).first<{ total: number }>(),
+    env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM plot_pricing WHERE project_id=?",
+    ).bind(projectId).first<{ total: number }>(),
+  ]);
 
   return Response.json(
     {
-      enabled: access.enabled,
-      editable: access.editable,
-      pricing: access.editable ? await pricingRows(projectId) : [],
+      enabled: true,
+      editable: true,
+      plots: rows.results.map((row) => ({
+        id: row.id,
+        sqft: row.sqft,
+        sqm: row.sqm,
+        sqyd: row.sqyd,
+        pricing: row.pricingType
+          ? {
+              plotId: row.id,
+              pricingType: row.pricingType,
+              unit: row.unit || "sqyd",
+              rate: row.rate,
+              fixedPrice: row.fixedPrice,
+              currency: row.currency || "INR",
+            } satisfies PricingRow
+          : null,
+      })),
+      total: Number(totalRow?.total || 0),
+      pricedCount: Number(pricedRow?.total || 0),
+      nextOffset: offset + rows.results.length,
+      hasMore: offset + rows.results.length < Number(totalRow?.total || 0),
     },
     { headers: { "cache-control": "no-store" } },
   );
@@ -122,12 +200,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
 
-  const inventory = await env.DB.prepare(
-    "SELECT id FROM plots WHERE project_id=? ORDER BY id",
-  )
-    .bind(projectId)
-    .all<{ id: string }>();
-  const inventoryIds = new Set(inventory.results.map((plot) => plot.id));
+  const inventoryIds = await existingPlotIds(projectId, plotIds);
   const unknown = plotIds.filter((plotId) => !inventoryIds.has(plotId));
   if (unknown.length)
     return Response.json(
@@ -152,12 +225,7 @@ export async function POST(request: Request) {
       sample: plotIds.slice(0, 20),
     });
 
-    return Response.json({
-      ok: true,
-      action,
-      count: plotIds.length,
-      pricing: await pricingRows(projectId),
-    });
+    return Response.json({ ok: true, action, count: plotIds.length });
   }
 
   if (action !== "apply")
@@ -214,10 +282,5 @@ export async function POST(request: Request) {
     currency,
   });
 
-  return Response.json({
-    ok: true,
-    action,
-    count: plotIds.length,
-    pricing: await pricingRows(projectId),
-  });
+  return Response.json({ ok: true, action, count: plotIds.length });
 }

@@ -1,0 +1,211 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import http from "node:http";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+
+const { chromium } = await import(pathToFileURL(process.env.PLOT_PLAYWRIGHT_MODULE).href);
+const root = process.cwd();
+const artifactDir = path.join(root, "artifacts", "public-runtime-e2e");
+fs.mkdirSync(artifactDir, { recursive: true });
+
+const tinyPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=",
+  "base64",
+);
+
+function json(res, value, headers = {}) {
+  res.writeHead(200, { "content-type": "application/json; charset=utf-8", ...headers });
+  res.end(JSON.stringify(value));
+}
+
+let liveStatus = "booked";
+
+const structure = {
+  projectId: "e2e-project",
+  projectName: "Browser Regression Project",
+  slug: "browser-regression-project",
+  preview: false,
+  publishVersion: 1,
+  settings: {
+    projectName: "Browser Regression Project",
+    brandName: "Rekixo",
+    brandShort: "RKP",
+    location: "Test City",
+    address: "Test Address",
+    mapWidth: "1200",
+    mapHeight: "2133",
+    publicRotation: "0",
+    pricingEnabled: "1",
+  },
+  plots: [
+    {
+      id: "P-1",
+      sqft: 1000,
+      sqm: 92.903,
+      sqyd: 111.111,
+      dimensions: "20 ft x 50 ft",
+      road: "30 ft road",
+      front: 20,
+      back: 20,
+      depth: 50,
+      depth2: 50,
+      dimensionUnit: "ft",
+      frontEdgeIndex: 0,
+      depthEdgeIndex: 1,
+      backEdgeIndex: 2,
+      depth2EdgeIndex: 3,
+      edgeSemantics: JSON.stringify({
+        v: 1,
+        layout: "four",
+        roles: { front: [0], depthA: [1], back: [2], depthB: [3] },
+      }),
+      polygon: JSON.stringify([
+        [0.18, 0.2],
+        [0.38, 0.2],
+        [0.38, 0.42],
+        [0.18, 0.42],
+      ]),
+      status: "available",
+      featured: false,
+    },
+  ],
+  gallery: [],
+};
+
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url || "/", "http://127.0.0.1");
+  if (url.pathname === "/api/public-data") {
+    assert.equal(url.searchParams.get("view"), "structure");
+    assert.equal(url.searchParams.get("pv"), "1");
+    return json(res, structure, {
+      "cache-control": "public,max-age=31536000,immutable",
+      "x-rekixo-publish-version": "1",
+    });
+  }
+  if (url.pathname === "/api/public-live") {
+    return json(res, {
+      projectId: "e2e-project",
+      pricingEnabled: true,
+      settings: { phone1: "+911234567890", whatsapp: "+911234567890" },
+      statuses: [{ id: "P-1", status: liveStatus }],
+      pricing: [
+        {
+          plotId: "P-1",
+          pricingType: "fixed",
+          unit: "sqyd",
+          rate: null,
+          fixedPrice: 2500000,
+          currency: "INR",
+        },
+      ],
+    }, { "cache-control": "no-store" });
+  }
+  if (url.pathname === "/api/public-gallery") {
+    return json(res, {
+      projectId: "e2e-project",
+      gallery: [{ id: "g1", caption: "Site View", filename: "site.png" }],
+    });
+  }
+  if (url.pathname === "/api/gallery/g1") {
+    res.writeHead(200, {
+      "content-type": "image/png",
+      "cache-control": "no-store",
+      "content-length": String(tinyPng.length),
+    });
+    return res.end(tinyPng);
+  }
+  if (url.pathname.startsWith("/api/project-asset/")) {
+    res.writeHead(404);
+    return res.end();
+  }
+
+  const relative =
+    url.pathname === "/" ? "public/project/index.html" :
+    url.pathname.startsWith("/project/") ? "public" + url.pathname :
+    null;
+  if (!relative) {
+    res.writeHead(404);
+    return res.end("not found");
+  }
+  const full = path.join(root, relative);
+  if (!full.startsWith(path.join(root, "public")) || !fs.existsSync(full)) {
+    res.writeHead(404);
+    return res.end("not found");
+  }
+  const ext = path.extname(full);
+  const type = ext === ".html" ? "text/html; charset=utf-8" : ext === ".js" ? "text/javascript; charset=utf-8" : "application/octet-stream";
+  res.writeHead(200, { "content-type": type, "cache-control": "no-store" });
+  fs.createReadStream(full).pipe(res);
+});
+
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+const address = server.address();
+const port = typeof address === "object" && address ? address.port : 0;
+const base = `http://127.0.0.1:${port}`;
+
+const browser = await chromium.launch();
+try {
+  for (const target of [
+    { name: "desktop", viewport: { width: 1440, height: 1000 } },
+    { name: "mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+  ]) {
+    liveStatus = "booked";
+    const context = await browser.newContext({
+      viewport: target.viewport,
+      isMobile: Boolean(target.isMobile),
+      hasTouch: Boolean(target.hasTouch),
+    });
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(String(error)));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+
+    await page.goto(
+      `${base}/project/index.html?projectId=e2e-project&pv=1&v=66`,
+      { waitUntil: "networkidle" },
+    );
+
+    await page.waitForSelector('.plot[data-plot-id="P-1"]', { state: "attached" });
+    assert.equal(
+      await page.locator('.plot[data-plot-id="P-1"]').getAttribute("data-status"),
+      "booked",
+      target.name + " should merge compact live status into cached structure",
+    );
+    assert.equal(
+      await page.locator("#countBooked").textContent(),
+      "1",
+      target.name + " booked count",
+    );
+
+    // A customer can keep the site open while an admin changes live status.
+    // Exercise the immediate visibility-refresh path instead of waiting 30s.
+    liveStatus = "sold";
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForFunction(() => {
+      const plot = document.querySelector('.plot[data-plot-id="P-1"]');
+      return plot?.getAttribute("data-status") === "sold";
+    });
+    assert.equal(await page.locator("#countSold").textContent(), "1", target.name + " sold refresh");
+    assert.equal(await page.locator("#countBooked").textContent(), "0", target.name + " booked refresh");
+
+    await page.locator("#galleryBtn").click();
+    await page.waitForSelector(".client-gallery article");
+    assert.equal(await page.locator(".client-gallery article").count(), 1);
+    assert.match(await page.locator(".client-gallery article b").textContent(), /Site View/);
+
+    await page.screenshot({
+      path: path.join(artifactDir, target.name + ".png"),
+      fullPage: true,
+    });
+
+    assert.deepEqual(errors, [], target.name + " browser console/page errors");
+    await context.close();
+  }
+  console.log("PASS public runtime desktop/mobile browser regression");
+} finally {
+  await browser.close();
+  await new Promise((resolve) => server.close(resolve));
+}

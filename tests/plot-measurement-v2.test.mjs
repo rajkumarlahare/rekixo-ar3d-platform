@@ -67,7 +67,7 @@ test("normal manual quad workflow is front-first and direction CSV remains legac
   assert.match(mapper, /frontFirstPendingRef/);
   assert.match(mapper, /pehli tapped boundary = road-facing Front/);
   assert.match(mapper, /Tap 1 \+ Tap 2 road-facing Front boundary/);
-  assert.match(mapper, /frontFirstFourSideEdges\(points\.length\)/);
+  assert.match(mapper, /frontFirstFourSideEdges\(4\)/);
   assert.match(mapper, /resolveFourSideEdges/);
 });
 
@@ -91,6 +91,6 @@ test("runtime cache is bumped so public clients receive measurement v2", () => {
     "app/preview/[projectId]/page.tsx",
     "app/projects/[slug]/page.tsx",
   ]) {
-    assert.match(read(file), /v=65/);
+    assert.match(read(file), /v=66/);
   }
 });

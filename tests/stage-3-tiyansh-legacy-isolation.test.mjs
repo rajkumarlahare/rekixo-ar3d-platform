@@ -74,7 +74,7 @@ test("runtime schema requires explicit tenant IDs for mutable customer data", ()
 test("Client Admin no longer bootstraps Tiyansh data from bundled public files", () => {
   assert.doesNotMatch(admin, /public\/plots\.json/);
   assert.doesNotMatch(admin, /tiyanshDefaults|COMPLETED_PROJECT_ID|isTiyansh/);
-  assert.match(admin, /const basePlots=useMemo<Plot\[\]>\(\(\)=>\[\],\[\]\)/);
+  assert.match(admin, /\[plots,setPlots\]=useState<Plot\[\]>\(\[\]\)/);
   assert.match(admin, /api\/project-asset\/masterplan\?projectId=/);
 });
 
@@ -101,10 +101,10 @@ test("Tiyansh static recovery artifacts are archived outside the live public tre
   assert.ok(!fs.existsSync("public/project/plots-data.js"));
 });
 
-test("all public entry points use runtime v65 and explicit tenant context", () => {
-  assert.match(rootPage, /projectId=\$\{encodeURIComponent\(target\.projectId \|\| ""\)\}&v=65/);
-  assert.match(sharedPage, /projectSlug=.*&v=65/);
-  assert.match(previewPage, /preview=1&v=65/);
+test("all public entry points use runtime v66 and explicit tenant context", () => {
+  assert.match(rootPage, /projectId=\$\{encodeURIComponent\(target\.projectId \|\| ""\)\}&pv=.*&v=66/);
+  assert.match(sharedPage, /projectSlug=.*&pv=.*&v=66/);
+  assert.match(previewPage, /preview=1&v=66/);
 });
 
 test("existing Tiyansh email login compatibility and future mobile login remain intact", () => {

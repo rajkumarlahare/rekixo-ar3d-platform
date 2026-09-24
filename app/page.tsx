@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { env } from "cloudflare:workers";
 import { redirect } from "next/navigation";
 import { panelMode } from "@/modules/auth";
 import { projectHostRole } from "@/modules/public-project";
@@ -69,11 +70,17 @@ export default async function Home() {
       />
     );
 
+  const published = target.projectId
+    ? await env.DB.prepare("SELECT publish_version AS publishVersion FROM projects WHERE id=? LIMIT 1")
+        .bind(target.projectId)
+        .first<{ publishVersion: number }>()
+    : null;
+
   return (
     <main style={{ position: "fixed", inset: 0, background: "#050914" }}>
       <iframe
         title="Client project website"
-        src={`/project/index.html?projectId=${encodeURIComponent(target.projectId || "")}&v=65`}
+        src={`/project/index.html?projectId=${encodeURIComponent(target.projectId || "")}&pv=${encodeURIComponent(String(published?.publishVersion || 0))}&v=66`}
         loading="eager"
         style={{ width: "100%", height: "100%", border: 0, display: "block" }}
       />

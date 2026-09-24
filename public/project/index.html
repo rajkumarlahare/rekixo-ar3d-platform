@@ -969,6 +969,7 @@ const REKIXO_FORWARD=new URLSearchParams();
 if(REKIXO_PROJECT_PARAM)REKIXO_FORWARD.set('projectId',REKIXO_PROJECT_PARAM);
 if(REKIXO_PROJECT_SLUG)REKIXO_FORWARD.set('projectSlug',REKIXO_PROJECT_SLUG);
 if(REKIXO_PARAMS.get('preview')==='1')REKIXO_FORWARD.set('preview','1');
+if(REKIXO_PARAMS.get('pv'))REKIXO_FORWARD.set('pv',REKIXO_PARAMS.get('pv'));
 const REKIXO_PROJECT_QUERY=REKIXO_FORWARD.toString()?'?'+REKIXO_FORWARD.toString():'';
 window.REKIXO_PROJECT_QUERY=REKIXO_PROJECT_QUERY;
 // REKIXO_PUBLIC_BOOT_RESILIENCE_V2
@@ -999,8 +1000,19 @@ async function rekixoFetchPublicData(){
   REKIXO_BOOT_CONTROLLER=controller;
   const timeout=setTimeout(()=>controller.abort(),REKIXO_BOOT_TIMEOUT_MS);
   try{
-    const response=await fetch('/api/public-data'+REKIXO_PROJECT_QUERY,{
-      cache:'no-store',
+    const preview=REKIXO_PARAMS.get('preview')==='1';
+    const structuralParams=new URLSearchParams(REKIXO_FORWARD);
+    if(!preview)structuralParams.set('view','structure');
+    const structuralQuery=structuralParams.toString()?'?'+structuralParams.toString():'';
+    const livePromise=preview
+      ? Promise.resolve(null)
+      : fetch('/api/public-live'+REKIXO_PROJECT_QUERY,{
+          cache:'no-store',
+          signal:controller.signal,
+          headers:{accept:'application/json'},
+        }).catch(()=>null);
+    const response=await fetch('/api/public-data'+structuralQuery,{
+      cache:preview?'no-store':'default',
       signal:controller.signal,
       headers:{accept:'application/json'},
     });
@@ -1017,6 +1029,25 @@ async function rekixoFetchPublicData(){
       const error=new Error('public-data-invalid-json');
       error.status=0;
       throw error;
+    }
+    const liveResponse=await livePromise;
+    if(liveResponse&&liveResponse.ok){
+      try{
+        const live=await liveResponse.json();
+        const statuses=new Map((Array.isArray(live.statuses)?live.statuses:[]).map(row=>[String(row.id),String(row.status||'available')]));
+        const prices=new Map((Array.isArray(live.pricing)?live.pricing:[]).map(row=>[String(row.plotId),row]));
+        data.settings={...(data.settings||{}),...(live.settings||{})};
+        data.plots=(Array.isArray(data.plots)?data.plots:[]).map(plot=>{
+          const price=prices.get(String(plot.id));
+          const next={...plot,status:statuses.get(String(plot.id))||plot.status};
+          if(live.pricingEnabled&&price){
+            next.pricing={type:price.pricingType,unit:price.unit,rate:price.rate,fixedPrice:price.fixedPrice,currency:price.currency};
+          }else{
+            delete next.pricing;
+          }
+          return next;
+        });
+      }catch(_){}
     }
     return data;
   }finally{
@@ -1081,18 +1112,23 @@ async function rekixoStartPublicBoot(){
 
 const rekixoBootRetryButton=document.getElementById('rekixoBootRetry');
 if(rekixoBootRetryButton){
-  rekixoBootRetryButton.addEventListener('click',()=>rekixoStartPublicBoot());
+  rekixoBootRetryButton.addEventListener('click',()=>{
+    window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
+  });
 }
-window.REKIXO_RETRY_PUBLIC_BOOT=()=>rekixoStartPublicBoot();
+window.REKIXO_RETRY_PUBLIC_BOOT=()=>{
+  window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
+  return window.REKIXO_PUBLIC_BOOT_PROMISE;
+};
 window.addEventListener('online',()=>{
   if(
     REKIXO_GENERIC_BOOT&&
     document.documentElement.classList.contains('rekixo-project-error')
   ){
-    rekixoStartPublicBoot();
+    window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   }
 });
-rekixoStartPublicBoot();
+window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
 </script>
 <script>
 (() => {
@@ -1104,6 +1140,8 @@ rekixoStartPublicBoot();
   let CALL_PHONE = '', WHATSAPP_PHONE = '', MAP_URL = '', PROJECT_NAME='Project', PROJECT_LOCATION='', ADMIN_URL='/admin/login';
   const plots = [];
   let ACTIVE_PROJECT_ID='';
+  let REKIXO_LIVE_STATE_ENABLED=true;
+  let REKIXO_LIVE_STATE_TIMER=0;
   const q = s => document.querySelector(s);
 
   // REKIXO_RESPONSIVE_BRAND_SUBTITLE_TICKER_V1_1
@@ -1331,7 +1369,7 @@ rekixoStartPublicBoot();
     amenitiesModal.classList.remove('open');
     amenitiesModal.setAttribute('aria-hidden','true');
   }
-  async function openGallery(){galleryModal.classList.add('open');galleryModal.setAttribute('aria-hidden','false');clientGallery.replaceChildren(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Loading gallery…'}));try{const response=await fetch('/api/public-data'+(window.REKIXO_PROJECT_QUERY||''),{cache:'no-store'});if(!response.ok)throw new Error();const data=await response.json(),items=Array.isArray(data.gallery)?data.gallery:[];clientGallery.replaceChildren();if(!items.length){clientGallery.append(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Gallery me abhi koi image nahi hai.'}));return}items.forEach(item=>{const card=document.createElement('article'),thumb=document.createElement('button'),img=document.createElement('img'),label=document.createElement('b'),caption=item.caption||item.filename||'Project image';thumb.type='button';thumb.className='gallery-thumb';thumb.setAttribute('aria-label','View full size: '+caption);const galleryBaseQuery=window.REKIXO_PROJECT_QUERY||'',galleryJoiner=galleryBaseQuery?'&':'?';img.src='/api/gallery/'+encodeURIComponent(item.id)+galleryBaseQuery+galleryJoiner+'public=1';img.alt=caption;img.loading='lazy';img.decoding='async';label.textContent=caption;thumb.onclick=()=>openFullImage(img.src,caption);thumb.append(img);card.append(thumb,label);clientGallery.append(card)})}catch(_){clientGallery.replaceChildren(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Gallery load nahi hui. Dobara try karein.'}))}}
+  async function openGallery(){galleryModal.classList.add('open');galleryModal.setAttribute('aria-hidden','false');clientGallery.replaceChildren(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Loading gallery…'}));try{const response=await fetch('/api/public-gallery'+(window.REKIXO_PROJECT_QUERY||''),{cache:'no-store'});if(!response.ok)throw new Error();const data=await response.json(),items=Array.isArray(data.gallery)?data.gallery:[];clientGallery.replaceChildren();if(!items.length){clientGallery.append(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Gallery me abhi koi image nahi hai.'}));return}items.forEach(item=>{const card=document.createElement('article'),thumb=document.createElement('button'),img=document.createElement('img'),label=document.createElement('b'),caption=item.caption||item.filename||'Project image';thumb.type='button';thumb.className='gallery-thumb';thumb.setAttribute('aria-label','View full size: '+caption);const galleryBaseQuery=window.REKIXO_PROJECT_QUERY||'',galleryJoiner=galleryBaseQuery?'&':'?';img.src='/api/gallery/'+encodeURIComponent(item.id)+galleryBaseQuery+galleryJoiner+'public=1';img.alt=caption;img.loading='lazy';img.decoding='async';label.textContent=caption;thumb.onclick=()=>openFullImage(img.src,caption);thumb.append(img);card.append(thumb,label);clientGallery.append(card)})}catch(_){clientGallery.replaceChildren(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Gallery load nahi hui. Dobara try karein.'}))}}
   function closeGallery(){galleryModal.classList.remove('open');galleryModal.setAttribute('aria-hidden','true')}
   function norm(v){let s=v.trim().toUpperCase().replace(/\s+/g,'').replace(/_/g,'-');if(plots.some(p=>String(p.id).toUpperCase()===s))return s;const m=s.match(/^([ABC])-?(\d{1,2})$/);return m?m[1]+'-'+String(+m[2]).padStart(2,'0'):s}
   const REKIXO_STATUS_THEME_DEFAULTS={available:'#12C568',booked:'#F5B516',sold:'#F0314C'};
@@ -1347,6 +1385,52 @@ rekixoStartPublicBoot();
   }
   function plotStatus(p){const s=String(p?.status||'available').trim().toLowerCase();return s==='enquire'?'available':(s==='booked'?'booked':(s==='sold'?'sold':'available'))}
   function updateStatusCounts(){const c={available:0,booked:0,sold:0};plots.forEach(p=>c[plotStatus(p)]++);q('#countAvailable').textContent=c.available;q('#countBooked').textContent=c.booked;q('#countSold').textContent=c.sold;q('#countTotal').textContent=plots.length}
+  function applyLiveState(data){
+    if(!data||typeof data!=='object')return;
+    const statusById=new Map((Array.isArray(data.statuses)?data.statuses:[]).map(row=>[String(row.id),String(row.status||'available')]));
+    const priceById=new Map((Array.isArray(data.pricing)?data.pricing:[]).map(row=>[String(row.plotId),row]));
+    plots.forEach(p=>{
+      if(statusById.has(p.id))p.status=statusById.get(p.id);
+      const price=priceById.get(p.id);
+      if(data.pricingEnabled&&price){
+        p.pricing={type:price.pricingType,unit:price.unit,rate:price.rate,fixedPrice:price.fixedPrice,currency:price.currency};
+      }else{
+        delete p.pricing;
+      }
+      const el=svg.querySelector(`[data-plot-id="${p.id}"]`);
+      if(el)el.dataset.status=plotStatus(p);
+    });
+    updateStatusCounts();
+    engine3D?.rebuildLabels?.();
+    engine3D?.request?.();
+    if(selected){
+      const fresh=plots.find(p=>p.id===selected.id);
+      if(fresh){
+        selected=fresh;
+        if(drawer.classList.contains('open')){
+          syncPlotPricing(fresh);
+          const st=plotStatus(fresh),statusEl=q('#plotStatusValue');
+          statusEl.textContent=st.charAt(0).toUpperCase()+st.slice(1);
+          statusEl.className=st;
+          drawer.dataset.status=st;
+        }
+      }
+    }
+  }
+  async function refreshLiveState(){
+    if(!REKIXO_LIVE_STATE_ENABLED||document.hidden)return;
+    try{
+      const response=await fetch('/api/public-live'+(window.REKIXO_PROJECT_QUERY||''),{cache:'no-store',headers:{accept:'application/json'}});
+      if(!response.ok)return;
+      applyLiveState(await response.json());
+    }catch(_){}
+  }
+  function startLiveStatePolling(){
+    if(REKIXO_LIVE_STATE_TIMER)clearInterval(REKIXO_LIVE_STATE_TIMER);
+    if(!REKIXO_LIVE_STATE_ENABLED)return;
+    REKIXO_LIVE_STATE_TIMER=setInterval(()=>void refreshLiveState(),30000);
+  }
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshLiveState()},{passive:true});
   function polyPoints(p){return p.points.map(x=>x.join(',')).join(' ')}
   function projectLabelPoint(points){const shared=globalThis.RekixoProjectGeometry?.labelPoint;if(typeof shared==='function'){const c=shared(points);if(Array.isArray(c)&&c.length>=2&&Number.isFinite(c[0])&&Number.isFinite(c[1]))return c}if(!Array.isArray(points)||!points.length)return[0,0];return[points.reduce((sum,v)=>sum+Number(v[0]||0),0)/points.length,points.reduce((sum,v)=>sum+Number(v[1]||0),0)/points.length]}
 
@@ -1938,7 +2022,9 @@ rekixoStartPublicBoot();
     });
   }
   function applyPublicData(data){
+    window.REKIXO_PUBLIC_DATA=data;
     ACTIVE_PROJECT_ID=String(data.projectId||'').trim();
+    REKIXO_LIVE_STATE_ENABLED=!Boolean(data&&data.preview);
 
     // public-data is the canonical tenant resolver. After it returns, every
     // project asset/gallery request follows THAT exact project id instead of
@@ -2055,6 +2141,7 @@ rekixoStartPublicBoot();
     if(/^#[0-9a-f]{6}$/i.test(s.accentColor||''))document.documentElement.style.setProperty('--gold',s.accentColor);
     document.body.dataset.template=s.template||'plots';
     updateStatusCounts();
+    startLiveStatePolling();
     if(selected){const fresh=plots.find(p=>p.id===selected.id);if(fresh){selected=fresh;if(drawer.classList.contains('open')){q('#sqm').textContent=Number(fresh.sqm).toLocaleString('en-IN')+' Sq.M';q('#sqft').textContent=Number(fresh.sqft).toLocaleString('en-IN')+' Sq.Ft';q('#sqyd').textContent=Number(fresh.sqyd).toLocaleString('en-IN')+' Sq.Yd';q('#dims').textContent=fresh.dimensions||'—';syncFrontDepthFacts(fresh);q('#road').textContent=fresh.road||'—';syncPlotPricing(fresh);const st=plotStatus(fresh),statusEl=q('#plotStatusValue');statusEl.textContent=st.charAt(0).toUpperCase()+st.slice(1);statusEl.className=st}}}
     let revealed=false,shellRevealed=false,masterFailures=0,usingCanonical=false;
     const revealShell=()=>{
@@ -2177,9 +2264,19 @@ rekixoStartPublicBoot();
 
   async function loadProjectSettings(){
     try{
+      let existing=window.REKIXO_PUBLIC_DATA;
+      if(!existing&&window.REKIXO_PUBLIC_BOOT_PROMISE){
+        await window.REKIXO_PUBLIC_BOOT_PROMISE.catch(()=>{});
+        existing=window.REKIXO_PUBLIC_DATA;
+      }
+      if(existing&&typeof existing==="object"){
+        const settings=existing.settings||existing;
+        return { ...FALLBACK, ...settings };
+      }
       const response = await fetch(buildPublicDataUrl(), { headers: { accept: "application/json" }, credentials: "same-origin" });
       if(!response.ok) throw new Error("public-data " + response.status);
       const data = await response.json();
+      window.REKIXO_PUBLIC_DATA=data;
       const settings = data && typeof data === "object" ? (data.settings || data) : {};
       return { ...FALLBACK, ...settings };
     }catch(error){

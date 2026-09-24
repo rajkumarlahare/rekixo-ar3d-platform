@@ -25,8 +25,9 @@ function validToken(value: string) {
 }
 
 function validUploadId(value: string) {
-  // Cloudflare R2 uploadId is opaque. Keep only length/control-character
-  // abuse guards and pass all other provider-issued characters through.
+  // R2 uploadId is an opaque provider-issued value. Do not impose a
+  // character allow-list here: production IDs may contain characters that
+  // are perfectly valid once URL-decoded. Keep only structural abuse guards.
   return (
     value.length >= 1 &&
     value.length <= 1024 &&
