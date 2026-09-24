@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 const read=(path)=>readFile(new URL(path,import.meta.url),"utf8");
@@ -39,6 +40,26 @@ test("login throttling atomically reserves IP and identifier attempts before aut
   const authAt=login.indexOf("const session=await authenticateAdmin");
   assert.ok(reserveAt>=0&&blockedAt>reserveAt&&authAt>blockedAt);
   assert.doesNotMatch(login,/async function recordFailure/);
+});
+
+test("login counter SQL increments atomically and resets only after the window",()=>{
+  const match=login.match(/env\.DB\.prepare\(\s*`([\s\S]*?RETURNING attempts, window_start AS windowStart)`\s*\)/);
+  assert.ok(match?.[1],"atomic login counter SQL not found");
+
+  const db=new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE login_attempts (key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, window_start INTEGER NOT NULL)");
+  const statement=db.prepare(match[1]);
+  const windowMs=15*60*1000;
+  const counts=[];
+  for(let index=0;index<6;index+=1){
+    const row=statement.get("same-key",1_000,windowMs,windowMs);
+    counts.push(Number(row.attempts));
+  }
+  assert.deepEqual(counts,[1,2,3,4,5,6]);
+
+  const reset=statement.get("same-key",1_000+windowMs,windowMs,windowMs);
+  assert.equal(Number(reset.attempts),1);
+  assert.equal(Number(reset.windowStart),1_000+windowMs);
 });
 
 test("anonymous platform health is minimized while owner diagnostics remain available",()=>{
