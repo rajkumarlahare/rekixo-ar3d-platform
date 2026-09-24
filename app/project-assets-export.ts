@@ -652,9 +652,18 @@ export async function buildProjectAssetExport(
 
   const mapperPrefix = `projects/${projectId}/mapper/`;
   const originalToken = String(values.masterplanOriginalObjectToken || "");
-  const originalKey = /^[a-zA-Z0-9_-]{12,80}$/.test(originalToken)
-    ? `${mapperPrefix}masterplanOriginal/${originalToken}`
-    : `${mapperPrefix}masterplanOriginal`;
+  const stableOriginalKey = `${mapperPrefix}masterplanOriginal`;
+  let originalKey = stableOriginalKey;
+  if (/^[a-zA-Z0-9_-]{12,80}$/.test(originalToken)) {
+    const versionedOriginalKey = `${mapperPrefix}masterplanOriginal/${originalToken}`;
+    if (await env.BUCKET.head(versionedOriginalKey)) {
+      originalKey = versionedOriginalKey;
+    } else {
+      warnings.push(
+        "Versioned masterplan original pointer is missing; export will try the legacy stable original key.",
+      );
+    }
+  }
 
   const mapperAssets = [
     {
