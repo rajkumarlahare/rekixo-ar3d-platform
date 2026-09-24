@@ -102,7 +102,7 @@ test("Tiyansh static recovery artifacts are archived outside the live public tre
 });
 
 test("all public entry points use runtime v66 and explicit tenant context", () => {
-  assert.match(rootPage, /projectId=\$\{encodeURIComponent\(target\.projectId \|\| ""\)\}&v=66/);
+  assert.match(rootPage, /projectId=\$\{encodeURIComponent\(target\.projectId \|\| ""\)\}&pv=.*&v=66/);
   assert.match(sharedPage, /projectSlug=.*&pv=.*&v=66/);
   assert.match(previewPage, /preview=1&v=66/);
 });
