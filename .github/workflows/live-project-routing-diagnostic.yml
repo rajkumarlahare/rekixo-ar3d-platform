@@ -1,0 +1,65 @@
+name: Live Project Routing Diagnostic
+
+on:
+  push:
+    branches: [diag/live-project-404-20260924]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check live routes and project responses
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/live-routing
+          check_url() {
+            label="$1"; url="$2"
+            echo "===== $label ====="
+            curl -sS -L --max-redirs 5 -D "artifacts/live-routing/$label.headers" -o "artifacts/live-routing/$label.body" -w 'final_url=%{url_effective}\nstatus=%{http_code}\ncontent_type=%{content_type}\nremote_ip=%{remote_ip}\n' "$url" || true
+            echo "--- headers ---"
+            sed -n '1,35p' "artifacts/live-routing/$label.headers" || true
+            echo "--- markers ---"
+            grep -Eio 'Vision Builders|Page Not Found|The Prime Square|rekixo|projectSlug=[^"& ]+|404[^<]{0,60}' "artifacts/live-routing/$label.body" | head -30 || true
+          }
+          check_url shared_tiyansh "https://ar3dstudio.in/projects/tiyansh-prime-square"
+          check_url shared_tj "https://ar3dstudio.in/projects/tj-lands-43f339"
+          check_url worker_tiyansh "https://rekixo-client-sites.ai-8f3.workers.dev/projects/tiyansh-prime-square"
+          check_url worker_tj "https://rekixo-client-sites.ai-8f3.workers.dev/projects/tj-lands-43f339"
+          check_url data_tiyansh "https://ar3dstudio.in/api/public-data?projectSlug=tiyansh-prime-square"
+          check_url data_tj "https://ar3dstudio.in/api/public-data?projectSlug=tj-lands-43f339"
+      - name: Check remote D1 project state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute tiyansh-production --remote --command "SELECT id,name,slug,status,public_status,publish_version,published_at FROM projects WHERE slug IN ('tiyansh-prime-square','tj-lands-43f339') OR public_status='published' ORDER BY slug;" | tee artifacts/live-routing/d1-projects.txt
+      - name: Check Cloudflare Worker routes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          zone_json=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/zones?name=ar3dstudio.in")
+          echo "$zone_json" > artifacts/live-routing/zone.json
+          zone_id=$(node -e 'const fs=require("fs");const x=JSON.parse(fs.readFileSync("artifacts/live-routing/zone.json","utf8"));process.stdout.write(x.result?.[0]?.id||"")')
+          if [ -z "$zone_id" ]; then echo "No zone id"; exit 1; fi
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/zones/$zone_id/workers/routes" | tee artifacts/live-routing/worker-routes.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-project-routing-diagnostic
+          path: artifacts/live-routing/
+          if-no-files-found: error
