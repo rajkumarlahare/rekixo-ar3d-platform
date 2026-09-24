@@ -780,9 +780,10 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
 
 /* Long measurements belong below the polygon. */
 .diagram.has-semantic-sides > svg{height:auto;aspect-ratio:300/150}
-.diagram-legend{display:none!important}
-.diagram-legend[hidden]{display:none}
+.diagram-legend{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.diagram-legend[hidden]{display:none!important}
 .diagram-side{min-width:0;padding:10px;border:1px solid #33435c;border-radius:10px;background:#0b1629}
+@media(max-width:360px){.diagram-legend{grid-template-columns:1fr}}
 .diagram-side-heading{display:flex;align-items:center;gap:7px;min-width:0;color:#dbe7fa;font-size:12px;font-weight:700}
 .diagram-side-swatch{width:24px;height:4px;flex:0 0 24px}
 .diagram-side-value{display:block;margin-top:5px;color:#f1f5fb;font-size:13px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
