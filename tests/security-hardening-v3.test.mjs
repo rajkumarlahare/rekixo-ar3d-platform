@@ -29,6 +29,11 @@ test("login throttling is bounded by IP and identifier with indexed cleanup",()=
   assert.match(login,/DELETE FROM login_attempts WHERE window_start < \?/);
   assert.match(migration,/idx_login_attempts_window_start/);
   assert.match(login,/retry-after/);
+
+  const blockedAt=login.indexOf("if(blocked(ipRow,now,IP_MAX)||blocked(identifierRow,now,IDENTIFIER_MAX))");
+  const authAt=login.indexOf("const session=await authenticateAdmin");
+  const identifierWriteAt=login.indexOf("recordFailure(identifierKey,identifierRow,now)");
+  assert.ok(blockedAt>=0&&authAt>blockedAt&&identifierWriteAt>authAt);
 });
 
 test("anonymous platform health is minimized while owner diagnostics remain available",()=>{
