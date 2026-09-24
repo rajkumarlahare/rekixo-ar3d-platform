@@ -278,7 +278,7 @@ export async function POST(request: Request) {
         },
       }),
     ]);
-    const shareImage = `/api/project-asset/shareCard?projectId=${encodeURIComponent(projectId)}&public=1&v=${encodeURIComponent(version)}`;
+    const shareImage = `/api/project-asset/shareCard?projectId=${encodeURIComponent(projectId)}&v=${encodeURIComponent(version)}`;
     await Promise.all([
       writeSetting(projectId, "shareVersion", version, now),
       writeSetting(projectId, "shareImage", shareImage, now),
