@@ -27,6 +27,16 @@ test("live business state is compact and no-store",()=>{
   assert.match(html,/setInterval\(\(\)=>void refreshLiveState\(\),30000\)/);
 });
 
+test("contact and share enhancer reuses the canonical boot payload",()=>{
+  assert.match(html,/window\.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot\(\)/);
+  assert.match(html,/window\.REKIXO_PUBLIC_DATA=data/);
+  const start=html.indexOf("async function loadProjectSettings()");
+  const end=html.indexOf("function upsertMeta",start);
+  const block=html.slice(start,end);
+  assert.match(block,/let existing=window\.REKIXO_PUBLIC_DATA/);
+  assert.match(block,/await window\.REKIXO_PUBLIC_BOOT_PROMISE\.catch/);
+});
+
 test("gallery metadata no longer refetches full project JSON",()=>{
   assert.match(galleryRoute,/gallery:items/);
   assert.match(html,/fetch\('\/api\/public-gallery'/);
