@@ -82,7 +82,7 @@ export async function GET(
       "content-type": item.contentType,
       "cache-control":
         mode === "public"
-          ? "public, max-age=31536000, immutable"
+          ? "public, max-age=300, must-revalidate"
           : "private, no-store",
       "x-content-type-options": "nosniff",
     });
