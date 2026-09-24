@@ -234,13 +234,13 @@ export function capturePublishedSnapshotStatements(
         project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,
         dimension_unit,front_edge_index,depth_edge_index,back_edge_index,
         depth2_edge_index,front_label,depth_label,back_label,depth2_label,
-        side_dimensions,edge_semantics,polygon,status,featured
+        side_dimensions,edge_semantics,polygon,status,featured,updated_at
       )
       SELECT
         project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,
         dimension_unit,front_edge_index,depth_edge_index,back_edge_index,
         depth2_edge_index,front_label,depth_label,back_label,depth2_label,
-        side_dimensions,edge_semantics,polygon,status,featured
+        side_dimensions,edge_semantics,polygon,status,featured,updated_at
       FROM plots WHERE project_id=?`,
     ).bind(projectId),
     env.DB.prepare(

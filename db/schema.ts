@@ -81,7 +81,8 @@ export const publishedPlots = sqliteTable("published_plots", {
   edgeSemantics:text("edge_semantics"),
   polygon:text("polygon").notNull().default(""),
   status:text("status").notNull().default("available"),
-  featured:integer("featured",{mode:"boolean"}).notNull().default(false)
+  featured:integer("featured",{mode:"boolean"}).notNull().default(false),
+  updatedAt:text("updated_at")
 },table=>({pk:primaryKey({columns:[table.projectId,table.id]})}));
 
 export const publishedPlotEdgeMeasurements = sqliteTable("published_plot_edge_measurements", {
