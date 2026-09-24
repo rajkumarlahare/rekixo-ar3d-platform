@@ -49,3 +49,55 @@ test("UI reports semantic reset after verified server mutation", () => {
   assert.match(mapper, /verifyPlotPersistence\(saved\)/);
   assert.match(mapper, /verifyAllBoundariesCleared\(\)/);
 });
+
+test("redraw and handle edits reset geometry-derived side assignments locally", () => {
+  const redrawStart = mapper.indexOf('function beginBoundaryShape');
+  const redrawEnd = mapper.indexOf('function beginFourCornerBoundary', redrawStart);
+  const redraw = mapper.slice(redrawStart, redrawEnd);
+  assert.match(redraw, /setFrontEdgeIndex\(""\)/);
+  assert.match(redraw, /setBackEdgeIndex\(""\)/);
+  assert.match(redraw, /setDepthEdgeIndex\(""\)/);
+  assert.match(redraw, /setDepth2EdgeIndex\(""\)/);
+  assert.match(redraw, /setEdgeSemanticsDraft\(""\)/);
+
+  const dragStart = mapper.indexOf('function endHandle');
+  const dragEnd = mapper.indexOf('async function verifyPlotPersistence', dragStart);
+  const drag = mapper.slice(dragStart, dragEnd);
+  assert.match(drag, /resetGeometryDerivedSideAssignments\(\)/);
+});
+
+test("clone copies geometry only and never imports source plot side bindings", () => {
+  const start = mapper.indexOf('function clonePreviousShape');
+  const end = mapper.indexOf('function downloadPlotSheetTemplate', start);
+  const block = mapper.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /setPoints\(polygon\.map/);
+  assert.match(block, /resetGeometryDerivedSideAssignments\(\)/);
+  assert.doesNotMatch(block, /source\.frontEdgeIndex/);
+  assert.doesNotMatch(block, /source\.backEdgeIndex/);
+  assert.doesNotMatch(block, /source\.depthEdgeIndex/);
+  assert.doesNotMatch(block, /source\.depth2EdgeIndex/);
+  assert.doesNotMatch(block, /source\.edgeSemantics/);
+});
+
+test("confirm does not recreate edge-zero Front after clone or geometry edit", () => {
+  const start = mapper.indexOf('async function confirmPlot');
+  const end = mapper.indexOf('async function remove', start);
+  const block = mapper.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.doesNotMatch(block, /frontFirstFourSideEdges/);
+  assert.match(block, /plotFrontDirections\[id\]/);
+  assert.match(block, /Front\/Depth save karne se pehle road-facing Front edge\/chain select karein/);
+});
+
+test("CAD auto-matched geometry also drops geometry-derived bindings", () => {
+  const start = mapper.indexOf('async function publishAutoMatches');
+  const end = mapper.indexOf('const currentPlot', start);
+  const block = mapper.slice(start, end);
+  assert.match(block, /frontEdgeIndex: null/);
+  assert.match(block, /backEdgeIndex: null/);
+  assert.match(block, /depthEdgeIndex: null/);
+  assert.match(block, /depth2EdgeIndex: null/);
+  assert.match(block, /edgeSemantics: null/);
+});
+
