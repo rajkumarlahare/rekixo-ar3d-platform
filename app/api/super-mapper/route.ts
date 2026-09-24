@@ -60,6 +60,129 @@ async function projectExists(projectId: string) {
   );
 }
 
+type PlotInventoryDiff = {
+  existingActiveCount: number;
+  incomingCount: number;
+  retainedCount: number;
+  addedIds: string[];
+  restoredIds: string[];
+  missingIds: string[];
+  missingMappedIds: string[];
+  missingNonAvailableIds: string[];
+  missingPricedIds: string[];
+  confirmationRequired: boolean;
+  confirmationToken: string;
+};
+
+async function inventoryConfirmationToken(
+  projectId: string,
+  incomingIds: string[],
+  existingRows: Array<{ id: string; inventoryActive: number | boolean }>,
+) {
+  const state = JSON.stringify({
+    projectId,
+    incoming: [...incomingIds].sort(),
+    active: existingRows
+      .filter((row) => Boolean(row.inventoryActive))
+      .map((row) => row.id)
+      .sort(),
+    inactive: existingRows
+      .filter((row) => !Boolean(row.inventoryActive))
+      .map((row) => row.id)
+      .sort(),
+  });
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(state),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+async function plotInventoryDiff(
+  projectId: string,
+  incomingIds: string[],
+): Promise<PlotInventoryDiff> {
+  const result = await env.DB.prepare(
+    `SELECT
+       p.id,
+       p.inventory_active AS inventoryActive,
+       p.status,
+       p.polygon,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM plot_pricing pr
+         WHERE pr.project_id=p.project_id AND pr.plot_id=p.id
+       ) THEN 1 ELSE 0 END AS priced
+     FROM plots p
+     WHERE p.project_id=?
+     ORDER BY p.id`,
+  )
+    .bind(projectId)
+    .all<{
+      id: string;
+      inventoryActive: number | boolean;
+      status: string;
+      polygon: string | null;
+      priced: number;
+    }>();
+
+  const rows = result.results;
+  const incoming = new Set(incomingIds);
+  const allById = new Map(rows.map((row) => [row.id, row]));
+  const activeRows = rows.filter((row) => Boolean(row.inventoryActive));
+  const missingRows = activeRows.filter((row) => !incoming.has(row.id));
+  const addedIds = incomingIds.filter((id) => !allById.has(id));
+  const restoredIds = incomingIds.filter((id) => {
+    const row = allById.get(id);
+    return Boolean(row && !Boolean(row.inventoryActive));
+  });
+  const retainedCount = incomingIds.length - addedIds.length - restoredIds.length;
+  const confirmationToken = missingRows.length
+    ? await inventoryConfirmationToken(projectId, incomingIds, rows)
+    : "";
+
+  return {
+    existingActiveCount: activeRows.length,
+    incomingCount: incomingIds.length,
+    retainedCount,
+    addedIds,
+    restoredIds,
+    missingIds: missingRows.map((row) => row.id),
+    missingMappedIds: missingRows
+      .filter((row) => String(row.polygon || "").trim())
+      .map((row) => row.id),
+    missingNonAvailableIds: missingRows
+      .filter((row) => row.status !== "available")
+      .map((row) => row.id),
+    missingPricedIds: missingRows
+      .filter((row) => Boolean(row.priced))
+      .map((row) => row.id),
+    confirmationRequired: missingRows.length > 0,
+    confirmationToken,
+  };
+}
+
+async function setPlotInventoryActive(
+  projectId: string,
+  ids: string[],
+  active: boolean,
+  now: string,
+) {
+  for (let index = 0; index < ids.length; index += 80) {
+    const chunk = ids.slice(index, index + 80);
+    if (!chunk.length) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    await env.DB.prepare(
+      `UPDATE plots
+       SET inventory_active=?,updated_at=?
+       WHERE project_id=? AND id IN (${placeholders})`,
+    )
+      .bind(active ? 1 : 0, now, projectId, ...chunk)
+      .run();
+  }
+}
+
 function validPolygon(value: string) {
   try {
     const points = JSON.parse(value);
