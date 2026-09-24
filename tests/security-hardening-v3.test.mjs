@@ -3,12 +3,13 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const read=(path)=>readFile(new URL(path,import.meta.url),"utf8");
-const [auth,login,health,logout,pkg,migration]=await Promise.all([
+const [auth,login,health,logout,pkg,lock,migration]=await Promise.all([
   read("../app/admin-auth.ts"),
   read("../app/api/admin/login/route.ts"),
   read("../app/api/platform-health/route.ts"),
   read("../app/api/admin/logout/route.ts"),
   read("../package.json"),
+  read("../package-lock.json"),
   read("../drizzle/0030_rekixo_auth_hardening.sql"),
 ]);
 
@@ -47,3 +48,17 @@ test("dependency baseline is patched and vinext upgrade is controlled on branch"
   assert.equal(data.devDependencies.vinext,"1.0.0-beta.10");
   assert.equal(data.overrides["image-size"],"2.0.4");
 });
+
+test("dependency lockfile resolves the exact controlled security baseline",()=>{
+  const data=JSON.parse(lock);
+  const packages=data.packages||{};
+  assert.equal(packages["node_modules/next"]?.version,"16.3.6");
+  assert.equal(packages["node_modules/react"]?.version,"19.2.8");
+  assert.equal(packages["node_modules/react-dom"]?.version,"19.2.8");
+  assert.equal(packages["node_modules/react-server-dom-webpack"]?.version,"19.2.8");
+  assert.equal(packages["node_modules/@vitejs/plugin-rsc"]?.version,"0.5.35");
+  assert.equal(packages["node_modules/vinext"]?.version,"1.0.0-beta.10");
+  const imageSize=packages["node_modules/image-size"]?.version;
+  if(imageSize!==undefined)assert.equal(imageSize,"2.0.4");
+});
+
