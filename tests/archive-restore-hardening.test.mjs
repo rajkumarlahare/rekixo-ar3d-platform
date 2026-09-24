@@ -11,9 +11,9 @@ const [migration,users]=await Promise.all([
 test("future archives preserve exact access state before disabling it",()=>{
   assert.match(migration,/project_archive_access_snapshot/);
   assert.match(users,/archiveAccessSnapshotStatements/);
-  assert.match(users,/entity_type,'admin'/);
-  assert.match(users,/entity_type,'membership'/);
-  assert.match(users,/entity_type,'domain'/);
+  assert.match(users,/SELECT project_id,'admin',id,status/);
+  assert.match(users,/SELECT project_id,'membership',user_id,status/);
+  assert.match(users,/SELECT project_id,'domain',host,status/);
   const snapshot=users.indexOf("...archiveAccessSnapshotStatements");
   const disable=users.indexOf("UPDATE projects SET status='deleted'",snapshot);
   assert.ok(snapshot>=0&&disable>snapshot);
