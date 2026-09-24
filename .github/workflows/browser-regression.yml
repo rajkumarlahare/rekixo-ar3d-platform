@@ -41,9 +41,9 @@ jobs:
           set -euo pipefail
           node scripts/prepare-full-admin-e2e.mjs
           mv drizzle/0024_mangal_raj_park_measurement_backfill.sql /tmp/0024_mangal_raj_park_measurement_backfill.sql
-          npx wrangler d1 migrations apply site-creator-d1 --local --config wrangler.e2e.jsonc
+          npx wrangler d1 migrations apply tiyansh-production --local --config wrangler.jsonc
           mv /tmp/0024_mangal_raj_park_measurement_backfill.sql drizzle/0024_mangal_raj_park_measurement_backfill.sql
-          npx wrangler d1 execute site-creator-d1 --local --config wrangler.e2e.jsonc --file=artifacts/full-admin-e2e/seed.sql
+          npx wrangler d1 execute tiyansh-production --local --config wrangler.jsonc --file=artifacts/full-admin-e2e/seed.sql
 
           # The installed local workerd trails the production compatibility date.
           # Change only this disposable CI checkout; production wrangler.jsonc is untouched.
@@ -60,14 +60,14 @@ jobs:
           }
           trap stop_server EXIT
 
-          REKIXO_E2E_LOCAL=1 npm run dev -- --host 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/super-server.log 2>&1 &
+          npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/super-server.log 2>&1 &
           SERVER_PID=$!
           node scripts/wait-http.mjs http://localhost:4173/admin/login
           E2E_STAGE=admin E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
           stop_server
 
           sed -i 's/^PANEL_MODE=super$/PANEL_MODE=client/' .dev.vars
-          REKIXO_E2E_LOCAL=1 npm run dev -- --host 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/client-server.log 2>&1 &
+          npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/client-server.log 2>&1 &
           SERVER_PID=$!
           node scripts/wait-http.mjs http://localhost:4173/projects/phase-11-e2e
           E2E_STAGE=customer E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
