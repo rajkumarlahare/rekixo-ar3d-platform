@@ -539,7 +539,7 @@ export default function ClientAdminManager({
   async function restoreProject(project: ArchivedProject) {
     if (
       !confirm(
-        `${project.name} restore karein? Domains aur admin access safety ke liye disabled rahenge.`,
+        `${project.name} restore karein? Naye archives me saved domains/admin access state restore hoga aur purane sessions revoke honge. Legacy archive me access safety ke liye disabled rahega.`,
       )
     )
       return;
@@ -555,7 +555,7 @@ export default function ClientAdminManager({
       setArchivedProjects((current) =>
         current.filter((item) => item.id !== project.id),
       );
-      notify("Project restored; admin access dobara enable karein");
+      notify(data.accessRestored?"Project aur saved access state restore hua; purane sessions revoked hain":"Project restored; legacy access disabled hai — admin/domain manually enable karein");
       window.location.reload();
     } catch (error) {
       notify(error instanceof Error ? error.message : "Project restore nahi hua");
