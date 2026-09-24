@@ -175,11 +175,17 @@ export default async function SharedProjectPage({
     );
   }
 
+  const published = await env.DB.prepare(
+    "SELECT publish_version AS publishVersion FROM projects WHERE id=? LIMIT 1",
+  )
+    .bind(project.id)
+    .first<{ publishVersion: number }>();
+
   return (
     <main style={{ position: "fixed", inset: 0, background: "#050914" }}>
       <iframe
         title={`${project.name} website`}
-        src={`/__rekixo/project/index.html?projectSlug=${encodeURIComponent(project.slug)}&v=65`}
+        src={`/__rekixo/project/index.html?projectSlug=${encodeURIComponent(project.slug)}&pv=${encodeURIComponent(String(published?.publishVersion || 0))}&v=66`}
         loading="eager"
         style={{ width: "100%", height: "100%", border: 0, display: "block" }}
       />
