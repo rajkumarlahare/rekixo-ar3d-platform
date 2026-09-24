@@ -52,14 +52,19 @@ test("public gallery works even when another client session cookie is present", 
   );
 });
 
-test("customer runtime explicitly marks gallery and share-card requests public", () => {
+test("customer runtime explicitly marks gallery image requests public", () => {
   assert.match(
     publicHtml,
     /galleryJoiner\+'public=1'/,
   );
+  // Super Admin share-card preview deliberately keeps its admin-scoped URL.
   assert.match(
     shareRoute,
-    /shareCard\?projectId=\$\{encodeURIComponent\(projectId\)\}&public=1&v=/,
+    /shareCard\?projectId=\$\{encodeURIComponent\(projectId\)\}&v=/,
+  );
+  assert.doesNotMatch(
+    shareRoute,
+    /shareCard\?projectId=\$\{encodeURIComponent\(projectId\)\}&public=1/,
   );
 });
 
