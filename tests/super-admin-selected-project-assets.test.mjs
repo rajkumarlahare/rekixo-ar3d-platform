@@ -18,20 +18,36 @@ test("Super Admin session is platform-scoped while mapper selects an explicit pr
   );
 });
 
-test("super admin asset requests require the explicit selected project", () => {
+test("super admin private asset requests still require the explicit selected project", () => {
   assert.match(assets, /if \(session\?\.role === "super_admin"\)/);
-  assert.match(assets, /return requested \? activeProjectId\(requested\) : null/);
+  assert.match(assets, /requested \? await activeProjectId\(requested\) : null/);
   assert.doesNotMatch(assets, /requested \|\| session\.projectId/);
   assert.match(assets, /headers\.set\("x-rekixo-project", projectId\)/);
+  assert.match(assets, /headers\.set\("x-rekixo-access-mode", mode\)/);
 });
 
-test("client admin explicit foreign project is rejected", () => {
-  assert.match(assets, /if \(requested && requested !== session\.projectId\) return null/);
-  assert.match(gallery, /if \(requested && requested !== session\.projectId\) return null/);
+test("client admin foreign private project remains rejected after public fallback check", () => {
+  assert.match(
+    assets,
+    /publicId[\s\S]*publicId !== session\.projectId[\s\S]*mode: "public"/,
+  );
+  assert.match(
+    assets,
+    /if \(requested && requested !== session\.projectId\) return null/,
+  );
+  assert.match(
+    gallery,
+    /publicId[\s\S]*publicId !== session\.projectId[\s\S]*mode: "public"/,
+  );
+  assert.match(
+    gallery,
+    /if \(requested && requested !== session\.projectId\) return null/,
+  );
 });
 
-test("gallery follows the same explicit Super Admin project rule", () => {
+test("gallery keeps explicit Super Admin selection for private/admin reads", () => {
   assert.match(gallery, /if \(session\?\.role === "super_admin"\)/);
-  assert.match(gallery, /return requested \? activeProjectId\(requested\) : null/);
+  assert.match(gallery, /requested \? await activeProjectId\(requested\) : null/);
   assert.doesNotMatch(gallery, /requested \|\| session\.projectId/);
+  assert.match(gallery, /"x-rekixo-access-mode", mode/);
 });

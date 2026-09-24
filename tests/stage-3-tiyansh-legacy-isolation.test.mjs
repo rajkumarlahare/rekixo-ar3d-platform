@@ -58,8 +58,8 @@ test("legacy Tiyansh host role is resolved from the active project state", () =>
 test("Super Admin has a platform scope instead of an implicit Tiyansh tenant", () => {
   assert.match(auth, /projectId:PLATFORM_ADMIN_SCOPE_ID/);
   assert.doesNotMatch(auth, /role:"super_admin",projectId:"tiyansh-prime-square"/);
-  assert.match(assets, /return requested \? activeProjectId\(requested\) : null/);
-  assert.match(gallery, /return requested \? activeProjectId\(requested\) : null/);
+  assert.match(assets, /requested \? await activeProjectId\(requested\) : null/);
+  assert.match(gallery, /requested \? await activeProjectId\(requested\) : null/);
   assert.match(data, /session\.role === "super_admin" \? String\(requested \|\| ""\)\.trim\(\) : session\.projectId/);
   assert.match(data, /Use project-specific Super Admin tools/);
 });

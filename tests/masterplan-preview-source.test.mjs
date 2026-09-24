@@ -29,10 +29,10 @@ test("authenticated preview never caches stale masterplan response", () => {
     route,
     /const previewRequest = requestUrl\.searchParams\.get\("preview"\) === "1"/,
   );
-  assert.match(route, /const authorizedPreview = previewRequest && Boolean\(session\)/);
+  assert.match(route, /const authorizedPreview = previewRequest && mode === "admin"/);
   assert.match(
     route,
-    /authorizedPreview \|\| \(session && !publicVariant\)[\s\S]*\? "no-store"/,
+    /mode === "admin"[\s\S]*\? "no-store"/,
   );
   assert.match(route, /x-rekixo-masterplan-source/);
 });
