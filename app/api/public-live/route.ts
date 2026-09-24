@@ -11,13 +11,15 @@ export async function GET(request:Request){
   if(!(await publicSiteEnabled(projectId)))return publicSiteUnavailableResponse();
 
   const contactPlaceholders=PROJECT_CONTACT_KEYS.map(()=>"?").join(",");
-  const [statusResult,pricingSetting,pricingResult,contactResult]=await Promise.all([
+  const [statusResult,pricingSetting,contactResult]=await Promise.all([
     env.DB.prepare("SELECT id,status FROM plots WHERE project_id=?").bind(projectId).all<StatusRow>(),
     env.DB.prepare("SELECT value FROM settings WHERE project_id=? AND key='pricingEnabled' LIMIT 1").bind(projectId).first<{value:string}>(),
-    env.DB.prepare("SELECT plot_id AS plotId,pricing_type AS pricingType,unit,rate,fixed_price AS fixedPrice,currency FROM plot_pricing WHERE project_id=? ORDER BY plot_id").bind(projectId).all<PricingRow>(),
     env.DB.prepare(`SELECT key,value FROM settings WHERE project_id=? AND key IN (${contactPlaceholders})`).bind(projectId,...PROJECT_CONTACT_KEYS).all<{key:string;value:string}>(),
   ]);
   const pricingEnabled=pricingSetting?.value==="1";
+  const pricingResult=pricingEnabled
+    ? await env.DB.prepare("SELECT plot_id AS plotId,pricing_type AS pricingType,unit,rate,fixed_price AS fixedPrice,currency FROM plot_pricing WHERE project_id=? ORDER BY plot_id").bind(projectId).all<PricingRow>()
+    : {results:[] as PricingRow[]};
   const settings=withProjectContactFallbacks(Object.fromEntries(contactResult.results.map(row=>[row.key,row.value])));
   return Response.json(
     {
