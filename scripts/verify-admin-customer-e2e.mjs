@@ -97,7 +97,7 @@ async function adminJourney(browser) {
   await page.getByRole("button", { name: "Toggle mapping focus/fullscreen" }).click();
   await page.waitForFunction(() => Boolean(document.fullscreenElement));
   await page.screenshot({ path: path.join(artifactDir, "admin-desktop-focus.png") });
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Toggle mapping focus/fullscreen" }).click();
   await page.waitForFunction(() => !document.fullscreenElement);
 
   await page.locator("button.mapper-focus-confirm").click();
