@@ -81,7 +81,8 @@ test("public drawer keeps edge evidence but labels each logical multi-segment si
   assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL/);
   assert.match(html, /function semanticRoleDiagramGeometry/);
   assert.match(html, /for\(const segment of geometry\.segments\)/);
-  assert.match(html, /text\.textContent=title\+\(value\?' · '\+value:''\)/);
+  assert.match(html, /measurement\.textContent=value\|\|'—'/);
+  assert.doesNotMatch(html, /text\.textContent=title\+\(value\?' · '\+value:''\)/);
   assert.doesNotMatch(html, /plotEdgeMeasurementValue\(p,role,edge\)\|\|value/);
 });
 
