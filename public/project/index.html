@@ -969,6 +969,7 @@ const REKIXO_FORWARD=new URLSearchParams();
 if(REKIXO_PROJECT_PARAM)REKIXO_FORWARD.set('projectId',REKIXO_PROJECT_PARAM);
 if(REKIXO_PROJECT_SLUG)REKIXO_FORWARD.set('projectSlug',REKIXO_PROJECT_SLUG);
 if(REKIXO_PARAMS.get('preview')==='1')REKIXO_FORWARD.set('preview','1');
+if(REKIXO_PARAMS.get('pv'))REKIXO_FORWARD.set('pv',REKIXO_PARAMS.get('pv'));
 const REKIXO_PROJECT_QUERY=REKIXO_FORWARD.toString()?'?'+REKIXO_FORWARD.toString():'';
 window.REKIXO_PROJECT_QUERY=REKIXO_PROJECT_QUERY;
 // REKIXO_PUBLIC_BOOT_RESILIENCE_V2
@@ -999,8 +1000,19 @@ async function rekixoFetchPublicData(){
   REKIXO_BOOT_CONTROLLER=controller;
   const timeout=setTimeout(()=>controller.abort(),REKIXO_BOOT_TIMEOUT_MS);
   try{
-    const response=await fetch('/api/public-data'+REKIXO_PROJECT_QUERY,{
-      cache:'no-store',
+    const preview=REKIXO_PARAMS.get('preview')==='1';
+    const structuralParams=new URLSearchParams(REKIXO_FORWARD);
+    if(!preview)structuralParams.set('view','structure');
+    const structuralQuery=structuralParams.toString()?'?'+structuralParams.toString():'';
+    const livePromise=preview
+      ? Promise.resolve(null)
+      : fetch('/api/public-live'+REKIXO_PROJECT_QUERY,{
+          cache:'no-store',
+          signal:controller.signal,
+          headers:{accept:'application/json'},
+        }).catch(()=>null);
+    const response=await fetch('/api/public-data'+structuralQuery,{
+      cache:preview?'no-store':'default',
       signal:controller.signal,
       headers:{accept:'application/json'},
     });
@@ -1017,6 +1029,25 @@ async function rekixoFetchPublicData(){
       const error=new Error('public-data-invalid-json');
       error.status=0;
       throw error;
+    }
+    const liveResponse=await livePromise;
+    if(liveResponse&&liveResponse.ok){
+      try{
+        const live=await liveResponse.json();
+        const statuses=new Map((Array.isArray(live.statuses)?live.statuses:[]).map(row=>[String(row.id),String(row.status||'available')]));
+        const prices=new Map((Array.isArray(live.pricing)?live.pricing:[]).map(row=>[String(row.plotId),row]));
+        data.settings={...(data.settings||{}),...(live.settings||{})};
+        data.plots=(Array.isArray(data.plots)?data.plots:[]).map(plot=>{
+          const price=prices.get(String(plot.id));
+          const next={...plot,status:statuses.get(String(plot.id))||plot.status};
+          if(live.pricingEnabled&&price){
+            next.pricing={type:price.pricingType,unit:price.unit,rate:price.rate,fixedPrice:price.fixedPrice,currency:price.currency};
+          }else{
+            delete next.pricing;
+          }
+          return next;
+        });
+      }catch(_){}
     }
     return data;
   }finally{
