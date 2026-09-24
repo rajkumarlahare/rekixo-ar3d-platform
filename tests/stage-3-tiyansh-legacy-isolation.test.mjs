@@ -74,7 +74,7 @@ test("runtime schema requires explicit tenant IDs for mutable customer data", ()
 test("Client Admin no longer bootstraps Tiyansh data from bundled public files", () => {
   assert.doesNotMatch(admin, /public\/plots\.json/);
   assert.doesNotMatch(admin, /tiyanshDefaults|COMPLETED_PROJECT_ID|isTiyansh/);
-  assert.match(admin, /const basePlots=useMemo<Plot\[\]>\(\(\)=>\[\],\[\]\)/);
+  assert.match(admin, /\[plots,setPlots\]=useState<Plot\[\]>\(\[\]\)/);
   assert.match(admin, /api\/project-asset\/masterplan\?projectId=/);
 });
 
