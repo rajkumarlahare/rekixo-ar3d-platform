@@ -4,6 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import {
   isPrefixedFrameworkAssetPath,
   isSharedAssetPath,
+  sharedPublicRuntimeAssetPath,
   rewriteAssetReferences,
   shouldRewriteAssetBody,
   stripSharedAssetPath,
@@ -97,6 +98,35 @@ async function fetchAssetCandidate(request: Request, env: Env) {
   }
 }
 
+function publicRuntimeAssetUsable(response: Response, pathname: string) {
+  if (response.status === 404) return false;
+  const type = (response.headers.get("content-type") || "").toLowerCase();
+  const lower = pathname.toLowerCase();
+  if (lower.endsWith(".html")) return type.includes("text/html");
+  if (lower.endsWith(".js") || lower.endsWith(".mjs")) return type.includes("javascript");
+  return true;
+}
+
+async function fetchPrefixedPublicRuntimeAsset(request: Request, env: Env) {
+  const externalUrl = new URL(request.url);
+  const assetPath = sharedPublicRuntimeAssetPath(externalUrl.pathname);
+  if (!assetPath) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+
+  // Serve the standalone customer runtime directly from the static asset
+  // binding. Never pass /__rekixo/project/ through Vinext canonical routing:
+  // its /project redirect would escape the isolated namespace and fall through
+  // to the boss/Vercel origin on the shared domain.
+  const assetUrl = new URL(request.url);
+  assetUrl.pathname = assetPath;
+  const response = await fetchAssetCandidate(
+    new Request(assetUrl.toString(), request),
+    env,
+  );
+  if (response && publicRuntimeAssetUsable(response, assetPath)) return response;
+  return null;
+}
+
 async function fetchPrefixedFrameworkAsset(request: Request, env: Env) {
   const url = new URL(request.url);
   if (!isPrefixedFrameworkAssetPath(url.pathname)) return null;
@@ -128,6 +158,8 @@ function isSensitiveClientPath(pathname: string) {
 }
 
 function canonicalRuntimePath(pathname: string) {
+  const sharedRuntimeAsset = sharedPublicRuntimeAssetPath(pathname);
+  if (sharedRuntimeAsset) return sharedRuntimeAsset;
   return pathname.startsWith("/__rekixo/")
     ? pathname.slice("/__rekixo".length)
     : pathname;
@@ -227,18 +259,24 @@ const worker = {
     const externalUrl = new URL(request.url);
     const sharedPlatform = isSharedPlatformRequest(externalUrl, env);
     const isolatedAssetRequest = isSharedAssetPath(externalUrl.pathname);
-    const directPrefixedAsset = isolatedAssetRequest
+    const directPublicRuntimeAsset = isolatedAssetRequest
+      ? await fetchPrefixedPublicRuntimeAsset(request, env)
+      : null;
+    const directPrefixedAsset = isolatedAssetRequest && !directPublicRuntimeAsset
       ? await fetchPrefixedFrameworkAsset(request, env)
       : null;
 
-    const internalRequest = isolatedAssetRequest && !directPrefixedAsset
-      ? stripSharedAssetPrefix(request)
-      : request;
+    const internalRequest =
+      isolatedAssetRequest && !directPublicRuntimeAsset && !directPrefixedAsset
+        ? stripSharedAssetPrefix(request)
+        : request;
     const internalUrl = new URL(internalRequest.url);
 
     let response: Response;
 
-    if (directPrefixedAsset) {
+    if (directPublicRuntimeAsset) {
+      response = directPublicRuntimeAsset;
+    } else if (directPrefixedAsset) {
       response = directPrefixedAsset;
     } else if (internalUrl.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
