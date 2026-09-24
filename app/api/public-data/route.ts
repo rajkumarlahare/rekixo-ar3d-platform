@@ -6,7 +6,7 @@ import {
   plots,
   settings,
 } from "@/modules/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getAdminSession } from "@/modules/auth";
 import {
@@ -200,7 +200,10 @@ export async function GET(request: Request) {
       );
     }
 
-    const currentPlotPromise = db.select().from(plots).where(eq(plots.projectId, projectId));
+    const currentPlotPromise = db
+      .select()
+      .from(plots)
+      .where(and(eq(plots.projectId, projectId), eq(plots.inventoryActive, true)));
     const currentEdgePromise = db
       .select()
       .from(plotEdgeMeasurements)
