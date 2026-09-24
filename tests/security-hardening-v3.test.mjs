@@ -61,4 +61,3 @@ test("dependency lockfile resolves the exact controlled security baseline",()=>{
   const imageSize=packages["node_modules/image-size"]?.version;
   if(imageSize!==undefined)assert.equal(imageSize,"2.0.4");
 });
-
