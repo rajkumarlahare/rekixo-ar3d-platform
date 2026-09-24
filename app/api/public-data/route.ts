@@ -89,6 +89,7 @@ type PublishedPlot = {
   polygon: string;
   status: string;
   featured: number | boolean;
+  updatedAt: string | null;
   notes?: string;
 };
 
@@ -236,7 +237,7 @@ export async function GET(request: Request) {
              front_label AS frontLabel,depth_label AS depthLabel,
              back_label AS backLabel,depth2_label AS depth2Label,
              side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,
-             polygon,status,featured
+             polygon,status,featured,updated_at AS updatedAt
            FROM published_plots
            WHERE project_id=?
            ORDER BY id`,
@@ -362,7 +363,7 @@ export async function GET(request: Request) {
         length: item.length,
         unit: item.unit,
         rawLabel: item.rawLabel,
-        roadFrontage: item.roadFrontage,
+        roadFrontage: Boolean(item.roadFrontage),
         roadAccess: item.roadAccess,
       });
       edgeMeasurementsByPlot.set(item.plotId, list);
@@ -398,13 +399,14 @@ export async function GET(request: Request) {
               length: item.length,
               unit: item.unit,
               rawLabel: item.rawLabel,
-              roadFrontage: item.roadFrontage,
+              roadFrontage: Boolean(item.roadFrontage),
               roadAccess: item.roadAccess,
             }),
           );
           const price = pricingEnabled ? pricingByPlot.get(plot.id) : null;
           return {
             ...publicPlot,
+            featured: Boolean(publicPlot.featured),
             status: liveStatusByPlot.get(plot.id) || publicPlot.status,
             ...(edgeMeasurements.length ? { edgeMeasurements } : {}),
             ...(price
