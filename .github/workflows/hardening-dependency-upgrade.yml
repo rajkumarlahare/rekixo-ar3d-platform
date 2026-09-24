@@ -3,9 +3,6 @@ name: Resolve Consolidated Hardening Dependency Lock
 on:
   push:
     branches: [hardening/consolidated-phases-5-12-20260924]
-    paths:
-      - package.json
-      - .github/workflows/hardening-dependency-upgrade.yml
   workflow_dispatch:
 
 permissions:
