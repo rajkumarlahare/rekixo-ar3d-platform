@@ -6,6 +6,8 @@ import {
   publicSiteUnavailableResponse,
 } from "@/modules/public-site-access";
 
+const LEGACY_PROJECT = "tiyansh-prime-square";
+
 type RouteParams = Promise<{ slug: string; version: string }>;
 
 function validVersion(value: string) {
@@ -22,11 +24,24 @@ async function shareAsset(slug: string, version: string) {
   }
 
   const snapshot = await env.DB.prepare(
-    "SELECT 1 AS ok FROM project_public_snapshots WHERE project_id=? LIMIT 1",
+    `SELECT
+       s.publish_version AS publishVersion,
+       p.publish_version AS currentPublishVersion
+     FROM projects p
+     LEFT JOIN project_public_snapshots s ON s.project_id=p.id
+     WHERE p.id=?
+     LIMIT 1`,
   )
     .bind(project.id)
-    .first<{ ok: number }>();
-  const rows = snapshot
+    .first<{ publishVersion: number | null; currentPublishVersion: number }>();
+  const snapshotReady =
+    snapshot?.publishVersion != null &&
+    Number(snapshot.publishVersion) === Number(snapshot.currentPublishVersion);
+  if (!snapshotReady && project.id !== LEGACY_PROJECT) {
+    return { object: null, disabled: true };
+  }
+
+  const rows = snapshotReady
     ? await env.DB.prepare(
         "SELECT key,value FROM published_settings WHERE project_id=? AND key IN ('shareImage','shareVersion')",
       )
