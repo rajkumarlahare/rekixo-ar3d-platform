@@ -1,0 +1,29 @@
+import { env } from "cloudflare:workers";
+import { publicProjectId } from "@/modules/projects";
+import { publicSiteEnabled, publicSiteUnavailableResponse } from "@/modules/public-site-access";
+
+type StatusRow={id:string;status:string};
+type PricingRow={plotId:string;pricingType:string;unit:string;rate:number|null;fixedPrice:number|null;currency:string};
+
+export async function GET(request:Request){
+  const projectId=await publicProjectId(request);
+  if(!projectId)return Response.json({error:"Published project nahi mila"},{status:404,headers:{"cache-control":"no-store"}});
+  if(!(await publicSiteEnabled(projectId)))return publicSiteUnavailableResponse();
+
+  const [statusResult,pricingSetting,pricingResult]=await Promise.all([
+    env.DB.prepare("SELECT id,status FROM plots WHERE project_id=?").bind(projectId).all<StatusRow>(),
+    env.DB.prepare("SELECT value FROM settings WHERE project_id=? AND key='pricingEnabled' LIMIT 1").bind(projectId).first<{value:string}>(),
+    env.DB.prepare("SELECT plot_id AS plotId,pricing_type AS pricingType,unit,rate,fixed_price AS fixedPrice,currency FROM plot_pricing WHERE project_id=? ORDER BY plot_id").bind(projectId).all<PricingRow>(),
+  ]);
+  const pricingEnabled=pricingSetting?.value==="1";
+  return Response.json(
+    {
+      projectId,
+      statuses:statusResult.results,
+      pricingEnabled,
+      pricing:pricingEnabled?pricingResult.results:[],
+      fetchedAt:new Date().toISOString(),
+    },
+    {headers:{"cache-control":"no-store","x-rekixo-live-state":"1"}},
+  );
+}
