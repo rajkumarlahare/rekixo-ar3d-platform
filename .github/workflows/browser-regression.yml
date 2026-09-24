@@ -1,0 +1,46 @@
+name: Browser E2E and Visual Regression
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [hardening/phases-5-12-20260924]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install isolated browser tooling
+        run: npm install --prefix /tmp/rekixo-browser --no-package-lock playwright@1.55.0
+      - name: Install Chromium
+        run: /tmp/rekixo-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Public runtime desktop/mobile E2E
+        run: node scripts/verify-public-runtime-e2e.mjs
+        env:
+          PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
+      - name: Existing diagram visual regression
+        run: node scripts/verify-plot-diagram-browser.mjs
+        env:
+          PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-regression-screenshots
+          path: artifacts/
+          if-no-files-found: ignore
