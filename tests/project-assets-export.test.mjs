@@ -17,6 +17,8 @@ test("Super Admin exposes an explicit Project Assets workspace", async () => {
   assert.match(manager, /Download Full Project ZIP/);
   assert.match(manager, /includeLinkedGeoLab/);
   assert.match(manager, /\/api\/admin\/project-assets\/download/);
+  assert.match(manager, /for \(const item of manifest\?\.missing \|\| \[\]\)/);
+  assert.match(manager, /if \(!groups\.has\(item\.section\)\) groups\.set\(item\.section, \[\]\)/);
 });
 
 test("project asset APIs are Super Admin only and require explicit project selection", async () => {

@@ -160,10 +160,16 @@ export default function ProjectAssetsManager({
       list.push(file);
       groups.set(file.section, list);
     }
-    return Array.from(groups.entries()).sort(
-      ([left], [right]) =>
-        Object.keys(sectionLabels).indexOf(left) - Object.keys(sectionLabels).indexOf(right),
-    );
+    for (const item of manifest?.missing || []) {
+      if (!groups.has(item.section)) groups.set(item.section, []);
+    }
+    const order = Object.keys(sectionLabels);
+    return Array.from(groups.entries()).sort(([left], [right]) => {
+      const leftIndex = order.indexOf(left);
+      const rightIndex = order.indexOf(right);
+      return (leftIndex < 0 ? order.length : leftIndex) -
+        (rightIndex < 0 ? order.length : rightIndex);
+    });
   }, [manifest]);
 
   const missingBySection = useMemo(() => {
