@@ -204,18 +204,6 @@ export async function GET(request: Request) {
       );
     }
 
-    const currentPlotPromise = db.select().from(plots).where(
-      and(eq(plots.projectId, projectId), eq(plots.inventoryActive, true)),
-    );
-    const currentEdgePromise = db
-      .select()
-      .from(plotEdgeMeasurements)
-      .where(eq(plotEdgeMeasurements.projectId, projectId));
-    const currentSettingsPromise = db
-      .select()
-      .from(settings)
-      .where(eq(settings.projectId, projectId));
-
     const plotPromise = snapshotReady
       ? env.DB.prepare(
           `SELECT
@@ -234,7 +222,9 @@ export async function GET(request: Request) {
           .bind(projectId)
           .all<PublishedPlot>()
           .then((result) => result.results)
-      : currentPlotPromise;
+      : db.select().from(plots).where(
+          and(eq(plots.projectId, projectId), eq(plots.inventoryActive, true)),
+        );
 
     const edgePromise = snapshotReady
       ? env.DB.prepare(
@@ -250,7 +240,10 @@ export async function GET(request: Request) {
           .bind(projectId)
           .all<PublishedEdgeMeasurement>()
           .then((result) => result.results)
-      : currentEdgePromise;
+      : db
+          .select()
+          .from(plotEdgeMeasurements)
+          .where(eq(plotEdgeMeasurements.projectId, projectId));
 
     const settingPromise = snapshotReady
       ? env.DB.prepare(
@@ -259,7 +252,10 @@ export async function GET(request: Request) {
           .bind(projectId)
           .all<{ key: string; value: string }>()
           .then((result) => result.results)
-      : currentSettingsPromise;
+      : db
+          .select()
+          .from(settings)
+          .where(eq(settings.projectId, projectId));
 
     const liveStatusPromise = structuralOnly
       ? Promise.resolve([] as Array<{ id: string; status: string }>)
