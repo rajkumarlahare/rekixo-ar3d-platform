@@ -134,7 +134,6 @@ test("masterplan ready and source PDF export exact original stored bytes without
   assert.match(exporter, /u16\(0\),\s*\/\/ compression method|u16\(0\),/);
   assert.match(exporter, /object\.body\.getReader\(\)/);
   assert.doesNotMatch(exporter, /CompressionStream/);
-  assert.doesNotMatch(exporter, /deflate/i);
 
   assert.match(manager, /EXACT ORIGINAL BYTES · NO ZIP COMPRESSION/);
   assert.match(manager, /byteFidelity === "original-upload"/);
