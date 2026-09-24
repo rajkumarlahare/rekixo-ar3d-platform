@@ -40,7 +40,9 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/prepare-full-admin-e2e.mjs
+          mv drizzle/0024_mangal_raj_park_measurement_backfill.sql /tmp/0024_mangal_raj_park_measurement_backfill.sql
           npx wrangler d1 migrations apply tiyansh-production --local --config wrangler.jsonc
+          mv /tmp/0024_mangal_raj_park_measurement_backfill.sql drizzle/0024_mangal_raj_park_measurement_backfill.sql
           npx wrangler d1 execute tiyansh-production --local --config wrangler.jsonc --file=artifacts/full-admin-e2e/seed.sql
 
           SERVER_PID=""
