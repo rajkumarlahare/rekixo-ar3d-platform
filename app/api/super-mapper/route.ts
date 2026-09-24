@@ -1533,7 +1533,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as {
     projectId?: string;
-    action?: "clear_all_polygons";
+    action?: "clear_all_polygons" | "clear_plot_boundary";
     confirmation?: string;
     plot?: Record<string, unknown>;
     plots?: Record<string, unknown>[];
@@ -1544,6 +1544,70 @@ export async function POST(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   if (projectId === COMPLETED_PROJECT_ID)
     return Response.json({ error: "Completed Tiyansh mapper locked है" }, { status: 409 });
+
+  if (body.action === "clear_plot_boundary") {
+    const plotId = String(body.plot?.id || "").trim();
+    if (!plotId) {
+      return Response.json({ error: "Plot ID missing hai" }, { status: 400 });
+    }
+
+    const existing = await env.DB.prepare(
+      "SELECT id,polygon FROM plots WHERE project_id=? AND id=? AND inventory_active=1 LIMIT 1",
+    )
+      .bind(projectId, plotId)
+      .first<{ id: string; polygon: string }>();
+    if (!existing) {
+      return Response.json({ error: "Plot nahi mila" }, { status: 404 });
+    }
+
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE plots
+         SET polygon='',
+             front_edge_index=NULL,
+             back_edge_index=NULL,
+             depth_edge_index=NULL,
+             depth2_edge_index=NULL,
+             edge_semantics=NULL,
+             updated_at=?
+         WHERE project_id=? AND id=? AND inventory_active=1`,
+      ).bind(now, projectId, plotId),
+      env.DB.prepare(
+        `UPDATE plot_edge_measurements
+         SET edge_index=NULL,point_count=NULL,updated_at=?
+         WHERE project_id=? AND plot_id=?`,
+      ).bind(now, projectId, plotId),
+      env.DB.prepare(
+        "INSERT INTO audit_logs (id,actor_id,actor_email,action,project_id,target_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)",
+      ).bind(
+        crypto.randomUUID(),
+        actor.id,
+        actor.email,
+        "mapper.boundary_removed",
+        projectId,
+        plotId,
+        JSON.stringify({ semanticBindingsReset: true }),
+        now,
+      ),
+    ]);
+
+    const cleared = await env.DB.prepare(
+      `SELECT
+         project_id AS projectId,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,
+         dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,
+         depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,
+         depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,
+         depth_label AS depthLabel,back_label AS backLabel,depth2_label AS depth2Label,
+         side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,
+         polygon,status,notes,featured,inventory_active AS inventoryActive,updated_at AS updatedAt
+       FROM plots WHERE project_id=? AND id=? LIMIT 1`,
+    )
+      .bind(projectId, plotId)
+      .first();
+
+    return Response.json({ ok: true, plot: cleared });
+  }
 
   if (body.action === "clear_all_polygons") {
     if (body.confirmation !== `CLEAR ${projectId}`) {
@@ -1560,8 +1624,23 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare(
-        "UPDATE plots SET polygon='',updated_at=? WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
+        `UPDATE plots
+         SET polygon='',
+             front_edge_index=NULL,
+             back_edge_index=NULL,
+             depth_edge_index=NULL,
+             depth2_edge_index=NULL,
+             edge_semantics=NULL,
+             updated_at=?
+         WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''`,
       ).bind(now, projectId),
+      env.DB.prepare(
+        `UPDATE plot_edge_measurements
+         SET edge_index=NULL,point_count=NULL,updated_at=?
+         WHERE project_id=? AND plot_id IN (
+           SELECT id FROM plots WHERE project_id=? AND inventory_active=1
+         )`,
+      ).bind(now, projectId, projectId),
       env.DB.prepare(
         "INSERT INTO audit_logs (id,actor_id,actor_email,action,project_id,target_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)",
       ).bind(
