@@ -15,18 +15,43 @@ async function activeProjectId(projectId: string) {
   return row?.id || null;
 }
 
-async function galleryProjectId(request: Request) {
+type GalleryAccess = {
+  projectId: string;
+  mode: "admin" | "public";
+};
+
+async function galleryAccess(request: Request): Promise<GalleryAccess | null> {
   const session = await getAdminSession();
-  const requested = new URL(request.url).searchParams.get("projectId");
+  const url = new URL(request.url);
+  const requested = url.searchParams.get("projectId");
+  const explicitPublic = url.searchParams.get("public") === "1";
+
+  // Resolve published public identity independently from any admin cookie.
+  const publicId = await publicProjectId(request);
+
+  if (explicitPublic) {
+    return publicId ? { projectId: publicId, mode: "public" } : null;
+  }
 
   if (session?.role === "super_admin") {
-    return requested ? activeProjectId(requested) : null;
+    const projectId = requested ? await activeProjectId(requested) : null;
+    return projectId ? { projectId, mode: "admin" } : null;
   }
+
   if (session?.role === "client_admin") {
+    if (
+      publicId &&
+      publicId !== session.projectId &&
+      (!requested || requested === publicId)
+    ) {
+      return { projectId: publicId, mode: "public" };
+    }
     if (requested && requested !== session.projectId) return null;
-    return activeProjectId(session.projectId);
+    const projectId = await activeProjectId(session.projectId);
+    return projectId ? { projectId, mode: "admin" } : null;
   }
-  return publicProjectId(request);
+
+  return publicId ? { projectId: publicId, mode: "public" } : null;
 }
 
 export async function GET(
@@ -35,8 +60,9 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const projectId = await galleryProjectId(request);
-    if (!projectId) return new Response("Not found", { status: 404 });
+    const access = await galleryAccess(request);
+    if (!access) return new Response("Not found", { status: 404 });
+    const { projectId, mode } = access;
     const [item] = await getDb()
       .select()
       .from(gallery)
@@ -47,9 +73,14 @@ export async function GET(
     if (!object) return new Response("Not found", { status: 404 });
     const headers = new Headers({
       "content-type": item.contentType,
-      "cache-control": "public, max-age=31536000, immutable",
+      "cache-control":
+        mode === "public"
+          ? "public, max-age=31536000, immutable"
+          : "private, no-store",
       "x-content-type-options": "nosniff",
     });
+    headers.set("x-rekixo-project", projectId);
+    headers.set("x-rekixo-access-mode", mode);
     if (object.httpEtag) headers.set("etag", object.httpEtag);
     if (object.size) headers.set("content-length", String(object.size));
     return new Response(object.body, { headers });
