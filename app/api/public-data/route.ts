@@ -93,6 +93,7 @@ type PublishedPlot = {
   polygon: string;
   status: string;
   featured: number | boolean;
+  inventoryActive?: number | boolean;
   updatedAt: string | null;
   notes?: string;
 };
@@ -374,8 +375,9 @@ export async function GET(request: Request) {
         platformUrl: links.platformUrl,
         engine3d,
         plots: plotRows.map((plot) => {
-          const { notes, ...publicPlot } = plot;
+          const { notes, inventoryActive, ...publicPlot } = plot;
           void notes;
+          void inventoryActive;
           const edgeMeasurements = (edgeMeasurementsByPlot.get(plot.id) || []).map(
             (item) => ({
               role: item.role,
