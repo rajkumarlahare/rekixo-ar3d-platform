@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: cloudflare-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -36,6 +36,48 @@ jobs:
       # any D1 migration or Worker deployment can start.
       - name: Run full regression suite
         run: node --test tests/*.test.mjs
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Before any production mutation, prove every non-legacy published client
+      # has the exact structural snapshot expected by the fail-closed runtime.
+      # This is read-only and stops the deploy before migrations/Workers if a
+      # current client would otherwise become unavailable.
+      - name: Preflight current published client snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute tiyansh-production --remote --json \
+            --command "SELECT p.id,p.name,p.publish_version AS publishVersion,s.publish_version AS snapshotVersion FROM projects p LEFT JOIN project_public_snapshots s ON s.project_id=p.id WHERE p.status='active' AND p.public_status='published' AND p.id!='tiyansh-prime-square' AND (s.project_id IS NULL OR s.publish_version<>p.publish_version) ORDER BY p.id;" \
+            > /tmp/rekixo-published-snapshot-preflight.json
+          node --input-type=module - /tmp/rekixo-published-snapshot-preflight.json <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const payload = JSON.parse(await readFile(process.argv[2], "utf8"));
+          const rows = [];
+          const walk = (value) => {
+            if (Array.isArray(value)) {
+              for (const item of value) walk(item);
+              return;
+            }
+            if (!value || typeof value !== "object") return;
+            if (Array.isArray(value.results)) rows.push(...value.results);
+            for (const item of Object.values(value)) walk(item);
+          };
+          walk(payload);
+          const unique = [...new Map(rows.map((row) => [String(row.id), row])).values()];
+          if (unique.length) {
+            console.error("STOP: published clients with missing/stale snapshot:");
+            for (const row of unique) {
+              console.error(`- ${row.id} · ${row.name || "Project"} · live=${row.publishVersion} snapshot=${row.snapshotVersion ?? "missing"}`);
+            }
+            process.exit(1);
+          }
+          console.log("Published client snapshot preflight passed.");
+          NODE
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       # Additive migrations run before the new V5 Workers. Existing legacy Worker
       # remains compatible while the columns/table are being added.
