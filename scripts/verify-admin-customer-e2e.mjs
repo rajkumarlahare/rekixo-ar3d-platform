@@ -24,6 +24,9 @@ function watchPage(page, errors) {
 
 async function chooseProject(page) {
   await page.getByRole("button", { name: "Plot Mapper" }).click();
+  // Pin the fixture through the real server-side project search so this journey
+  // stays deterministic even when migrations seed more than the first 50 projects.
+  await page.getByRole("textbox", { name: "Search client projects" }).fill(projectSlug);
   await page.waitForFunction(
     (id) => [...document.querySelectorAll("#workspace-project option")].some((o) => o.value === id),
     projectId,
