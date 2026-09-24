@@ -1,0 +1,51 @@
+name: Postfix Live Project Diagnostic
+
+on:
+  push:
+    branches: [diag/postfix-live-projects-20260924]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify live project routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/postfix-live
+          probe() {
+            label="$1"; url="$2"
+            status=$(curl -sS --max-redirs 0 -D "artifacts/postfix-live/$label.headers" -o "artifacts/postfix-live/$label.body" -w '%{http_code}' "$url" || true)
+            echo "$label status=$status url=$url"
+            sed -n '1,25p' "artifacts/postfix-live/$label.headers"
+            test "$status" = "200"
+          }
+
+          probe outer_tj "https://ar3dstudio.in/projects/tj-lands-43f339"
+          grep -qi 'projectSlug=tj-lands-43f339' artifacts/postfix-live/outer_tj.body
+          ! grep -qi 'Vision Builders' artifacts/postfix-live/outer_tj.body
+
+          probe iframe_tj "https://ar3dstudio.in/__rekixo/project/?projectSlug=tj-lands-43f339&pv=9&v=66"
+          ! grep -qi '^location:' artifacts/postfix-live/iframe_tj.headers
+          grep -qi 'id="viewport"' artifacts/postfix-live/iframe_tj.body
+          ! grep -qi 'Vision Builders' artifacts/postfix-live/iframe_tj.body
+
+          probe data_tj "https://ar3dstudio.in/api/public-data?projectSlug=tj-lands-43f339"
+          grep -qi '"slug":"tj-lands-43f339"' artifacts/postfix-live/data_tj.body
+
+          probe iframe_tiyansh "https://ar3dstudio.in/__rekixo/project/?projectSlug=tiyansh-prime-square&pv=1&v=66"
+          ! grep -qi '^location:' artifacts/postfix-live/iframe_tiyansh.headers
+          grep -qi 'id="viewport"' artifacts/postfix-live/iframe_tiyansh.body
+          ! grep -qi 'Vision Builders' artifacts/postfix-live/iframe_tiyansh.body
+
+          echo "PASS: TJ Lands and Tiyansh shared customer runtimes stay inside Rekixo."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postfix-live-project-diagnostic
+          path: artifacts/postfix-live/
+          if-no-files-found: error
