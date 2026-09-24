@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [hardening/phases-5-12-20260924]
+    branches: [hardening/consolidated-phases-5-12-20260924]
   workflow_dispatch:
 
 permissions:
