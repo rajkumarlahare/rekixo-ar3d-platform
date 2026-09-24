@@ -99,6 +99,30 @@ async function verifyGallery(origin, data, query) {
   assert.match(response.headers.get("content-type") || "", /^image\//i);
 }
 
+async function verifySharedProjectRuntime(origin, data) {
+  const publishVersion = Number(data?.publishVersion || 0);
+  const url =
+    `${origin}/__rekixo/project/?projectSlug=${encodeURIComponent(projectSlug)}&pv=${encodeURIComponent(String(publishVersion))}&v=66`;
+  const response = await read(url, {
+    headers: { accept: "text/html" },
+    redirect: "manual",
+  });
+  assert.equal(
+    response.status,
+    200,
+    `shared project runtime escaped isolated namespace (HTTP ${response.status}, location ${response.headers.get("location") || "none"})`,
+  );
+  assert.equal(
+    response.headers.get("location"),
+    null,
+    "shared project runtime must not redirect out of /__rekixo",
+  );
+  assert.match(response.headers.get("content-type") || "", /text\/html/i);
+  const html = await response.text();
+  assert.match(html, /id=["']viewport["']/i, "customer runtime shell missing");
+  assert.doesNotMatch(html, /Vision Builders/i, "customer runtime fell through to boss/Vercel origin");
+}
+
 async function verifyEmailLogin(origin, path) {
   const response = await read(`${origin}${path}`, {
     headers: { accept: "text/html" },
@@ -150,6 +174,7 @@ if (phase === "generic" || phase === "post-legacy") {
   const html = await projectPage.text();
   assert.match(html, /projectSlug=tiyansh-prime-square/);
   assert.match(html, /v=66/);
+  await verifySharedProjectRuntime(genericOrigin, generic.data);
 }
 
 if (phase === "post-legacy") {
