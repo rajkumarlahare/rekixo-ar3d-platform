@@ -36,3 +36,21 @@ test("side-control file remains last mapper CSS import",()=>{
   const side=layout.indexOf('import "./mapper-side-controls.css"');
   assert.ok(globals>=0&&mapper>globals&&side>mapper);
 });
+
+test("fullscreen side dock keeps only its viewport-width delta",()=>{
+  assert.match(sideCss,/REKIXO_FULLSCREEN_SIDE_DOCK_CENTER_V3/);
+  assert.match(
+    sideCss,
+    /\.mapper-v4-canvas:fullscreen \.mapper-side-dock \{[\s\S]*width: min\(calc\(100vw - 24px\), 860px\) !important;[\s\S]*\}/,
+  );
+  assert.doesNotMatch(
+    sideCss,
+    /\.mapper-v4-canvas:fullscreen \.mapper-side-dock:has\(\.plot-side-layout-toggle\)/,
+  );
+  assert.doesNotMatch(
+    sideCss,
+    /\.mapper-v4-canvas:fullscreen \.mapper-side-dock \.plot-side-role-grid/,
+  );
+  assert.ok((sideCss.match(/!important/g)||[]).length<=41);
+});
+
