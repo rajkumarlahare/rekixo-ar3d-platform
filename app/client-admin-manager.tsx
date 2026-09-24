@@ -80,6 +80,7 @@ export default function ClientAdminManager({
   const [loginId, setLoginId] = useState("");
   const [projectName, setProjectName] = useState("");
   const [existingProjectId, setExistingProjectId] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
   const [publicHost, setPublicHost] = useState("");
   const [adminHost, setAdminHost] = useState("");
   const [fallbackAdminUrl, setFallbackAdminUrl] = useState("");
@@ -127,6 +128,30 @@ export default function ClientAdminManager({
       active = false;
     };
   }, [notify]);
+
+  useEffect(() => {
+    const needle = projectSearch.trim();
+    if (needle.length < 2) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      const query = new URLSearchParams({section:"projects",limit:"50",offset:"0",q:needle});
+      fetch(`/api/admin/users?${query.toString()}`, {cache:"no-store"})
+        .then(async response => {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Projects search nahi hui");
+          if (!active) return;
+          const found = (data.projects || []) as Project[];
+          setProjects(current => {
+            const selected = current.find(project => project.id === existingProjectId);
+            return selected && !found.some(project => project.id === selected.id)
+              ? [selected, ...found]
+              : found;
+          });
+        })
+        .catch(() => {});
+    },220);
+    return () => {active=false;window.clearTimeout(timer);};
+  }, [projectSearch, existingProjectId]);
 
   useEffect(() => {
     if (!credential) return;
@@ -499,6 +524,12 @@ export default function ClientAdminManager({
         >
           <label>
             <span>Existing project (optional)</span>
+            <input
+              value={projectSearch}
+              onChange={(event) => setProjectSearch(event.target.value)}
+              placeholder="Search existing project"
+              aria-label="Search existing project"
+            />
             <select
               value={existingProjectId}
               onChange={(event) => {
