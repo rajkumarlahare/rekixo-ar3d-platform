@@ -3632,22 +3632,17 @@ export default function PlotMapper({
     if (!confirm(`Plot ${plot.id} की saved clickable boundary हटाएँ? Plot details/status सुरक्षित रहेंगे।`)) return;
     setBusy(true);
     try {
-      const cleared: Plot = {
-        ...plot,
-        polygon: "",
-        frontEdgeIndex: null,
-        backEdgeIndex: null,
-        depthEdgeIndex: null,
-        depth2EdgeIndex: null,
-        edgeSemantics: null,
-      };
       const response = await fetch("/api/super-mapper", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId, plot: cleared }),
+        body: JSON.stringify({
+          projectId,
+          action: "clear_plot_boundary",
+          plot: { id: plot.id },
+        }),
       });
       const result = await apiResult(response);
-      const saved = (result.plot || cleared) as Plot;
+      const saved = result.plot as Plot;
 
       // Clearing a mapped plot is also a persistent mutation. Do not tell the
       // operator it is gone until a second no-cache read confirms polygon="".
@@ -3664,7 +3659,7 @@ export default function PlotMapper({
         // Local draft cleanup is best-effort; server data is already verified.
       }
       loadPlotDetails({ ...verified.plot, polygon: "" }, false);
-      notify(`Plot ${verified.plot.id} boundary SERVER VERIFIED removed ✓; details/status सुरक्षित हैं`);
+      notify(`Plot ${verified.plot.id} boundary SERVER VERIFIED removed ✓; side bindings reset · details/status सुरक्षित हैं`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "Boundary नहीं हटी");
     } finally {
