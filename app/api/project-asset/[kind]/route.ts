@@ -37,11 +37,30 @@ async function authorizedAssetAccess(request: Request, kind: string) {
   const url = new URL(request.url);
   const requested = url.searchParams.get("projectId");
   const variant = url.searchParams.get("variant") || "";
+  const previewRequest = url.searchParams.get("preview") === "1";
   const explicitPublic =
     PUBLIC_KINDS.has(kind) &&
     (url.searchParams.get("public") === "1" ||
       variant === "public" ||
       variant === "public-canonical");
+
+  // Mapper preview requests are authenticated admin requests even when they ask
+  // for the optimized public masterplan bytes via variant=public. Resolve this
+  // before explicit-public routing, otherwise a draft project's Super Admin
+  // preview is incorrectly forced through published-only publicProjectId().
+  if (previewRequest && session?.role === "super_admin") {
+    const projectId = requested ? await activeProjectId(requested) : null;
+    return projectId
+      ? ({ projectId, mode: "admin", session } satisfies AssetAccess)
+      : null;
+  }
+  if (previewRequest && session?.role === "client_admin") {
+    if (requested && requested !== session.projectId) return null;
+    const projectId = await activeProjectId(session.projectId);
+    return projectId
+      ? ({ projectId, mode: "admin", session } satisfies AssetAccess)
+      : null;
+  }
 
   // Resolve the public project independently of any admin cookie. A browser may
   // legitimately be logged into Client A while viewing Client B's published site.
@@ -56,7 +75,7 @@ async function authorizedAssetAccess(request: Request, kind: string) {
       : null;
   }
 
-  // Super Admin canonical/preview requests still require an explicit project.
+  // Super Admin canonical requests still require an explicit project.
   if (session?.role === "super_admin") {
     const projectId = requested ? await activeProjectId(requested) : null;
     return projectId
