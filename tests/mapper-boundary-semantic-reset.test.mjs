@@ -100,4 +100,3 @@ test("CAD auto-matched geometry also drops geometry-derived bindings", () => {
   assert.match(block, /depth2EdgeIndex: null/);
   assert.match(block, /edgeSemantics: null/);
 });
-
