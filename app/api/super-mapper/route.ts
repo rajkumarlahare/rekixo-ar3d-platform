@@ -1377,39 +1377,49 @@ export async function POST(request: Request) {
       // canonical Front/Back/Depth A/Depth B edge semantics as soon as geometry
       // is available. Separate Side Mapping CSV remains an advanced correction tool.
       const directionRows = rows.filter((row) => row.frontDirection);
-      let autoSideMapped = 0;
-      if (directionRows.length) {
-        const existingDirectionSetting = await env.DB.prepare(
-          "SELECT value FROM settings WHERE project_id=? AND key='plotFrontDirections' LIMIT 1",
-        )
-          .bind(projectId)
-          .first<{ value: string }>();
-        let existingDirections: Record<string, EdgeDirection> = {};
-        try {
-          const parsed = JSON.parse(existingDirectionSetting?.value || "{}");
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            existingDirections = Object.fromEntries(
-              Object.entries(parsed).filter((entry): entry is [string, EdgeDirection] =>
+      const incomingIdSet = new Set(incomingIds);
+      const existingDirectionSetting = await env.DB.prepare(
+        "SELECT value FROM settings WHERE project_id=? AND key='plotFrontDirections' LIMIT 1",
+      )
+        .bind(projectId)
+        .first<{ value: string }>();
+      let existingDirections: Record<string, EdgeDirection> = {};
+      try {
+        const parsed = JSON.parse(existingDirectionSetting?.value || "{}");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          existingDirections = Object.fromEntries(
+            Object.entries(parsed).filter(
+              (entry): entry is [string, EdgeDirection] =>
+                incomingIdSet.has(entry[0]) &&
                 ["top", "right", "bottom", "left"].includes(String(entry[1])),
-              ),
-            );
-          }
-        } catch {
-          existingDirections = {};
+            ),
+          );
         }
-        const mergedDirections: Record<string, EdgeDirection> = {
-          ...existingDirections,
-        };
-        for (const row of directionRows) {
-          mergedDirections[row.id] = row.frontDirection as EdgeDirection;
-        }
+      } catch {
+        existingDirections = {};
+      }
+      const mergedDirections: Record<string, EdgeDirection> = {
+        ...existingDirections,
+      };
+      for (const row of directionRows) {
+        mergedDirections[row.id] = row.frontDirection as EdgeDirection;
+      }
+      if (
+        existingDirectionSetting ||
+        directionRows.length ||
+        inventory.missingIds.length ||
+        inventory.restoredIds.length
+      ) {
         await writeSetting(
           projectId,
           "plotFrontDirections",
           JSON.stringify(mergedDirections),
           now,
         );
+      }
 
+      let autoSideMapped = 0;
+      if (directionRows.length) {
         const [rotationRow, mappedRows] = await Promise.all([
           env.DB.prepare(
             "SELECT value FROM settings WHERE project_id=? AND key='publicRotation' LIMIT 1",
@@ -1487,6 +1497,12 @@ export async function POST(request: Request) {
         partialSideMeasurements: quality.partialSideMeasurements.length,
         missingFrontDirection: quality.missingFrontDirection.length,
         autoSideMapped,
+        inventoryExisting: inventory.existingActiveCount,
+        inventoryIncoming: inventory.incomingCount,
+        inventoryAdded: inventory.addedIds.length,
+        inventoryRestored: inventory.restoredIds.length,
+        inventoryPendingRemoval: inventory.missingIds.length,
+        pendingRemovalIds: inventory.missingIds.slice(0, 100),
       });
       return Response.json({
         ok: true,
@@ -1495,6 +1511,7 @@ export async function POST(request: Request) {
         plots: saved,
         quality,
         autoSideMapped,
+        inventory,
       });
     }
 
