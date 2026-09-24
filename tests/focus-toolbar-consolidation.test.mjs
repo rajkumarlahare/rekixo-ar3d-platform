@@ -61,7 +61,7 @@ test("normal and fullscreen side assigner share the centered wide layout", () =>
 });
 
 test("fullscreen side assigner remains viewport-centered", () => {
-  assert.ok(sideCss.includes("REKIXO_FULLSCREEN_SIDE_DOCK_CENTER_V2"));
+  assert.ok(sideCss.includes("REKIXO_FULLSCREEN_SIDE_DOCK_CENTER_V3"));
   assert.ok(sideCss.includes(".mapper-v4-canvas:fullscreen .plot-side-assigner {"));
   assert.ok(sideCss.includes("left: 50% !important;"));
   assert.ok(
