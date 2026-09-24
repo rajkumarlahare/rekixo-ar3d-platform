@@ -33,9 +33,20 @@ export type AdminSession={
   exp:number;
 };
 
+async function sessionSigningKey(usages: KeyUsage[]){
+  return crypto.subtle.importKey("raw",bytes(cfg().SESSION_SECRET),{name:"HMAC",hash:"SHA-256"},false,usages);
+}
 async function signature(body:string){
-  const key=await crypto.subtle.importKey("raw",bytes(cfg().SESSION_SECRET),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const key=await sessionSigningKey(["sign"]);
   return b64url(new Uint8Array(await crypto.subtle.sign("HMAC",key,enc.encode(body))));
+}
+async function validSignature(body:string,sig:string){
+  try{
+    const supplied=fromB64url(sig);
+    if(supplied.length!==32)return false;
+    const key=await sessionSigningKey(["verify"]);
+    return crypto.subtle.verify("HMAC",key,supplied,enc.encode(body));
+  }catch{return false}
 }
 
 async function verifyPassword(password:string,saltB64:string,hashB64:string){
@@ -86,7 +97,10 @@ type ClientAuthRow={
 export async function authenticateAdmin(identifier:string,password:string,host?:string,scope?:{projectId?:string;projectSlug?:string}):Promise<AdminSession|null>{
   const candidates=loginCandidates(identifier),now=Date.now();
   const mode=panelMode();
-  if(mode==="super"&&candidates.email&&candidates.email===cfg().ADMIN_EMAIL?.toLowerCase()&&await verifyPassword(password,cfg().ADMIN_PASSWORD_SALT,cfg().ADMIN_PASSWORD_HASH))return {id:"owner",name:"Rekixo Super Admin",email:candidates.email,loginId:candidates.email,loginType:"email",role:"super_admin",projectId:PLATFORM_ADMIN_SCOPE_ID,sessionVersion:1,mustChangePassword:false,exp:now+8*60*60*1000};
+  if(mode==="super"&&candidates.email&&candidates.email===cfg().ADMIN_EMAIL?.toLowerCase()&&await verifyPassword(password,cfg().ADMIN_PASSWORD_SALT,cfg().ADMIN_PASSWORD_HASH)){
+    const owner=await env.DB.prepare("SELECT session_version AS sessionVersion FROM super_admin_security WHERE id='owner' LIMIT 1").first<{sessionVersion:number}>();
+    return {id:"owner",name:"Rekixo Super Admin",email:candidates.email,loginId:candidates.email,loginType:"email",role:"super_admin",projectId:PLATFORM_ADMIN_SCOPE_ID,sessionVersion:Number(owner?.sessionVersion||1),mustChangePassword:false,exp:now+8*60*60*1000};
+  }
   if(mode!=="client")return null;
   const rows=await env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.project_id AS projectId,u.password_hash AS passwordHash,u.password_salt AS passwordSalt,u.session_version AS sessionVersion,u.must_change_password AS mustChangePassword,u.status,p.status AS projectStatus,p.admin_host AS adminHost,p.slug AS projectSlug FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE u.login_id=? OR u.login_id=? OR ((u.login_type='email' OR u.login_type IS NULL) AND lower(u.email)=?) LIMIT 2").bind(candidates.email,candidates.mobile,candidates.email).all<ClientAuthRow>();
   if(rows.results.length!==1)return null;
@@ -105,11 +119,16 @@ export async function authenticateAdmin(identifier:string,password:string,host?:
 
 export async function getAdminSession():Promise<AdminSession|null>{
   const token=(await cookies()).get(COOKIE)?.value;if(!token)return null;
-  const [body,sig]=token.split(".");if(!body||!sig||sig!==await signature(body))return null;
+  const [body,sig]=token.split(".");if(!body||!sig||!(await validSignature(body,sig)))return null;
   let session:AdminSession;try{session=JSON.parse(dec.decode(fromB64url(body))) as AdminSession}catch{return null}
   if(!session.id||!session.email||!session.role||!session.projectId||session.exp<Date.now())return null;
   const mode=panelMode();
-  if(session.role==="super_admin"&&session.id==="owner")return mode==="super"?{...session,loginId:session.loginId||session.email,loginType:"email"}:null;
+  if(session.role==="super_admin"&&session.id==="owner"){
+    if(mode!=="super")return null;
+    const owner=await env.DB.prepare("SELECT session_version AS sessionVersion FROM super_admin_security WHERE id='owner' LIMIT 1").first<{sessionVersion:number}>();
+    if(!owner||Number(owner.sessionVersion)!==Number(session.sessionVersion))return null;
+    return {...session,loginId:session.loginId||session.email,loginType:"email"};
+  }
   if(mode!=="client")return null;
   const row=await env.DB.prepare("SELECT u.name,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.role,u.project_id AS projectId,u.session_version AS sessionVersion,u.must_change_password AS mustChangePassword,u.status,p.status AS projectStatus FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE u.id=? LIMIT 1").bind(session.id).first<{name:string;email:string;loginType:ClientLoginType;loginId:string|null;mobile:string|null;role:AdminRole;projectId:string;sessionVersion:number;mustChangePassword:number;status:string;projectStatus:string}>();
   if(!row||row.role!=="client_admin"||row.status!=="active"||row.projectStatus!=="active"||row.email!==session.email||row.sessionVersion!==session.sessionVersion)return null;
