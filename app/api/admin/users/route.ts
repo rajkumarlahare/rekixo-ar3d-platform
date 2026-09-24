@@ -14,7 +14,7 @@ import {
 
 const unauthorized=()=>Response.json({error:"Super Admin access required"},{status:403});
 const hostPattern=/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-type UserRow={id:string;email:string;loginType:ClientLoginType;loginId:string|null;mobile:string|null;name:string;role:string;status:string;mustChangePassword:number;createdAt:string;updatedAt:string;lastLoginAt:string|null;projectId:string;projectName:string;projectSlug:string;publicHost:string|null;adminHost:string|null};
+type UserRow={id:string;email:string;loginType:ClientLoginType;loginId:string|null;mobile:string|null;name:string;role:string;status:string;mustChangePassword:number;createdAt:string;updatedAt:string;lastLoginAt:string|null;projectId:string;projectName:string;projectSlug:string;publicHost:string|null;adminHost:string|null;projectAdminCount:number;projectActiveAdminCount:number};
 type ProjectRow={id:string;name:string;slug:string;kind:string;publicHost:string|null;adminHost:string|null;status:string;deletedAt:string|null;adminCount:number;loginMode:string};
 const cleanHost=(value:unknown)=>{const host=String(value||"").trim().toLowerCase().replace(/^https?:\/\//,"").replace(/\/.*/,"").replace(/\.$/,"");return host||null};
 const validHost=(host:string|null)=>!host||hostPattern.test(host);
@@ -31,18 +31,47 @@ export async function GET(request:Request){
   const projectPageSelect="SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id";
 
   if(section==="summary"){
-    const [projects,archived,userCount,auditCount]=await Promise.all([
-      env.DB.prepare(projectQuery+" LIMIT 100").all<ProjectRow>(),
-      env.DB.prepare(archivedQuery+" LIMIT 50").all(),
+    const [userCount,auditCount,projectCount,archivedCount]=await Promise.all([
       env.DB.prepare("SELECT COUNT(*) AS total FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted'").first<{total:number}>(),
       env.DB.prepare("SELECT COUNT(*) AS total FROM audit_logs").first<{total:number}>(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM projects WHERE status!='deleted'").first<{total:number}>(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM projects WHERE status='deleted'").first<{total:number}>(),
     ]);
     return Response.json({
-      projects:projects.results.map(project=>({...project,loginMode:project.loginMode==="mobile"?"mobile":"email"})),
-      archivedProjects:archived.results,
       userCount:Number(userCount?.total||0),
       auditCount:Number(auditCount?.total||0),
+      projectCount:Number(projectCount?.total||0),
+      archivedCount:Number(archivedCount?.total||0),
       clientAdminUrl:clientAdminUrl(),
+    },{headers:{"cache-control":"no-store"}});
+  }
+
+  if(section==="project_options"){
+    const limit=Math.max(1,readPage("limit",20,50));
+    const q=String(url.searchParams.get("q")||"").trim().toLowerCase().slice(0,80);
+    const pattern=`%${q.replace(/[%_]/g,"")}%`;
+    const result=q
+      ? await env.DB.prepare(
+          "SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' AND (lower(p.name) LIKE ? OR lower(p.id) LIKE ? OR lower(p.slug) LIKE ?) GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?",
+        ).bind(pattern,pattern,pattern,limit).all<ProjectRow>()
+      : await env.DB.prepare(
+          "SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' GROUP BY p.id ORDER BY p.created_at DESC LIMIT ?",
+        ).bind(limit).all<ProjectRow>();
+    return Response.json({
+      projects:result.results.map(project=>({...project,loginMode:project.loginMode==="mobile"?"mobile":"email"})),
+    },{headers:{"cache-control":"no-store"}});
+  }
+
+  if(section==="archived"){
+    const limit=Math.max(1,readPage("limit",10,50)),offset=readPage("offset",0,1_000_000);
+    const [archived,total]=await Promise.all([
+      env.DB.prepare("SELECT p.id,p.name,p.kind,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status='deleted' GROUP BY p.id ORDER BY p.deleted_at DESC,p.updated_at DESC LIMIT ? OFFSET ?").bind(limit,offset).all(),
+      env.DB.prepare("SELECT COUNT(*) AS total FROM projects WHERE status='deleted'").first<{total:number}>(),
+    ]);
+    return Response.json({
+      archivedProjects:archived.results,
+      total:Number(total?.total||0),
+      hasMore:offset+archived.results.length<Number(total?.total||0),
     },{headers:{"cache-control":"no-store"}});
   }
 
@@ -77,7 +106,7 @@ export async function GET(request:Request){
   if(section==="clients"){
     const limit=Math.max(1,readPage("limit",8,50)),offset=readPage("offset",0,1_000_000);
     const [result,total]=await Promise.all([
-      env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC LIMIT ? OFFSET ?").bind(limit,offset).all<UserRow>(),
+      env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost,(SELECT COUNT(*) FROM admin_users ax WHERE ax.project_id=p.id) AS projectAdminCount,(SELECT COUNT(*) FROM admin_users aa WHERE aa.project_id=p.id AND aa.status='active') AS projectActiveAdminCount FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC LIMIT ? OFFSET ?").bind(limit,offset).all<UserRow>(),
       env.DB.prepare("SELECT COUNT(*) AS total FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted'").first<{total:number}>(),
     ]);
     return Response.json({
@@ -110,7 +139,7 @@ export async function GET(request:Request){
   }
 
   const [result,projects,audits,archived]=await Promise.all([
-    env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC").all<UserRow>(),
+    env.DB.prepare("SELECT u.id,u.email,u.login_type AS loginType,u.login_id AS loginId,u.mobile,u.name,u.role,u.status,u.must_change_password AS mustChangePassword,u.created_at AS createdAt,u.updated_at AS updatedAt,u.last_login_at AS lastLoginAt,p.id AS projectId,p.name AS projectName,p.slug AS projectSlug,p.public_host AS publicHost,p.admin_host AS adminHost,(SELECT COUNT(*) FROM admin_users ax WHERE ax.project_id=p.id) AS projectAdminCount,(SELECT COUNT(*) FROM admin_users aa WHERE aa.project_id=p.id AND aa.status='active') AS projectActiveAdminCount FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted' ORDER BY u.created_at DESC").all<UserRow>(),
     env.DB.prepare(projectQuery).all<ProjectRow>(),
     env.DB.prepare("SELECT action,actor_email AS actorEmail,project_id AS projectId,target_id AS targetId,created_at AS createdAt FROM audit_logs ORDER BY created_at DESC LIMIT 50").all(),
     env.DB.prepare(archivedQuery).all()
