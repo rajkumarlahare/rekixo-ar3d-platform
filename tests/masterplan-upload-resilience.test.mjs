@@ -40,7 +40,7 @@ test("large source processing avoids full-resolution mapper decode when possible
   assert.match(mapper, /bitmap\.close\(\)/);
 });
 
-test("30-100 MB originals upload in bounded R2 multipart chunks", () => {
+test("30-100 MB originals upload in bounded and exact-size-verified R2 multipart chunks", () => {
   assert.match(mapper, /MASTERPLAN_ORIGINAL_CHUNK_BYTES = 8 \* 1024 \* 1024/);
   assert.match(mapper, /uploadMasterplanOriginal/);
   assert.match(multipart, /createMultipartUpload/);
@@ -49,6 +49,12 @@ test("30-100 MB originals upload in bounded R2 multipart chunks", () => {
   assert.match(multipart, /upload\.complete\(parts\)/);
   assert.match(multipart, /MAX_ORIGINAL_BYTES = 100 \* 1024 \* 1024/);
   assert.match(multipart, /MAX_PART_BYTES = 8 \* 1024 \* 1024/);
+  assert.match(multipart, /MAX_PARTS = Math\.ceil\(MAX_ORIGINAL_BYTES \/ MAX_PART_BYTES\)/);
+  assert.match(multipart, /uploadToken\(size\)/);
+  assert.match(multipart, /expectedSizeFromToken/);
+  assert.match(multipart, /actualSize !== expectedSize/);
+  assert.match(multipart, /env\.BUCKET\.delete\(objectKey\(projectId, token\)\)/);
+  assert.match(multipart, /browserSafeImageMagic/);
 });
 
 test("mapper loads light preview first then promotes decoded HD with retry", () => {
