@@ -1081,18 +1081,23 @@ async function rekixoStartPublicBoot(){
 
 const rekixoBootRetryButton=document.getElementById('rekixoBootRetry');
 if(rekixoBootRetryButton){
-  rekixoBootRetryButton.addEventListener('click',()=>rekixoStartPublicBoot());
+  rekixoBootRetryButton.addEventListener('click',()=>{
+    window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
+  });
 }
-window.REKIXO_RETRY_PUBLIC_BOOT=()=>rekixoStartPublicBoot();
+window.REKIXO_RETRY_PUBLIC_BOOT=()=>{
+  window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
+  return window.REKIXO_PUBLIC_BOOT_PROMISE;
+};
 window.addEventListener('online',()=>{
   if(
     REKIXO_GENERIC_BOOT&&
     document.documentElement.classList.contains('rekixo-project-error')
   ){
-    rekixoStartPublicBoot();
+    window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   }
 });
-rekixoStartPublicBoot();
+window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
 </script>
 <script>
 (() => {
@@ -2218,7 +2223,11 @@ rekixoStartPublicBoot();
 
   async function loadProjectSettings(){
     try{
-      const existing=window.REKIXO_PUBLIC_DATA;
+      let existing=window.REKIXO_PUBLIC_DATA;
+      if(!existing&&window.REKIXO_PUBLIC_BOOT_PROMISE){
+        await window.REKIXO_PUBLIC_BOOT_PROMISE.catch(()=>{});
+        existing=window.REKIXO_PUBLIC_DATA;
+      }
       if(existing&&typeof existing==="object"){
         const settings=existing.settings||existing;
         return { ...FALLBACK, ...settings };
