@@ -800,6 +800,8 @@ export async function buildProjectAssetExport(
       sizeBytes: Number(logoHead.size || 0),
       objectKey: `${mapperPrefix}logo`,
       etag: logoHead.httpEtag || undefined,
+      uploadedAt: logoHead.uploaded?.toISOString?.(),
+      customMetadata: logoHead.customMetadata,
     });
   } else {
     missing.push({
