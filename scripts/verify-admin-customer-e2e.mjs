@@ -206,7 +206,8 @@ async function customerJourney(browser) {
     assert.equal(await plot.getAttribute("data-status"), "available");
     assert.equal(await frame.locator("#countTotal").textContent(), "1");
     await plot.click();
-    await frame.locator("#plotDrawer").waitFor({ state: "visible" });
+    await frame.locator("#drawer.open").waitFor({ state: "visible" });
+    assert.equal(await frame.locator("#drawer").getAttribute("aria-hidden"), "false");
 
     await page.screenshot({
       path: path.join(artifactDir, `customer-${target.name}.png`),
