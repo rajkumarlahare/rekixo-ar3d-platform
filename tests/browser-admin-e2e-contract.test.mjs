@@ -44,7 +44,7 @@ test("mapper mutations refresh publish readiness without changing workspace tabs
 });
 
 
-test("customer iframe keeps projectSlug on the canonical static runtime path",()=>{
-  assert.match(customerPage,/src=\{`\/project\/index\.html\?projectSlug=/);
+test("customer iframe keeps projectSlug on the query-safe isolated runtime path",()=>{
+  assert.match(customerPage,/src=\{`\/__rekixo\/project\/\?projectSlug=/);
   assert.doesNotMatch(customerPage,/__rekixo\/project\/index\.html\?projectSlug=/);
 });
