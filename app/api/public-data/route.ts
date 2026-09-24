@@ -201,10 +201,9 @@ export async function GET(request: Request) {
       );
     }
 
-    const currentPlotPromise = db
-      .select()
-      .from(plots)
-      .where(and(eq(plots.projectId, projectId), eq(plots.inventoryActive, true)));
+    const currentPlotPromise = db.select().from(plots).where(
+      and(eq(plots.projectId, projectId), eq(plots.inventoryActive, true)),
+    );
     const currentEdgePromise = db
       .select()
       .from(plotEdgeMeasurements)
