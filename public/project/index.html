@@ -1103,6 +1103,7 @@ rekixoStartPublicBoot();
   // REKIXO_CONTACT_CHANNEL_SEPARATION_V1
   let CALL_PHONE = '', WHATSAPP_PHONE = '', MAP_URL = '', PROJECT_NAME='Project', PROJECT_LOCATION='', ADMIN_URL='/admin/login';
   const plots = [];
+  let PUBLIC_GALLERY=[];
   let ACTIVE_PROJECT_ID='';
   const q = s => document.querySelector(s);
 
@@ -1331,7 +1332,7 @@ rekixoStartPublicBoot();
     amenitiesModal.classList.remove('open');
     amenitiesModal.setAttribute('aria-hidden','true');
   }
-  async function openGallery(){galleryModal.classList.add('open');galleryModal.setAttribute('aria-hidden','false');clientGallery.replaceChildren(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Loading gallery…'}));try{const response=await fetch('/api/public-data'+(window.REKIXO_PROJECT_QUERY||''),{cache:'no-store'});if(!response.ok)throw new Error();const data=await response.json(),items=Array.isArray(data.gallery)?data.gallery:[];clientGallery.replaceChildren();if(!items.length){clientGallery.append(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Gallery me abhi koi image nahi hai.'}));return}items.forEach(item=>{const card=document.createElement('article'),thumb=document.createElement('button'),img=document.createElement('img'),label=document.createElement('b'),caption=item.caption||item.filename||'Project image';thumb.type='button';thumb.className='gallery-thumb';thumb.setAttribute('aria-label','View full size: '+caption);const galleryBaseQuery=window.REKIXO_PROJECT_QUERY||'',galleryJoiner=galleryBaseQuery?'&':'?';img.src='/api/gallery/'+encodeURIComponent(item.id)+galleryBaseQuery+galleryJoiner+'public=1';img.alt=caption;img.loading='lazy';img.decoding='async';label.textContent=caption;thumb.onclick=()=>openFullImage(img.src,caption);thumb.append(img);card.append(thumb,label);clientGallery.append(card)})}catch(_){clientGallery.replaceChildren(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Gallery load nahi hui. Dobara try karein.'}))}}
+  function openGallery(){galleryModal.classList.add('open');galleryModal.setAttribute('aria-hidden','false');const items=PUBLIC_GALLERY;clientGallery.replaceChildren();if(!items.length){clientGallery.append(Object.assign(document.createElement('div'),{className:'gallery-state',textContent:'Gallery me abhi koi image nahi hai.'}));return}items.forEach(item=>{const card=document.createElement('article'),thumb=document.createElement('button'),img=document.createElement('img'),label=document.createElement('b'),caption=item.caption||item.filename||'Project image';thumb.type='button';thumb.className='gallery-thumb';thumb.setAttribute('aria-label','View full size: '+caption);const galleryBaseQuery=window.REKIXO_PROJECT_QUERY||'',galleryJoiner=galleryBaseQuery?'&':'?';img.src='/api/gallery/'+encodeURIComponent(item.id)+galleryBaseQuery+galleryJoiner+'public=1';img.alt=caption;img.loading='lazy';img.decoding='async';label.textContent=caption;thumb.onclick=()=>openFullImage(img.src,caption);thumb.append(img);card.append(thumb,label);clientGallery.append(card)})}
   function closeGallery(){galleryModal.classList.remove('open');galleryModal.setAttribute('aria-hidden','true')}
   function norm(v){let s=v.trim().toUpperCase().replace(/\s+/g,'').replace(/_/g,'-');if(plots.some(p=>String(p.id).toUpperCase()===s))return s;const m=s.match(/^([ABC])-?(\d{1,2})$/);return m?m[1]+'-'+String(+m[2]).padStart(2,'0'):s}
   const REKIXO_STATUS_THEME_DEFAULTS={available:'#12C568',booked:'#F5B516',sold:'#F0314C'};
@@ -1347,6 +1348,43 @@ rekixoStartPublicBoot();
   }
   function plotStatus(p){const s=String(p?.status||'available').trim().toLowerCase();return s==='enquire'?'available':(s==='booked'?'booked':(s==='sold'?'sold':'available'))}
   function updateStatusCounts(){const c={available:0,booked:0,sold:0};plots.forEach(p=>c[plotStatus(p)]++);q('#countAvailable').textContent=c.available;q('#countBooked').textContent=c.booked;q('#countSold').textContent=c.sold;q('#countTotal').textContent=plots.length}
+  let statusPollTimer=0,statusPollBusy=false;
+  async function refreshLiveStatuses(){
+    if(statusPollBusy||document.hidden||!PUBLIC_READY)return;
+    statusPollBusy=true;
+    try{
+      const response=await fetch('/api/public-status'+(window.REKIXO_PROJECT_QUERY||''),{cache:'no-store'});
+      if(!response.ok)return;
+      const data=await response.json();
+      const statuses=new Map((Array.isArray(data.statuses)?data.statuses:[]).map(row=>[String(row.id),String(row.status)]));
+      let changed=false;
+      plots.forEach(p=>{
+        const next=statuses.get(String(p.id));if(!next||next===p.status)return;
+        p.status=next;changed=true;
+        const el=svg.querySelector(`[data-plot-id="${p.id}"]`);if(el)el.dataset.status=plotStatus(p)
+      });
+      if(!changed)return;
+      updateStatusCounts();
+      if(selected){
+        const fresh=plots.find(p=>p.id===selected.id);
+        if(fresh){
+          selected=fresh;
+          if(drawer.classList.contains('open')){
+            const st=plotStatus(fresh),statusEl=q('#plotStatusValue');
+            statusEl.textContent=st.charAt(0).toUpperCase()+st.slice(1);statusEl.className=st
+          }
+        }
+      }
+      engine3D?.setPlots?.(plots);
+      engine3D?.setStatusFilter?.(statusFilter)
+    }catch(_){}
+    finally{statusPollBusy=false}
+  }
+  function scheduleStatusPolling(){
+    clearInterval(statusPollTimer);
+    statusPollTimer=window.setInterval(refreshLiveStatuses,20000)
+  }
+
   function polyPoints(p){return p.points.map(x=>x.join(',')).join(' ')}
   function projectLabelPoint(points){const shared=globalThis.RekixoProjectGeometry?.labelPoint;if(typeof shared==='function'){const c=shared(points);if(Array.isArray(c)&&c.length>=2&&Number.isFinite(c[0])&&Number.isFinite(c[1]))return c}if(!Array.isArray(points)||!points.length)return[0,0];return[points.reduce((sum,v)=>sum+Number(v[0]||0),0)/points.length,points.reduce((sum,v)=>sum+Number(v[1]||0),0)/points.length]}
 
@@ -1846,7 +1884,7 @@ rekixoStartPublicBoot();
   viewport.addEventListener('pointercancel',e=>{if(!mode3D)finishPointer(e,true)},{passive:true});
   const cancelMapGesture=()=>{if(!pointers.size&&!gesture)return;pointers.clear();gesture=null;setGestureActive(false)};
   window.addEventListener('blur',cancelMapGesture,{passive:true});
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelMapGesture()},{passive:true});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelMapGesture();else void refreshLiveStatuses()},{passive:true});
   viewport.addEventListener('lostpointercapture',e=>{if(pointers.has(e.pointerId)&&pointers.size===1&&gesture?.moved){pointers.delete(e.pointerId);gesture=null;setGestureActive(false)}});
 
   viewport.addEventListener('wheel',e=>{if(mode3D)return;e.preventDefault();zoomAt(scale*(e.deltaY<0?1.12:.89),e.clientX,e.clientY)},{passive:false});
@@ -1952,6 +1990,7 @@ rekixoStartPublicBoot();
     window.REKIXO_PROJECT_QUERY=canonicalForward.toString()?'?'+canonicalForward.toString():'';
 
     const s=data&&data.settings||{};
+    PUBLIC_GALLERY=Array.isArray(data&&data.gallery)?data.gallery.slice():[];
     applyPlotStatusTheme(s);
     publicRotation=normalizeQuarterTurn(s.publicRotation);
     publicInitialViewMode=normalizeInitialViewMode(s.publicInitialViewMode);
@@ -2072,7 +2111,8 @@ rekixoStartPublicBoot();
       reset();
       engine3D?.setPlots?.(plots);
       if(master&&HAS_MASTERPLAN&&master.src)engine3D?.setImageSrc?.(master.src);
-      engine3D?.setShowAll(showAll);engine3D?.setStatusFilter?.(statusFilter)
+      engine3D?.setShowAll(showAll);engine3D?.setStatusFilter?.(statusFilter);
+      scheduleStatusPolling()
     };
     const loadMaster=(canonical=false,bust=false)=>{
       if(!master)return;
