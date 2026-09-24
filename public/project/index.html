@@ -780,10 +780,9 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
 
 /* Long measurements belong below the polygon. */
 .diagram.has-semantic-sides > svg{height:auto;aspect-ratio:300/150}
-.diagram-legend{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.diagram-legend[hidden]{display:none!important}
+.diagram-legend{display:none!important}
+.diagram-legend[hidden]{display:none}
 .diagram-side{min-width:0;padding:10px;border:1px solid #33435c;border-radius:10px;background:#0b1629}
-@media(max-width:360px){.diagram-legend{grid-template-columns:1fr}}
 .diagram-side-heading{display:flex;align-items:center;gap:7px;min-width:0;color:#dbe7fa;font-size:12px;font-weight:700}
 .diagram-side-swatch{width:24px;height:4px;flex:0 0 24px}
 .diagram-side-value{display:block;margin-top:5px;color:#f1f5fb;font-size:13px;line-height:1.5;white-space:normal;overflow-wrap:anywhere}
@@ -1685,17 +1684,33 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
       const tick=4,x=atStart?segment.x1:segment.x2,y=atStart?segment.y1:segment.y2;
       makeLine(x-segment.nx*tick,y-segment.ny*tick,x+segment.nx*tick,y+segment.ny*tick,color,'1.2')
     };
-    for(const [role,,,color,dash] of diagramSideSpecs(p)){
+    for(const [role,title,value,color,dash] of diagramSideSpecs(p)){
       const geometry=semanticRoleDiagramGeometry(scaledPoints,semantics[role]||[],cx,cy);
       if(!geometry)continue;
 
       // A curved logical side may contain many polygon segments. Draw every
-      // segment so the guide follows the real boundary. Measurements stay in
-      // the responsive cards below the SVG so long labels never clip the plot.
+      // segment so the guide follows the real boundary, but annotate the
+      // logical Front/Back/Depth side only once.
       for(const segment of geometry.segments)
         makeLine(segment.x1,segment.y1,segment.x2,segment.y2,color,'1.55',dash);
       for(const segment of geometry.chainStarts)makeTick(segment,true,color);
       for(const segment of geometry.chainEnds)makeTick(segment,false,color);
+
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const {x:tx,y:ty,angle}=geometry.label;
+      text.setAttribute('x',tx);text.setAttribute('y',ty);
+      text.setAttribute('transform',`rotate(${angle} ${tx} ${ty})`);
+      text.setAttribute('fill',color);
+      text.setAttribute('font-size','9');
+      text.setAttribute('font-weight','900');
+      text.setAttribute('text-anchor','middle');
+      text.setAttribute('dominant-baseline','central');
+      text.setAttribute('paint-order','stroke');
+      text.setAttribute('stroke','#081225');
+      text.setAttribute('stroke-width','3');
+      text.setAttribute('stroke-linejoin','round');
+      text.textContent=title+(value?' · '+value:'');
+      group.appendChild(text);
       rendered++
     }
     group.style.display=rendered?'':'none';
