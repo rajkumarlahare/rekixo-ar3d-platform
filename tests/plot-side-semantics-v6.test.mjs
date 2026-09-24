@@ -95,13 +95,11 @@ test("customer irregular diagram uses actual-edge dimensions and no guessed fall
   assert.match(html, /front!==null&&distinctRoles/);
   assert.match(html, /REKIXO_PUBLIC_EDGE_DIMENSIONS_V11_LOGICAL_SIDE_LABEL/);
   assert.match(html, /function semanticRoleDiagramGeometry/);
-  assert.match(html, /Measurements stay in[\s\S]*responsive cards below the SVG/);
+  assert.match(html, /logical Front\/Back\/Depth side only once/);
   assert.doesNotMatch(html, /plotEdgeMeasurementValue\(p,role,edge\)\|\|value/);
   assert.match(html, /const irregular=.*includes\('irregular'\)/);
   assert.match(html, /setLegacyDiagramDimensionsVisible\(!canonicalRendered&&!irregular\)/);
-  assert.match(html, /diagram-legend\{[^}]*display:grid/);
-  assert.match(html, /diagram-legend\[hidden\]\{display:none!important\}/);
-  assert.doesNotMatch(html, /text\.textContent=title\+\(value\?' · '\+value:''\)/);
+  assert.match(html, /diagram-legend\{display:none!important\}/);
 });
 
 test("runtime has no VISTAR tenant hardcode", () => {
