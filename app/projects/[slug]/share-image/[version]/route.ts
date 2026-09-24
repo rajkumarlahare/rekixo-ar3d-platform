@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { projectBySlug } from "../../../../project-context";
 import {
   publicSiteEnabled,
+  publicSiteUnavailableHeaders,
   publicSiteUnavailableResponse,
 } from "@/modules/public-site-access";
 
@@ -112,7 +113,11 @@ export async function HEAD(
   { params }: { params: RouteParams },
 ) {
   const result = await resolve(params);
-  if (result.disabled) return publicSiteUnavailableResponse();
+  if (result.disabled)
+    return new Response(null, {
+      status: 503,
+      headers: publicSiteUnavailableHeaders(),
+    });
   if (!result.object) return new Response(null, { status: 404 });
 
   return new Response(null, {
