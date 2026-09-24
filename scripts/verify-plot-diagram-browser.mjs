@@ -50,14 +50,10 @@ try{
           texts:document.querySelectorAll('#semanticEdgeLabels text').length,
           edges:document.querySelectorAll('#semanticEdgeLabels line').length,
           hidden:document.querySelector('#diagramLegend').hidden,
-          legendDisplay:getComputedStyle(document.querySelector('#diagramLegend')).display,
-          bounds:{left:bounds.left,right:bounds.right,top:bounds.top,bottom:bounds.bottom,svgBottom:svg.bottom},
-          cardRects:visibleCards.map(c=>{const r=c.getBoundingClientRect();return {role:c.dataset.role,left:r.left,right:r.right,top:r.top,bottom:r.bottom,display:getComputedStyle(c).display}}),
           values:cards.map(c=>[c.dataset.role,c.querySelector('.diagram-side-value').textContent])
         }
       });
       assert.equal(result.overflow,false,width+' '+fixture.id+' overflow');
-      if(result.outside)console.error('DIAGRAM_CLIPPING_DEBUG',JSON.stringify({width,fixture:fixture.id,...result}));
       assert.equal(result.outside,false,width+' '+fixture.id+' clipping');
       assert.equal(result.overlap,false,width+' '+fixture.id+' overlap');
       // V11 (2026-09-23) intentionally renders one SVG label plus
