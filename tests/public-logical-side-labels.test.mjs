@@ -70,13 +70,13 @@ test("future disjoint evidence can draw multiple chains without duplicating the 
   assert.equal(geometry.chainEnds.length, 2);
 });
 
-test("public renderer creates one text annotation per logical role, never one per segment", () => {
-  assert.match(rendererSource, /for\(const \[role,title,value,color,dash\] of diagramSideSpecs\(p\)\)/);
+test("public renderer draws each logical side guide without long SVG text", () => {
+  assert.match(rendererSource, /for\(const \[role,,,color,dash\] of diagramSideSpecs\(p\)\)/);
   assert.match(rendererSource, /for\(const segment of geometry\.segments\)/);
-  assert.match(rendererSource, /text\.textContent=title\+\(value\?' · '\+value:''\)/);
+  assert.match(rendererSource, /renderDiagramLegend\(p,semantics\)/);
   assert.equal(
     (rendererSource.match(/createElementNS\('http:\/\/www\.w3\.org\/2000\/svg','text'\)/g) || []).length,
-    1,
+    0,
   );
   assert.doesNotMatch(rendererSource, /edgeValue/);
   assert.doesNotMatch(rendererSource, /plotEdgeMeasurementValue\(p,role,edge\)/);
