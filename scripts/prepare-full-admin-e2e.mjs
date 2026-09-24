@@ -43,25 +43,6 @@ fs.writeFileSync(
   { mode: 0o600 },
 );
 
-fs.writeFileSync(
-  "wrangler.e2e.jsonc",
-  JSON.stringify({
-    name: "rekixo-phase11-e2e",
-    main: "worker/index.ts",
-    compatibility_date: "2026-09-06",
-    d1_databases: [{
-      binding: "DB",
-      database_name: "site-creator-d1",
-      database_id: "00000000-0000-4000-8000-000000000000",
-      migrations_dir: "drizzle",
-    }],
-    r2_buckets: [{
-      binding: "BUCKET",
-      bucket_name: "site-creator-r2",
-    }],
-  }, null, 2),
-);
-
 const artifactDir = path.join(process.cwd(), "artifacts", "full-admin-e2e");
 fs.mkdirSync(artifactDir, { recursive: true });
 const seed = `
