@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { authenticateAdmin,sameOrigin,sessionCookie } from "@/modules/auth";
 
-const WINDOW=15*60*1000,MAX=5;
+const WINDOW=15*60*1000,MAX=5,IP_MAX=25,STALE_AFTER=24*60*60*1000;
 
 type LoginInput={
   loginId?:string;
@@ -14,9 +14,22 @@ type LoginInput={
   returnPath?:string;
 };
 
-async function keyFor(request:Request,identifier:string){
-  const ip=request.headers.get("cf-connecting-ip")||"unknown",raw=new TextEncoder().encode(`${ip}:${identifier.trim().toLowerCase()}`),hash=await crypto.subtle.digest("SHA-256",raw);
+async function digestKey(value:string){
+  const raw=new TextEncoder().encode(value),hash=await crypto.subtle.digest("SHA-256",raw);
   return Array.from(new Uint8Array(hash)).map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+async function attemptKeys(request:Request,identifier:string){
+  const ip=(request.headers.get("cf-connecting-ip")||"unknown").trim();
+  return {
+    pair:await digestKey(`pair:${ip}:${identifier.trim().toLowerCase()}`),
+    ip:await digestKey(`ip:${ip}`),
+  };
+}
+async function recordFailure(db:typeof env.DB,key:string,row:{attempts:number;windowStart:number}|null,now:number){
+  if(!row||now-row.windowStart>=WINDOW)
+    await db.prepare("INSERT INTO login_attempts (key, attempts, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts=1, window_start=excluded.window_start").bind(key,now).run();
+  else
+    await db.prepare("UPDATE login_attempts SET attempts=attempts+1 WHERE key=?").bind(key).run();
 }
 
 function formRequest(request:Request){
@@ -70,23 +83,33 @@ export async function POST(request:Request){
 
   if(!sameOrigin(request))return loginFailure(request,parsed.nativeForm,returnPath,"Invalid request origin",403,"origin");
 
-  const identifier=String(body.loginId||body.email||"").trim(),key=await keyFor(request,identifier),now=Date.now(),db=env.DB,host=(request.headers.get("host")||new URL(request.url).host).toLowerCase().split(":")[0];
-  const row=await db.prepare("SELECT attempts, window_start AS windowStart FROM login_attempts WHERE key = ?").bind(key).first<{attempts:number;windowStart:number}>();
+  const identifier=String(body.loginId||body.email||"").trim(),keys=await attemptKeys(request,identifier),now=Date.now(),db=env.DB,host=(request.headers.get("host")||new URL(request.url).host).toLowerCase().split(":")[0];
 
-  if(row&&now-row.windowStart<WINDOW&&row.attempts>=MAX){
+  // Bound table growth even during sustained failed-login traffic.
+  await db.prepare("DELETE FROM login_attempts WHERE window_start < ?").bind(now-STALE_AFTER).run();
+
+  const [pairRow,ipRow]=await Promise.all([
+    db.prepare("SELECT attempts, window_start AS windowStart FROM login_attempts WHERE key = ?").bind(keys.pair).first<{attempts:number;windowStart:number}>(),
+    db.prepare("SELECT attempts, window_start AS windowStart FROM login_attempts WHERE key = ?").bind(keys.ip).first<{attempts:number;windowStart:number}>(),
+  ]);
+
+  if(
+    (pairRow&&now-pairRow.windowStart<WINDOW&&pairRow.attempts>=MAX)||
+    (ipRow&&now-ipRow.windowStart<WINDOW&&ipRow.attempts>=IP_MAX)
+  ){
     return loginFailure(request,parsed.nativeForm,returnPath,"Too many attempts. 15 minutes baad try karein.",429,"rate");
   }
 
   const session=await authenticateAdmin(identifier,String(body.password||""),host,{projectId:String(body.projectId||""),projectSlug:String(body.projectSlug||"")});
   if(!session){
-    if(!row||now-row.windowStart>=WINDOW)await db.prepare("INSERT INTO login_attempts (key, attempts, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts=1, window_start=excluded.window_start").bind(key,now).run();
-    else await db.prepare("UPDATE login_attempts SET attempts=attempts+1 WHERE key=?").bind(key).run();
+    await recordFailure(db,keys.pair,pairRow||null,now);
+    await recordFailure(db,keys.ip,ipRow||null,now);
     return loginFailure(request,parsed.nativeForm,returnPath,"Login ID ya password galat hai.",401,"invalid");
   }
 
   await db.batch([
-    db.prepare("DELETE FROM login_attempts WHERE key=?").bind(key),
-    db.prepare("DELETE FROM login_attempts WHERE window_start < ?").bind(now-24*60*60*1000),
+    db.prepare("DELETE FROM login_attempts WHERE key=?").bind(keys.pair),
+    db.prepare("DELETE FROM login_attempts WHERE key=?").bind(keys.ip),
   ]);
 
   const cookie=await sessionCookie(session);
