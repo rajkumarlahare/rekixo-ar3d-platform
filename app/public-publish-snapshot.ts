@@ -209,6 +209,39 @@ export async function promotePublishedAssets(
   );
 }
 
+export function finalizeInactivePlotInventoryStatements(projectId: string) {
+  return [
+    env.DB.prepare(
+      `UPDATE geo_features
+       SET linked_plot_id=NULL
+       WHERE project_id=?
+         AND linked_plot_id IN (
+           SELECT id FROM plots
+           WHERE project_id=? AND inventory_active=0
+         )`,
+    ).bind(projectId, projectId),
+    env.DB.prepare(
+      `DELETE FROM plot_edge_measurements
+       WHERE project_id=?
+         AND plot_id IN (
+           SELECT id FROM plots
+           WHERE project_id=? AND inventory_active=0
+         )`,
+    ).bind(projectId, projectId),
+    env.DB.prepare(
+      `DELETE FROM plot_pricing
+       WHERE project_id=?
+         AND plot_id IN (
+           SELECT id FROM plots
+           WHERE project_id=? AND inventory_active=0
+         )`,
+    ).bind(projectId, projectId),
+    env.DB.prepare(
+      "DELETE FROM plots WHERE project_id=? AND inventory_active=0",
+    ).bind(projectId),
+  ];
+}
+
 export function capturePublishedSnapshotStatements(
   projectId: string,
   publishVersion: number,
@@ -241,7 +274,7 @@ export function capturePublishedSnapshotStatements(
         dimension_unit,front_edge_index,depth_edge_index,back_edge_index,
         depth2_edge_index,front_label,depth_label,back_label,depth2_label,
         side_dimensions,edge_semantics,polygon,status,featured,updated_at
-      FROM plots WHERE project_id=?`,
+      FROM plots WHERE project_id=? AND inventory_active=1`,
     ).bind(projectId),
     env.DB.prepare(
       `INSERT INTO published_plot_edge_measurements (
@@ -249,9 +282,16 @@ export function capturePublishedSnapshotStatements(
         raw_label,road_frontage,road_access
       )
       SELECT
-        project_id,plot_id,role,segment_index,edge_index,point_count,length,unit,
-        raw_label,road_frontage,road_access
-      FROM plot_edge_measurements WHERE project_id=?`,
+        m.project_id,m.plot_id,m.role,m.segment_index,m.edge_index,m.point_count,
+        m.length,m.unit,m.raw_label,m.road_frontage,m.road_access
+      FROM plot_edge_measurements m
+      WHERE m.project_id=?
+        AND EXISTS (
+          SELECT 1 FROM plots p
+          WHERE p.project_id=m.project_id
+            AND p.id=m.plot_id
+            AND p.inventory_active=1
+        )`,
     ).bind(projectId),
     env.DB.prepare(
       `INSERT INTO published_settings (project_id,key,value)

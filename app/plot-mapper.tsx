@@ -174,6 +174,20 @@ type PlotSheetQualitySummary = {
   richDetailReady: boolean;
 };
 
+type PlotInventorySummary = {
+  existingActiveCount: number;
+  incomingCount: number;
+  retainedCount: number;
+  addedIds: string[];
+  restoredIds: string[];
+  missingIds: string[];
+  missingMappedIds: string[];
+  missingNonAvailableIds: string[];
+  missingPricedIds: string[];
+  confirmationRequired: boolean;
+  confirmationToken: string;
+};
+
 type CurrentPlotQuality = {
   total: number;
   dimensionsComplete: number;
@@ -2416,6 +2430,8 @@ export default function PlotMapper({
   async function preflightPlotSheet(file: File) {
     setBusy(true);
     let quality: PlotSheetQualitySummary | null = null;
+    let inventory: PlotInventorySummary | null = null;
+    let inventoryConfirmation = "";
     try {
       const data = new FormData();
       data.append("projectId", projectId);
@@ -2427,7 +2443,45 @@ export default function PlotMapper({
       });
       const result = await apiResult(response);
       quality = (result.quality || null) as PlotSheetQualitySummary | null;
+      inventory = (result.inventory || null) as PlotInventorySummary | null;
       if (!quality) throw new Error("Plot sheet quality report nahi mila");
+      if (!inventory) throw new Error("Plot inventory reconciliation report nahi mila");
+
+      if (inventory.confirmationRequired) {
+        const examples = inventory.missingIds.slice(0, 16);
+        const proceed = window.confirm(
+          [
+            "Canonical Plot Data inventory change detected.",
+            "",
+            `Current active plots: ${inventory.existingActiveCount}`,
+            `Incoming canonical plots: ${inventory.incomingCount}`,
+            `Plots missing from new sheet: ${inventory.missingIds.length}`,
+            examples.length ? `Missing examples: ${examples.join(", ")}` : "",
+            inventory.missingMappedIds.length
+              ? `Mapped boundaries affected: ${inventory.missingMappedIds.length}`
+              : "",
+            inventory.missingNonAvailableIds.length
+              ? `Booked/Sold affected: ${inventory.missingNonAvailableIds.length}`
+              : "",
+            inventory.missingPricedIds.length
+              ? `Pricing rows affected: ${inventory.missingPricedIds.length}`
+              : "",
+            "",
+            "Confirm करने पर ये plots mapper draft inventory से हटेंगे.",
+            "Current published customer website पर ये Publish Update तक बने रहेंगे.",
+            "Publish Update के समय removal final होगा.",
+            "",
+            "Inventory reconciliation confirm करें?",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+        if (!proceed) {
+          notify("Plot inventory reconciliation cancel की गई — कोई बदलाव नहीं हुआ");
+          return;
+        }
+        inventoryConfirmation = inventory.confirmationToken;
+      }
 
       if (!quality.richDetailReady) {
         const problemLines = [
@@ -2484,12 +2538,14 @@ export default function PlotMapper({
       setBusy(false);
     }
 
-    if (quality) await upload(file, "plotSheet");
+    if (quality && inventory)
+      await upload(file, "plotSheet", { inventoryConfirmation });
   }
 
   async function upload(
     file: File,
     kind: "masterplan" | "sourcePdf" | "sourceCad" | "plotSheet" | "measurementSheet" | "roadAccessSheet" | "sideMappingSheet" | "logo",
+    options: { inventoryConfirmation?: string } = {},
   ) {
     if (completedProject && !["sourcePdf", "logo", "measurementSheet", "roadAccessSheet", "sideMappingSheet"].includes(kind)) {
       notify("Tiyansh completed project locked है");
@@ -2501,6 +2557,9 @@ export default function PlotMapper({
       const data = new FormData();
       data.append("projectId", projectId);
       data.append("kind", kind);
+      if (kind === "plotSheet" && options.inventoryConfirmation) {
+        data.append("inventoryConfirmation", options.inventoryConfirmation);
+      }
       if (kind === "logo") {
         data.append("file", await prepareProjectLogo(file));
       } else if (kind === "masterplan") {
@@ -2586,10 +2645,12 @@ export default function PlotMapper({
         notify(String((result.cadGeometry as CadGeometry | undefined)?.candidates.length || 0) + " CAD boundaries मिलीं");
       } else if (kind === "plotSheet") {
         const quality = (result.quality || null) as PlotSheetQualitySummary | null;
+        const inventory = (result.inventory || null) as PlotInventorySummary | null;
         const autoSideMapped = Number(result.autoSideMapped || 0);
+        const pendingRemoval = inventory?.missingIds.length || 0;
         notify(
           quality
-            ? `${Number(result.count || 0)} plots imported · full details ${quality.fullDetailCount}/${quality.total}${autoSideMapped ? ` · ${autoSideMapped} side maps auto-applied` : ""}`
+            ? `${Number(result.count || 0)} plots imported · full details ${quality.fullDetailCount}/${quality.total}${autoSideMapped ? ` · ${autoSideMapped} side maps auto-applied` : ""}${pendingRemoval ? ` · ${pendingRemoval} removals pending Publish Update` : ""}`
             : String(Number(result.count || 0)) + " plot records import हुए",
         );
       } else if (kind === "measurementSheet") {

@@ -60,6 +60,129 @@ async function projectExists(projectId: string) {
   );
 }
 
+type PlotInventoryDiff = {
+  existingActiveCount: number;
+  incomingCount: number;
+  retainedCount: number;
+  addedIds: string[];
+  restoredIds: string[];
+  missingIds: string[];
+  missingMappedIds: string[];
+  missingNonAvailableIds: string[];
+  missingPricedIds: string[];
+  confirmationRequired: boolean;
+  confirmationToken: string;
+};
+
+async function inventoryConfirmationToken(
+  projectId: string,
+  incomingIds: string[],
+  existingRows: Array<{ id: string; inventoryActive: number | boolean }>,
+) {
+  const state = JSON.stringify({
+    projectId,
+    incoming: [...incomingIds].sort(),
+    active: existingRows
+      .filter((row) => Boolean(row.inventoryActive))
+      .map((row) => row.id)
+      .sort(),
+    inactive: existingRows
+      .filter((row) => !Boolean(row.inventoryActive))
+      .map((row) => row.id)
+      .sort(),
+  });
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(state),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+async function plotInventoryDiff(
+  projectId: string,
+  incomingIds: string[],
+): Promise<PlotInventoryDiff> {
+  const result = await env.DB.prepare(
+    `SELECT
+       p.id,
+       p.inventory_active AS inventoryActive,
+       p.status,
+       p.polygon,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM plot_pricing pr
+         WHERE pr.project_id=p.project_id AND pr.plot_id=p.id
+       ) THEN 1 ELSE 0 END AS priced
+     FROM plots p
+     WHERE p.project_id=?
+     ORDER BY p.id`,
+  )
+    .bind(projectId)
+    .all<{
+      id: string;
+      inventoryActive: number | boolean;
+      status: string;
+      polygon: string | null;
+      priced: number;
+    }>();
+
+  const rows = result.results;
+  const incoming = new Set(incomingIds);
+  const allById = new Map(rows.map((row) => [row.id, row]));
+  const activeRows = rows.filter((row) => Boolean(row.inventoryActive));
+  const missingRows = activeRows.filter((row) => !incoming.has(row.id));
+  const addedIds = incomingIds.filter((id) => !allById.has(id));
+  const restoredIds = incomingIds.filter((id) => {
+    const row = allById.get(id);
+    return Boolean(row && !Boolean(row.inventoryActive));
+  });
+  const retainedCount = incomingIds.length - addedIds.length - restoredIds.length;
+  const confirmationToken = missingRows.length
+    ? await inventoryConfirmationToken(projectId, incomingIds, rows)
+    : "";
+
+  return {
+    existingActiveCount: activeRows.length,
+    incomingCount: incomingIds.length,
+    retainedCount,
+    addedIds,
+    restoredIds,
+    missingIds: missingRows.map((row) => row.id),
+    missingMappedIds: missingRows
+      .filter((row) => String(row.polygon || "").trim())
+      .map((row) => row.id),
+    missingNonAvailableIds: missingRows
+      .filter((row) => row.status !== "available")
+      .map((row) => row.id),
+    missingPricedIds: missingRows
+      .filter((row) => Boolean(row.priced))
+      .map((row) => row.id),
+    confirmationRequired: missingRows.length > 0,
+    confirmationToken,
+  };
+}
+
+async function setPlotInventoryActive(
+  projectId: string,
+  ids: string[],
+  active: boolean,
+  now: string,
+) {
+  for (let index = 0; index < ids.length; index += 80) {
+    const chunk = ids.slice(index, index + 80);
+    if (!chunk.length) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    await env.DB.prepare(
+      `UPDATE plots
+       SET inventory_active=?,updated_at=?
+       WHERE project_id=? AND id IN (${placeholders})`,
+    )
+      .bind(active ? 1 : 0, now, projectId, ...chunk)
+      .run();
+  }
+}
+
 function validPolygon(value: string) {
   try {
     const points = JSON.parse(value);
@@ -382,8 +505,8 @@ async function savePlots(
   // Plot-sheet re-import preserves hand-curated geometry/status and only replaces
   // semantic Front/Depth metadata when the incoming sheet explicitly supplies it.
   const statement = preserveGeometry
-    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),back=COALESCE(excluded.back,back),depth2=COALESCE(excluded.depth2,depth2),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),back_edge_index=COALESCE(excluded.back_edge_index,back_edge_index),depth2_edge_index=COALESCE(excluded.depth2_edge_index,depth2_edge_index),front_label=COALESCE(excluded.front_label,front_label),depth_label=COALESCE(excluded.depth_label,depth_label),back_label=COALESCE(excluded.back_label,back_label),depth2_label=COALESCE(excluded.depth2_label,depth2_label),side_dimensions=COALESCE(excluded.side_dimensions,side_dimensions),edge_semantics=COALESCE(excluded.edge_semantics,edge_semantics),notes=excluded.notes,updated_at=excluded.updated_at"
-    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,back=excluded.back,depth2=excluded.depth2,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,back_edge_index=excluded.back_edge_index,depth2_edge_index=excluded.depth2_edge_index,front_label=excluded.front_label,depth_label=excluded.depth_label,back_label=excluded.back_label,depth2_label=excluded.depth2_label,side_dimensions=excluded.side_dimensions,edge_semantics=excluded.edge_semantics,polygon=excluded.polygon,notes=excluded.notes,updated_at=excluded.updated_at";
+    ? "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,inventory_active,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=COALESCE(excluded.front,front),depth=COALESCE(excluded.depth,depth),back=COALESCE(excluded.back,back),depth2=COALESCE(excluded.depth2,depth2),dimension_unit=COALESCE(excluded.dimension_unit,dimension_unit),front_edge_index=COALESCE(excluded.front_edge_index,front_edge_index),depth_edge_index=COALESCE(excluded.depth_edge_index,depth_edge_index),back_edge_index=COALESCE(excluded.back_edge_index,back_edge_index),depth2_edge_index=COALESCE(excluded.depth2_edge_index,depth2_edge_index),front_label=COALESCE(excluded.front_label,front_label),depth_label=COALESCE(excluded.depth_label,depth_label),back_label=COALESCE(excluded.back_label,back_label),depth2_label=COALESCE(excluded.depth2_label,depth2_label),side_dimensions=COALESCE(excluded.side_dimensions,side_dimensions),edge_semantics=COALESCE(excluded.edge_semantics,edge_semantics),inventory_active=1,notes=excluded.notes,updated_at=excluded.updated_at"
+    : "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,inventory_active,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET sqft=excluded.sqft,sqm=excluded.sqm,sqyd=excluded.sqyd,dimensions=excluded.dimensions,road=excluded.road,front=excluded.front,depth=excluded.depth,back=excluded.back,depth2=excluded.depth2,dimension_unit=excluded.dimension_unit,front_edge_index=excluded.front_edge_index,depth_edge_index=excluded.depth_edge_index,back_edge_index=excluded.back_edge_index,depth2_edge_index=excluded.depth2_edge_index,front_label=excluded.front_label,depth_label=excluded.depth_label,back_label=excluded.back_label,depth2_label=excluded.depth2_label,side_dimensions=excluded.side_dimensions,edge_semantics=excluded.edge_semantics,polygon=excluded.polygon,inventory_active=1,notes=excluded.notes,updated_at=excluded.updated_at";
 
   for (let index = 0; index < saved.length; index += 80) {
     const chunk = saved.slice(index, index + 80);
@@ -416,6 +539,7 @@ async function savePlots(
           plot.status,
           plot.notes,
           plot.featured,
+          1,
           plot.updatedAt,
         ),
       ),
@@ -471,7 +595,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   const [plots, settings, cadGeometry] = await Promise.all([
     env.DB.prepare(
-      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,back AS back,depth2 AS depth2,back_label AS backLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
+      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,back AS back,depth2 AS depth2,back_label AS backLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,status,notes,featured,polygon FROM plots WHERE project_id=? AND inventory_active=1 ORDER BY id",
     )
       .bind(projectId)
       .all(),
@@ -815,7 +939,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "Side Mapping CSV me valid rows nahi mili" }, { status: 400 });
 
       const plotRows = await env.DB.prepare(
-        "SELECT id,polygon FROM plots WHERE project_id=?",
+        "SELECT id,polygon FROM plots WHERE project_id=? AND inventory_active=1",
       )
         .bind(projectId)
         .all<{ id: string; polygon: string | null }>();
@@ -898,7 +1022,7 @@ export async function POST(request: Request) {
         );
 
       const plotRows = await env.DB.prepare(
-        "SELECT id,polygon,road,edge_semantics AS edgeSemantics,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=?",
+        "SELECT id,polygon,road,edge_semantics AS edgeSemantics,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=? AND inventory_active=1",
       )
         .bind(projectId)
         .all<{
@@ -1099,7 +1223,7 @@ export async function POST(request: Request) {
       // Safety contract: this importer never creates plots and never touches area,
       // dimensions, Front/Back/Depth, polygons, pricing, or Booked/Sold status.
       const existing = await env.DB.prepare(
-        "SELECT id FROM plots WHERE project_id=?",
+        "SELECT id FROM plots WHERE project_id=? AND inventory_active=1",
       )
         .bind(projectId)
         .all<{ id: string }>();
@@ -1162,6 +1286,8 @@ export async function POST(request: Request) {
         );
 
       const quality = assessPlotSheetRows(rows);
+      const incomingIds = Array.from(new Set(rows.map((row) => row.id)));
+      const inventory = await plotInventoryDiff(projectId, incomingIds);
       await writeAudit(actor, "mapper.plotSheet_preflight", projectId, null, {
         filename: file.name,
         count: rows.length,
@@ -1172,12 +1298,18 @@ export async function POST(request: Request) {
         partialSideMeasurements: quality.partialSideMeasurements.length,
         genericAreaOnlyDimensions: quality.genericAreaOnlyDimensions.length,
         missingFrontDirection: quality.missingFrontDirection.length,
+        inventoryExisting: inventory.existingActiveCount,
+        inventoryIncoming: inventory.incomingCount,
+        inventoryAdded: inventory.addedIds.length,
+        inventoryRestored: inventory.restoredIds.length,
+        inventoryPendingRemoval: inventory.missingIds.length,
       });
       return Response.json({
         ok: true,
         name: file.name,
         count: rows.length,
         quality,
+        inventory,
       });
     }
 
@@ -1198,8 +1330,29 @@ export async function POST(request: Request) {
       if (rows.length > 2000)
         return Response.json({ error: "Ek project me adhiktam 2000 plot rows import karein" }, { status: 400 });
       const quality = assessPlotSheetRows(rows);
-      // Store only after parsing succeeds, so a bad upload does not replace the
-      // last known-good source sheet.
+      const incomingIds = Array.from(new Set(rows.map((row) => row.id)));
+      const inventory = await plotInventoryDiff(projectId, incomingIds);
+      const inventoryConfirmation = String(
+        form.get("inventoryConfirmation") || "",
+      );
+      if (
+        inventory.confirmationRequired &&
+        inventoryConfirmation !== inventory.confirmationToken
+      ) {
+        return Response.json(
+          {
+            error:
+              "Canonical Plot Data me existing plots missing hain. Inventory reconciliation confirm karein.",
+            code: "PLOT_INVENTORY_CONFIRMATION_REQUIRED",
+            reconciliationRequired: true,
+            inventory,
+          },
+          { status: 409 },
+        );
+      }
+
+      // Store only after parsing and inventory confirmation both succeed, so a
+      // bad/accidental replacement never overwrites the last known-good source.
       await env.BUCKET.put(objectKey, file.stream(), {
         httpMetadata: { contentType: file.type || "text/csv" },
       });
@@ -1209,45 +1362,64 @@ export async function POST(request: Request) {
         rows.map((row) => ({ ...row, polygon: "", status: "available", featured: false })),
         true,
       );
+      await setPlotInventoryActive(
+        projectId,
+        inventory.missingIds,
+        false,
+        now,
+      );
 
+      // Missing canonical rows are draft-inactive, not immediately deleted.
+      // This preserves the currently published customer inventory/status/pricing
+      // until Publish Update atomically promotes the new canonical inventory.
       // Normal new-project flow uses ONE canonical plot sheet. Front Direction
       // is stored even before polygons exist, then automatically converted to
       // canonical Front/Back/Depth A/Depth B edge semantics as soon as geometry
       // is available. Separate Side Mapping CSV remains an advanced correction tool.
       const directionRows = rows.filter((row) => row.frontDirection);
-      let autoSideMapped = 0;
-      if (directionRows.length) {
-        const existingDirectionSetting = await env.DB.prepare(
-          "SELECT value FROM settings WHERE project_id=? AND key='plotFrontDirections' LIMIT 1",
-        )
-          .bind(projectId)
-          .first<{ value: string }>();
-        let existingDirections: Record<string, EdgeDirection> = {};
-        try {
-          const parsed = JSON.parse(existingDirectionSetting?.value || "{}");
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            existingDirections = Object.fromEntries(
-              Object.entries(parsed).filter((entry): entry is [string, EdgeDirection] =>
+      const incomingIdSet = new Set(incomingIds);
+      const existingDirectionSetting = await env.DB.prepare(
+        "SELECT value FROM settings WHERE project_id=? AND key='plotFrontDirections' LIMIT 1",
+      )
+        .bind(projectId)
+        .first<{ value: string }>();
+      let existingDirections: Record<string, EdgeDirection> = {};
+      try {
+        const parsed = JSON.parse(existingDirectionSetting?.value || "{}");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          existingDirections = Object.fromEntries(
+            Object.entries(parsed).filter(
+              (entry): entry is [string, EdgeDirection] =>
+                incomingIdSet.has(entry[0]) &&
                 ["top", "right", "bottom", "left"].includes(String(entry[1])),
-              ),
-            );
-          }
-        } catch {
-          existingDirections = {};
+            ),
+          );
         }
-        const mergedDirections: Record<string, EdgeDirection> = {
-          ...existingDirections,
-        };
-        for (const row of directionRows) {
-          mergedDirections[row.id] = row.frontDirection as EdgeDirection;
-        }
+      } catch {
+        existingDirections = {};
+      }
+      const mergedDirections: Record<string, EdgeDirection> = {
+        ...existingDirections,
+      };
+      for (const row of directionRows) {
+        mergedDirections[row.id] = row.frontDirection as EdgeDirection;
+      }
+      if (
+        existingDirectionSetting ||
+        directionRows.length ||
+        inventory.missingIds.length ||
+        inventory.restoredIds.length
+      ) {
         await writeSetting(
           projectId,
           "plotFrontDirections",
           JSON.stringify(mergedDirections),
           now,
         );
+      }
 
+      let autoSideMapped = 0;
+      if (directionRows.length) {
         const [rotationRow, mappedRows] = await Promise.all([
           env.DB.prepare(
             "SELECT value FROM settings WHERE project_id=? AND key='publicRotation' LIMIT 1",
@@ -1255,7 +1427,7 @@ export async function POST(request: Request) {
             .bind(projectId)
             .first<{ value: string }>(),
           env.DB.prepare(
-            "SELECT id,polygon FROM plots WHERE project_id=? AND TRIM(COALESCE(polygon,''))<>''",
+            "SELECT id,polygon FROM plots WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
           )
             .bind(projectId)
             .all<{ id: string; polygon: string }>(),
@@ -1325,6 +1497,12 @@ export async function POST(request: Request) {
         partialSideMeasurements: quality.partialSideMeasurements.length,
         missingFrontDirection: quality.missingFrontDirection.length,
         autoSideMapped,
+        inventoryExisting: inventory.existingActiveCount,
+        inventoryIncoming: inventory.incomingCount,
+        inventoryAdded: inventory.addedIds.length,
+        inventoryRestored: inventory.restoredIds.length,
+        inventoryPendingRemoval: inventory.missingIds.length,
+        pendingRemovalIds: inventory.missingIds.slice(0, 100),
       });
       return Response.json({
         ok: true,
@@ -1333,6 +1511,7 @@ export async function POST(request: Request) {
         plots: saved,
         quality,
         autoSideMapped,
+        inventory,
       });
     }
 
@@ -1371,7 +1550,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Clear all confirmation invalid है" }, { status: 400 });
     }
     const count = await env.DB.prepare(
-      "SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND TRIM(COALESCE(polygon,''))<>''",
+      "SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
     )
       .bind(projectId)
       .first<{ total: number }>();
@@ -1381,7 +1560,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare(
-        "UPDATE plots SET polygon='',updated_at=? WHERE project_id=? AND TRIM(COALESCE(polygon,''))<>''",
+        "UPDATE plots SET polygon='',updated_at=? WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
       ).bind(now, projectId),
       env.DB.prepare(
         "INSERT INTO audit_logs (id,actor_id,actor_email,action,project_id,target_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -1411,7 +1590,7 @@ export async function POST(request: Request) {
         if (key === "sqmToSqftFactor") {
           const factor = normalizeSqmToSqftFactor(validated);
           await env.DB.prepare(
-            "UPDATE plots SET sqft=ROUND(sqm * ?, 3),updated_at=? WHERE project_id=? AND sqm>0",
+            "UPDATE plots SET sqft=ROUND(sqm * ?, 3),updated_at=? WHERE project_id=? AND inventory_active=1 AND sqm>0",
           )
             .bind(factor, now, projectId)
             .run();
