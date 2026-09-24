@@ -238,6 +238,11 @@ export async function GET(
   }
   if (!object) return new Response("Not found", { status: 404 });
 
+  // Published versioned masterplan/logo responses are immutable by design. The
+  // public-site kill switch is checked above on every origin request, but bytes
+  // already stored in a browser/CDN immutable cache cannot be recalled. Runtime
+  // shells revalidate and gallery bytes are no-store so revocation-sensitive
+  // surfaces still return to origin promptly.
   const versionedRequest = requestUrl.searchParams.has("v");
   const headers = new Headers({
     "content-type": object.httpMetadata?.contentType || "application/octet-stream",
