@@ -11,6 +11,7 @@ import {
   Cuboid,
   Share2,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
 } from "lucide-react";
 import ClientAdminManager from "./client-admin-manager";
@@ -36,7 +37,7 @@ type Project = {
   adminCount: number;
 };
 
-type WorkspaceTab = "clients" | "profile" | "mapper" | "geo" | "three-d" | "share" | "assets";
+type WorkspaceTab = "clients" | "profile" | "mapper" | "mapping-controls" | "geo" | "three-d" | "share" | "assets";
 
 export default function SuperAdminDashboard({
   user,
@@ -128,7 +129,9 @@ export default function SuperAdminDashboard({
         ? "Project Profile"
         : tab === "mapper"
           ? "Plot Mapper Engine"
-          : tab === "geo"
+          : tab === "mapping-controls"
+            ? "Mapping Controls"
+            : tab === "geo"
             ? "Geo Mapper"
             : tab === "three-d"
               ? "3D Engine Integration"
@@ -142,7 +145,9 @@ export default function SuperAdminDashboard({
         ? "One canonical contact profile plus project-wise customer actions — Super Admin controls what the public site exposes."
         : tab === "mapper"
           ? "Company masterplan से client website के clickable plots तैयार करें।"
-          : tab === "geo"
+          : tab === "mapping-controls"
+            ? "Selected project ke canonical plot boundaries, Front/Back/Depth semantics aur measurements ko dedicated workspace me safely edit karein."
+            : tab === "geo"
             ? "Project boundaries, GPS control points aur GIS exchange data ko isolated Geo workspace me manage karein."
             : tab === "three-d"
               ? "Platform project ko isolated Rekixo AR3D Engine project se safely link karein."
@@ -181,6 +186,12 @@ export default function SuperAdminDashboard({
             onClick={() => setTab("mapper")}
           >
             <MapPinned /> Plot Mapper
+          </button>
+          <button
+            className={tab === "mapping-controls" ? "active" : ""}
+            onClick={() => setTab("mapping-controls")}
+          >
+            <SlidersHorizontal /> Mapping Controls
           </button>
           <button
             className={tab === "geo" ? "active" : ""}
@@ -245,7 +256,7 @@ export default function SuperAdminDashboard({
                 </>
               ) : (
                 <>
-                  {projectId && tab !== "assets" ? (
+                  {projectId && tab !== "assets" && tab !== "mapping-controls" ? (
                     <ProjectPublicAccessManager
                       key={`public-access:${projectId}`}
                       projectId={projectId}
@@ -280,6 +291,13 @@ export default function SuperAdminDashboard({
                       />
                       <ProjectPublishPanel projectId={projectId} notify={notify} />
                     </>
+                  ) : tab === "mapping-controls" ? (
+                    <PlotMapper
+                      key={`mapping-controls:${projectId}`}
+                      projectId={projectId}
+                      notify={notify}
+                      workspaceMode="controls"
+                    />
                   ) : tab === "geo" ? (
                     <>
                       <GeoLabClone

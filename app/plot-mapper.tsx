@@ -1069,10 +1069,13 @@ function dimensionPair(value: string) {
 export default function PlotMapper({
   notify,
   projectId,
+  workspaceMode = "full",
 }: {
   notify: (message: string) => void;
   projectId: string;
+  workspaceMode?: "full" | "controls";
 }) {
+  const controlsWorkspace = workspaceMode === "controls";
   const completedProject = projectId === COMPLETED_PROJECT_ID;
   const assetUrl = (kind: string) =>
     completedProject && kind === "masterplan"
@@ -3907,7 +3910,11 @@ export default function PlotMapper({
   const sourceSceneAspectRatio = `${sourceWidth} / ${sourceHeight}`;
 
   return (
-    <section className="mapper-shell auto-cad-mapper" onContextMenu={(event) => event.preventDefault()}>
+    <section
+      className={`mapper-shell auto-cad-mapper${controlsWorkspace ? " mapping-controls-workspace" : ""}`}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      {!controlsWorkspace && (
       <div className="card mapper-tools mapper-v2-head">
         <div className="section-title">
           <MousePointer2 />
@@ -4227,8 +4234,9 @@ export default function PlotMapper({
         {settings.sourcePdfName && <a className="mapper-pdf-link" href={assetUrl("sourcePdf")} target="_blank" rel="noreferrer"><FileText /> Open technical PDF reference</a>}
         {settings.cadParseError && <div className="mapper-warning">CAD source सुरक्षित है, लेकिन automatic geometry parse नहीं हुआ: {settings.cadParseError}. DXF export upload करें या Manual Precise fallback use करें.</div>}
       </div>
+      )}
 
-      {cadGeometry && !completedProject && (
+      {cadGeometry && !completedProject && !controlsWorkspace && (
         <details className="card cad-assistant-card">
           <summary>
             <span><b>Advanced CAD Assistant</b><small>Optional auto-suggestions; normal plot mapping main image par hoti hai.</small></span>
@@ -4279,6 +4287,27 @@ export default function PlotMapper({
           </div>
           </div>
         </details>
+      )}
+
+      {controlsWorkspace && (
+        <div className="card mapping-controls-safety-note" role="note" aria-label="Mapping Controls safety notice">
+          <CheckCircle2 />
+          <div>
+            <small>SAFE MAPPING WORKSPACE</small>
+            <h2>Mapping Controls</h2>
+            <p>
+              Yeh koi duplicate mapper ya duplicate data store nahi hai. Isi project-scoped
+              canonical Plot Mapper state aur <code>/api/super-mapper</code> save/verify flow
+              ko reuse karta hai. Save/Update sirf selected project ki editable mapping ko
+              change karta hai; live customer site tab tak unchanged rehti hai jab tak
+              Publish Update nahi kiya jata.
+            </p>
+            <span>
+              Masterplan / Plot Data / PDF / CAD source upload aur publishing controls original
+              Plot Mapper page par hi rahenge.
+            </span>
+          </div>
+        </div>
       )}
 
       <div className="mapper-work mapper-v4-work">
@@ -5040,7 +5069,7 @@ export default function PlotMapper({
         </aside>
       </div>
 
-      {!completedProject && liveMatrix && acceptedAutoMatches.length > 0 && (
+      {!controlsWorkspace && !completedProject && liveMatrix && acceptedAutoMatches.length > 0 && (
         <div className="card auto-publish-card cad-only-card">
           <div>
             <small>AUTO MATCH REVIEW</small>
