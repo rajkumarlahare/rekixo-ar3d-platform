@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { sharedPublicRuntimeAssetPath } from "../worker/shared-assets.mjs";
 
 const source = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
@@ -68,7 +69,14 @@ test("Rekixo static assets use a native isolated namespace plus compatibility fa
   assert.match(nextConfig, /assetPrefix:\s*"\/__rekixo"/);
   assert.match(helpers, /SHARED_ASSET_PREFIX = "\/__rekixo"/);
   assert.match(helpers, /rewriteAssetReferences/);
+  assert.equal(sharedPublicRuntimeAssetPath("/__rekixo/project/"), "/project/index.html");
+  assert.equal(sharedPublicRuntimeAssetPath("/__rekixo/project"), "/project/index.html");
+  assert.equal(sharedPublicRuntimeAssetPath("/__rekixo/project/index.html"), "/project/index.html");
+  assert.equal(sharedPublicRuntimeAssetPath("/__rekixo/project/project-geometry.js"), "/project/project-geometry.js");
+  assert.equal(sharedPublicRuntimeAssetPath("/__rekixo/_next/static/a.js"), null);
   assert.match(worker, /stripSharedAssetPrefix/);
+  assert.match(worker, /fetchPrefixedPublicRuntimeAsset/);
+  assert.match(worker, /directPublicRuntimeAsset/);
   assert.match(worker, /fetchPrefixedFrameworkAsset/);
   assert.match(worker, /env\.ASSETS\.fetch\(request\)/);
   assert.match(worker, /CLIENT_PLATFORM_HOST/);
