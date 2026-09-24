@@ -1362,3 +1362,20 @@
   .project-assets-stats,
   .project-assets-project-meta{grid-template-columns:1fr}
 }
+
+.project-assets-original-badge{
+  width:max-content;
+  max-width:100%;
+  margin-top:3px;
+  display:inline-flex;
+  align-items:center;
+  border:1px solid #2d7255;
+  border-radius:999px;
+  background:#0d2c22;
+  color:#66e0a8;
+  padding:3px 7px;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.04em;
+  white-space:normal;
+}
