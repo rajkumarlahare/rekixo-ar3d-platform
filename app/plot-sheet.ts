@@ -265,7 +265,9 @@ function normalizeRow(
   if (!sqm && sqyd) sqm = sqydToSqm(sqyd);
   if (!sqft && sqm) sqft = sqmToSqft(sqm, sqmToSqftFactor);
   if (!sqyd && sqm) sqyd = sqmToSqyd(sqm);
-  if (!sqft) return null;
+  // Keep a valid Plot ID in canonical inventory even when its authoritative area
+  // is intentionally unknown. Zero is the internal "unknown/not supplied" sentinel;
+  // we never derive or fabricate an area from the masterplan image.
   const dimensions = String(input.dimensions || "").trim().slice(0, 120);
   const front = optionalPositive(input.front, "Front");
   const depth = optionalPositive(input.depth, "Depth");
