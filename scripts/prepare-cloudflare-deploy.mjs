@@ -78,6 +78,17 @@ if (mode === "client" && sharedDomainRoutes.length) {
   delete config.routes;
 }
 
+// Cloudflare Static Assets defaults to auto-trailing-slash HTML handling.
+// On the shared Generic Client Worker that would canonicalize
+// /project/index.html -> /project while the Worker is intentionally serving
+// /__rekixo/project/. The redirect escapes the reserved Rekixo namespace and
+// falls through to the boss/Vercel origin. Disable HTML canonicalization only
+// for the Generic Client Worker; legacy/super retain their existing default.
+if (config.assets && typeof config.assets === "object") {
+  if (mode === "client") config.assets.html_handling = "none";
+  else delete config.assets.html_handling;
+}
+
 config.d1_databases = [
   {
     binding: "DB",
