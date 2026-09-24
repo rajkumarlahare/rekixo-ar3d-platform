@@ -375,9 +375,9 @@ export async function GET(request: Request) {
         platformUrl: links.platformUrl,
         engine3d,
         plots: plotRows.map((plot) => {
-          const { notes, inventoryActive, ...publicPlot } = plot;
+          const { notes, ...publicPlot } = plot;
           void notes;
-          void inventoryActive;
+          delete (publicPlot as { inventoryActive?: unknown }).inventoryActive;
           const edgeMeasurements = (edgeMeasurementsByPlot.get(plot.id) || []).map(
             (item) => ({
               role: item.role,
