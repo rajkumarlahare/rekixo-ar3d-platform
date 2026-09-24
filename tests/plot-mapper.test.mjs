@@ -60,7 +60,8 @@ test("auto CAD mapper is owner-only, project-native and keeps precise manual fal
   assert.match(api, /Completed Tiyansh mapper locked/);
   assert.match(api, /body\.action === "clear_all_polygons"/);
   assert.match(api, /mapper\.all_boundaries_removed/);
-  assert.match(api, /UPDATE plots SET polygon='',updated_at=\?/);
+  assert.match(api, /SET polygon=''[\s\S]*front_edge_index=NULL[\s\S]*edge_semantics=NULL/);
+  assert.match(api, /UPDATE plot_edge_measurements[\s\S]*edge_index=NULL,point_count=NULL/);
   assert.match(schema, /polygon:text\("polygon"\)/);
 
   assert.match(website, /setMapDimensions/);
