@@ -73,7 +73,8 @@ test("Rekixo static assets use a native isolated namespace plus compatibility fa
   assert.match(worker, /env\.ASSETS\.fetch\(request\)/);
   assert.match(worker, /CLIENT_PLATFORM_HOST/);
   assert.match(worker, /externalUrl\.pathname\.startsWith\("\/projects\/"\)/);
-  assert.match(projectPage, /\/__rekixo\/project\/index\.html\?projectSlug=/);
+  assert.match(projectPage, /\/__rekixo\/project\/\?projectSlug=/);
+  assert.doesNotMatch(projectPage, /\/__rekixo\/project\/index\.html\?projectSlug=/);
   assert.match(dashboard, /\/api\/project-asset\/masterplan\?projectId=/);
 });
 
