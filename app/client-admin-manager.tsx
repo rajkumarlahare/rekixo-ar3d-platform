@@ -31,6 +31,8 @@ type ClientAdmin = {
   projectSlug?: string;
   publicHost: string | null;
   adminHost: string | null;
+  projectAdminCount: number;
+  projectActiveAdminCount: number;
   adminUrl?: string;
 };
 
@@ -64,6 +66,7 @@ type Audit = {
 
 const CLIENT_PAGE_SIZE = 8;
 const AUDIT_PAGE_SIZE = 10;
+const ARCHIVE_PAGE_SIZE = 8;
 
 export default function ClientAdminManager({
   notify,
@@ -81,6 +84,7 @@ export default function ClientAdminManager({
   const [projectName, setProjectName] = useState("");
   const [existingProjectId, setExistingProjectId] = useState("");
   const [projectSearch, setProjectSearch] = useState("");
+  const [projectOptionsLoading, setProjectOptionsLoading] = useState(false);
   const [publicHost, setPublicHost] = useState("");
   const [adminHost, setAdminHost] = useState("");
   const [fallbackAdminUrl, setFallbackAdminUrl] = useState("");
@@ -97,6 +101,11 @@ export default function ClientAdminManager({
   const [clientsLoading, setClientsLoading] = useState(false);
   const [usersTotal, setUsersTotal] = useState(0);
 
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [archivedLoaded, setArchivedLoaded] = useState(false);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedTotal, setArchivedTotal] = useState(0);
+
   const [auditsOpen, setAuditsOpen] = useState(false);
   const [auditsLoaded, setAuditsLoaded] = useState(false);
   const [auditsLoading, setAuditsLoading] = useState(false);
@@ -104,16 +113,23 @@ export default function ClientAdminManager({
 
   useEffect(() => {
     let active = true;
-    fetch("/api/admin/users?section=summary", { cache: "no-store" })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
+    Promise.all([
+      fetch("/api/admin/users?section=summary", { cache: "no-store" }),
+      fetch("/api/admin/users?section=project_options&limit=20", { cache: "no-store" }),
+    ])
+      .then(async ([summaryResponse, projectResponse]) => {
+        const [summary, projectData] = await Promise.all([
+          summaryResponse.json(),
+          projectResponse.json(),
+        ]);
+        if (!summaryResponse.ok) throw new Error(summary.error);
+        if (!projectResponse.ok) throw new Error(projectData.error);
         if (!active) return;
-        setProjects(data.projects || []);
-        setArchivedProjects(data.archivedProjects || []);
-        setUsersTotal(Number(data.userCount || 0));
-        setAuditsTotal(Number(data.auditCount || 0));
-        setFallbackAdminUrl(data.clientAdminUrl || "");
+        setProjects(projectData.projects || []);
+        setUsersTotal(Number(summary.userCount || 0));
+        setAuditsTotal(Number(summary.auditCount || 0));
+        setArchivedTotal(Number(summary.archivedCount || 0));
+        setFallbackAdminUrl(summary.clientAdminUrl || "");
       })
       .catch((error) => {
         if (active)
@@ -130,28 +146,36 @@ export default function ClientAdminManager({
   }, [notify]);
 
   useEffect(() => {
-    const needle = projectSearch.trim();
-    if (needle.length < 2) return;
-    let active = true;
-    const timer = window.setTimeout(() => {
-      const query = new URLSearchParams({section:"projects",limit:"50",offset:"0",q:needle});
-      fetch(`/api/admin/users?${query.toString()}`, {cache:"no-store"})
-        .then(async response => {
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error || "Projects search nahi hui");
-          if (!active) return;
-          const found = (data.projects || []) as Project[];
-          setProjects(current => {
-            const selected = current.find(project => project.id === existingProjectId);
-            return selected && !found.some(project => project.id === selected.id)
-              ? [selected, ...found]
-              : found;
-          });
-        })
-        .catch(() => {});
-    },220);
-    return () => {active=false;window.clearTimeout(timer);};
-  }, [projectSearch, existingProjectId]);
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setProjectOptionsLoading(true);
+      try {
+        const query = projectSearch.trim();
+        const response = await fetch(
+          `/api/admin/users?section=project_options&limit=50&q=${encodeURIComponent(query)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Projects load nahi hue");
+        const incoming = (data.projects || []) as Project[];
+        setProjects((current) => {
+          const selected = current.find((item) => item.id === existingProjectId);
+          return selected && !incoming.some((item) => item.id === selected.id)
+            ? [selected, ...incoming]
+            : incoming;
+        });
+      } catch (error) {
+        if (!controller.signal.aborted)
+          notify(error instanceof Error ? error.message : "Projects load nahi hue");
+      } finally {
+        if (!controller.signal.aborted) setProjectOptionsLoading(false);
+      }
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [projectSearch, existingProjectId, notify]);
 
   useEffect(() => {
     if (!credential) return;
@@ -200,6 +224,32 @@ export default function ClientAdminManager({
     }
   }
 
+  async function loadArchived(reset = false) {
+    if (archivedLoading) return;
+    setArchivedLoading(true);
+    try {
+      const offset = reset ? 0 : archivedProjects.length;
+      const response = await fetch(
+        `/api/admin/users?section=archived&limit=${ARCHIVE_PAGE_SIZE}&offset=${offset}`,
+        { cache: "no-store" },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Archived projects load nahi hue");
+      const page = (data.archivedProjects || []) as ArchivedProject[];
+      setArchivedProjects((current) =>
+        reset
+          ? page
+          : [...current, ...page.filter((item) => !current.some((x) => x.id === item.id))],
+      );
+      setArchivedTotal(Number(data.total || 0));
+      setArchivedLoaded(true);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Archived projects load nahi hue");
+    } finally {
+      setArchivedLoading(false);
+    }
+  }
+
   async function loadAudits(reset = false) {
     if (auditsLoading) return;
     setAuditsLoading(true);
@@ -228,6 +278,12 @@ export default function ClientAdminManager({
     const next = !clientsOpen;
     setClientsOpen(next);
     if (next && !clientsLoaded) await loadClients(true);
+  }
+
+  async function toggleArchived() {
+    const next = !archivedOpen;
+    setArchivedOpen(next);
+    if (next && !archivedLoaded) await loadArchived(true);
   }
 
   async function toggleAudits() {
@@ -339,9 +395,19 @@ export default function ClientAdminManager({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      const activeDelta = data.status === "active" ? 1 : -1;
       setUsers((current) =>
         current.map((item) =>
-          item.id === user.id ? { ...item, status: data.status } : item,
+          item.projectId === user.projectId
+            ? {
+                ...item,
+                ...(item.id === user.id ? { status: data.status } : {}),
+                projectActiveAdminCount: Math.max(
+                  0,
+                  Number(item.projectActiveAdminCount || 0) + activeDelta,
+                ),
+              }
+            : item,
         ),
       );
       notify(
@@ -403,13 +469,14 @@ export default function ClientAdminManager({
   }
 
   async function remove(user: ClientAdmin) {
-    const sameProject = Number(
-      projects.find((project) => project.id === user.projectId)?.adminCount || 1,
-    );
+    const sameProject = Math.max(1, Number(user.projectAdminCount || 1));
+    const activeAdmins = Math.max(0, Number(user.projectActiveAdminCount || 0));
+    const removingLastActive =
+      user.status === "active" && activeAdmins <= 1;
     const message =
-      sameProject > 1
-        ? `${user.name} का admin access हटाएँ? Project और बाकी admins सुरक्षित रहेंगे।`
-        : `${user.projectName} का आखिरी admin हटाने पर project archive होगा। Data, gallery, mapper और Geo files recoverable रहेंगी।`;
+      !removingLastActive
+        ? `${user.name} का admin access हटाएँ? Project और बाकी active admins सुरक्षित रहेंगे।`
+        : `${user.projectName} का आखिरी active admin हटाने पर project archive होगा। Data, gallery, mapper और Geo files recoverable रहेंगी।`;
     if (!confirm(message)) return;
     setBusy(user.id);
     try {
@@ -422,7 +489,20 @@ export default function ClientAdminManager({
       setUsers((current) =>
         data.projectDeleted
           ? current.filter((item) => item.projectId !== user.projectId)
-          : current.filter((item) => item.id !== user.id),
+          : current
+              .filter((item) => item.id !== user.id)
+              .map((item) =>
+                item.projectId === user.projectId
+                  ? {
+                      ...item,
+                      projectAdminCount: Math.max(0, sameProject - 1),
+                      projectActiveAdminCount: Math.max(
+                        0,
+                        activeAdmins - (user.status === "active" ? 1 : 0),
+                      ),
+                    }
+                  : item,
+              ),
       );
       setUsersTotal((current) =>
         Math.max(0, current - (data.projectDeleted ? sameProject : 1)),
@@ -527,8 +607,8 @@ export default function ClientAdminManager({
             <input
               value={projectSearch}
               onChange={(event) => setProjectSearch(event.target.value)}
-              placeholder="Search existing project"
-              aria-label="Search existing project"
+              placeholder="Project name search"
+              aria-label="Search existing projects"
             />
             <select
               value={existingProjectId}
@@ -544,6 +624,11 @@ export default function ClientAdminManager({
                 </option>
               ))}
             </select>
+            <small>
+              {projectOptionsLoading
+                ? "Projects search ho rahe hain…"
+                : "Recent 20 projects default; search se maximum 50 matching projects load honge."}
+            </small>
           </label>
           {!existingProjectId && (
             <label>
@@ -781,9 +866,9 @@ export default function ClientAdminManager({
         )}
       </div>
 
-      {archivedProjects.length ? (
-        <div className="card client-list-card">
-          <div className="client-list-head">
+      {archivedTotal ? (
+        <div className={`card client-list-card super-collapsible-card ${archivedOpen ? "is-open" : "is-collapsed"}`}>
+          <div className="client-list-head super-collapsible-head">
             <div>
               <h2>Recoverable projects</h2>
               <p>
@@ -791,37 +876,70 @@ export default function ClientAdminManager({
                 domains explicitly re-enable karein.
               </p>
             </div>
-            <b>{archivedProjects.length}</b>
+            <div className="super-collapsible-meta">
+              <b>{archivedTotal}</b>
+              <button
+                type="button"
+                className="super-collapse-toggle"
+                aria-label={archivedOpen ? "Collapse recoverable projects" : "Expand recoverable projects"}
+                aria-expanded={archivedOpen}
+                onClick={() => void toggleArchived()}
+              >
+                <ChevronDown />
+              </button>
+            </div>
           </div>
-          <div className="client-admin-list">
-            {archivedProjects.map((project) => (
-              <article key={project.id}>
-                <div className="client-avatar disabled">
-                  {project.name[0]?.toUpperCase()}
-                </div>
-                <div className="client-identity">
-                  <b>{project.name}</b>
-                  <span>
-                    Archived ·{" "}
-                    {project.deletedAt
-                      ? new Date(project.deletedAt).toLocaleString()
-                      : "time unavailable"}
-                  </span>
-                  <small>Data retained for recovery</small>
-                </div>
-                <em className="disabled">archived</em>
-                <div className="client-actions">
-                  <button
-                    disabled={busy === `restore:${project.id}`}
-                    onClick={() => restoreProject(project)}
-                  >
-                    <UserCheck />
-                    Restore
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
+          {archivedOpen && (
+            <div className="super-collapsible-body">
+              {archivedLoading && !archivedLoaded ? (
+                <div className="empty">Archived projects load ho rahe hain…</div>
+              ) : (
+                <>
+                  <div className="client-admin-list">
+                    {archivedProjects.map((project) => (
+                      <article key={project.id}>
+                        <div className="client-avatar disabled">
+                          {project.name[0]?.toUpperCase()}
+                        </div>
+                        <div className="client-identity">
+                          <b>{project.name}</b>
+                          <span>
+                            Archived ·{" "}
+                            {project.deletedAt
+                              ? new Date(project.deletedAt).toLocaleString()
+                              : "time unavailable"}
+                          </span>
+                          <small>Data retained for recovery</small>
+                        </div>
+                        <em className="disabled">archived</em>
+                        <div className="client-actions">
+                          <button
+                            disabled={busy === `restore:${project.id}`}
+                            onClick={() => restoreProject(project)}
+                          >
+                            <UserCheck />
+                            Restore
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {archivedProjects.length < archivedTotal && (
+                    <button
+                      type="button"
+                      className="super-load-more"
+                      disabled={archivedLoading}
+                      onClick={() => void loadArchived(false)}
+                    >
+                      {archivedLoading
+                        ? "Loading…"
+                        : `Load ${Math.min(ARCHIVE_PAGE_SIZE, archivedTotal - archivedProjects.length)} more`}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       ) : null}
 
