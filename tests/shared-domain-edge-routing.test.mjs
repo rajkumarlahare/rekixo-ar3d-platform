@@ -24,6 +24,8 @@ test("shared boss domain routes are narrow and never hijack the Vercel root", as
   assert.doesNotMatch(deploy, /`\$\{platformHost\}\/\*`/);
   assert.match(deploy, /if \(mode === "client" && sharedDomainRoutes\.length\)/);
   assert.match(deploy, /delete config\.routes/);
+  assert.match(deploy, /if \(mode === "client"\) config\.assets\.html_handling = "none"/);
+  assert.match(deploy, /else delete config\.assets\.html_handling/);
 });
 
 test("query-bearing Rekixo API routes terminate in wildcard so Cloudflare matches query strings", async () => {
