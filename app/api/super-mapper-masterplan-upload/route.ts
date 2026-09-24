@@ -25,7 +25,13 @@ function validToken(value: string) {
 }
 
 function validUploadId(value: string) {
-  return /^[a-zA-Z0-9._~-]{8,240}$/.test(value);
+  // Cloudflare R2 uploadId is opaque. Keep only length/control-character
+  // abuse guards and pass all other provider-issued characters through.
+  return (
+    value.length >= 1 &&
+    value.length <= 1024 &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
 }
 
 function objectKey(projectId: string, token: string) {
