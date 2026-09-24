@@ -35,11 +35,13 @@ test("draft projects remain previewable only through authenticated preview", asy
   // Asset/gallery routes must additionally honor the Super Admin's explicitly
   // selected tenant instead of falling back to the legacy Tiyansh session project.
   assert.match(asset, /if \(session\?\.role === "super_admin"\)/);
-  assert.match(asset, /return requested \? activeProjectId\(requested\) : null/);
+  assert.match(asset, /requested \? await activeProjectId\(requested\) : null/);
   assert.match(asset, /if \(requested && requested !== session\.projectId\) return null/);
+  assert.match(asset, /await publicProjectId\(request\)/);
   assert.match(gallery, /if \(session\?\.role === "super_admin"\)/);
-  assert.match(gallery, /return requested \? activeProjectId\(requested\) : null/);
+  assert.match(gallery, /requested \? await activeProjectId\(requested\) : null/);
   assert.match(gallery, /if \(requested && requested !== session\.projectId\) return null/);
+  assert.match(gallery, /const publicId = await publicProjectId\(request\)/);
 });
 
 test("technical CAD/PDF internals stay protected while public branding assets are allowed", async () => {
