@@ -90,6 +90,7 @@ export default function ClientPlotPricing({
   const [pricing, setPricing] = useState<PricingRow[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const [visibleLimit, setVisibleLimit] = useState(200);
   const [pricingType, setPricingType] = useState<"rate" | "fixed">("rate");
   const [unit, setUnit] = useState<"sqyd" | "sqft" | "sqm">("sqyd");
   const [rate, setRate] = useState("");
@@ -106,6 +107,10 @@ export default function ClientPlotPricing({
       ? plots.filter((plot) => plot.id.toLowerCase().includes(needle))
       : plots;
   }, [plots, query]);
+  const visiblePlots = useMemo(
+    () => filteredPlots.slice(0, visibleLimit),
+    [filteredPlots, visibleLimit],
+  );
   const selectedPlots = useMemo(() => {
     const selected = new Set(selectedIds);
     return plots.filter((plot) => selected.has(plot.id));
@@ -238,7 +243,10 @@ export default function ClientPlotPricing({
           <input
             value={query}
             placeholder="Plot number search"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setVisibleLimit(200);
+            }}
           />
         </label>
         <button
@@ -253,7 +261,7 @@ export default function ClientPlotPricing({
       </div>
 
       <div className="client-pricing-plot-list">
-        {filteredPlots.map((plot) => {
+        {visiblePlots.map((plot) => {
           const row = pricingByPlot.get(plot.id);
           const checked = selectedIds.includes(plot.id);
           return (
@@ -280,6 +288,15 @@ export default function ClientPlotPricing({
             </label>
           );
         })}
+        {visibleLimit < filteredPlots.length ? (
+          <button
+            type="button"
+            className="client-pricing-load-more"
+            onClick={() => setVisibleLimit((current) => current + 200)}
+          >
+            Show next {Math.min(200, filteredPlots.length - visibleLimit)} plots
+          </button>
+        ) : null}
       </div>
 
       <div className="client-pricing-form">
