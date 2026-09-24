@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [workflow,journey,prepare]=await Promise.all([
+const [workflow,journey,prepare,customerPage]=await Promise.all([
   readFile(new URL("../.github/workflows/browser-regression.yml",import.meta.url),"utf8"),
   readFile(new URL("../scripts/verify-admin-customer-e2e.mjs",import.meta.url),"utf8"),
   readFile(new URL("../scripts/prepare-full-admin-e2e.mjs",import.meta.url),"utf8"),
+  readFile(new URL("../app/projects/[slug]/page.tsx",import.meta.url),"utf8"),
 ]);
 
 test("browser CI exercises real local D1 Super Admin and customer modes",()=>{
@@ -40,4 +41,10 @@ test("mapper mutations refresh publish readiness without changing workspace tabs
   assert.match(mapper,/rekixo:mapper-data-updated/);
   assert.match(mapper,/verifyPlotPersistence\(saved\)[\s\S]{0,260}announceMapperDataUpdated\(\)/);
   assert.match(publishPanel,/rekixo:mapper-data-updated/);
+});
+
+
+test("customer iframe keeps projectSlug on the canonical static runtime path",()=>{
+  assert.match(customerPage,/src=\{`\/project\/index\.html\?projectSlug=/);
+  assert.doesNotMatch(customerPage,/__rekixo\/project\/index\.html\?projectSlug=/);
 });
