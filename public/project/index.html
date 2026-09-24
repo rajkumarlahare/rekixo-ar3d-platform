@@ -1451,6 +1451,20 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   });
   function setSelected(id){svg.querySelectorAll('.plot').forEach(el=>el.classList.toggle('selected',el.dataset.plotId===id))}
   function setLine(id,x1,y1,x2,y2){const el=q(id);el.setAttribute('x1',x1);el.setAttribute('y1',y1);el.setAttribute('x2',x2);el.setAttribute('y2',y2)}
+  function diagramPresentationPoints(points){
+    // Drawer geometry is presentation-only. Keep canonical/source polygon points
+    // untouched and rotate a copy with the exact same quarter-turn convention as
+    // the public masterplan world. Point order is preserved, so saved semantic
+    // edge indices still refer to the same physical Front/Back/Depth boundaries.
+    const raw=typeof publicRotation==='number'?publicRotation:0;
+    const turn=((raw%4)+4)%4;
+    return (Array.isArray(points)?points:[]).map(([x,y])=>{
+      if(turn===1)return[-y,x];
+      if(turn===2)return[-x,-y];
+      if(turn===3)return[y,-x];
+      return[x,y]
+    })
+  }
   function plotLengthText(value,unit){
     const number=Number(value);
     if(!(number>0))return '';
@@ -1718,10 +1732,11 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   }
 
   function diagram(p){
-    const xs=p.points.map(a=>a[0]),ys=p.points.map(a=>a[1]),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),bw=maxx-minx||1,bh=maxy-miny||1;
+    const diagramPoints=diagramPresentationPoints(p.points);
+    const xs=diagramPoints.map(a=>a[0]),ys=diagramPoints.map(a=>a[1]),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys),bw=maxx-minx||1,bh=maxy-miny||1;
     const s=Math.min(165/bw,82/bh),ox=170-(minx+maxx)/2*s,oy=71-(miny+maxy)/2*s;
     const left=minx*s+ox,right=maxx*s+ox,top=miny*s+oy,bottom=maxy*s+oy,cx=(left+right)/2,cy=(top+bottom)/2;
-    const scaledPoints=p.points.map(([x,y])=>[x*s+ox,y*s+oy]);
+    const scaledPoints=diagramPoints.map(([x,y])=>[x*s+ox,y*s+oy]);
     q('#diagramPoly').setAttribute('points',scaledPoints.map(([x,y])=>`${x},${y}`).join(' '));
     const semantic=plotSemanticDimensions(p);
     const canonicalRendered=renderSemanticDiagramEdges(p,scaledPoints,cx,cy);
