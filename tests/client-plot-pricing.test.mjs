@@ -71,7 +71,10 @@ test("client dashboard keeps full plot editor Super Admin-only and mounts isolat
 });
 
 test("client pricing UI supports single and bulk selection, rate units, fixed price and automatic base preview", () => {
-  assert.match(clientUi, /Select visible/);
+  assert.match(clientUi, /Select page/);
+  assert.match(clientUi, /PRICING_PAGE_SIZE = 100/);
+  assert.match(clientUi, /visiblePlots\.map/);
+  assert.match(clientUi, /Page \{page \+ 1\} \/ \{pageCount\}/);
   assert.match(clientUi, /Clear selection/);
   assert.match(clientUi, /type="checkbox"/);
   assert.match(clientUi, /Rate × Area/);
