@@ -4,9 +4,10 @@ import test from "node:test";
 
 const read=(path)=>readFile(new URL(path,import.meta.url),"utf8");
 
-const [gallery,mapper,pkg,lock]=await Promise.all([
+const [gallery,mapper,multipart,pkg,lock]=await Promise.all([
   read("../app/api/gallery/route.ts"),
   read("../app/api/super-mapper/route.ts"),
+  read("../app/api/super-mapper-masterplan-upload/route.ts"),
   read("../package.json"),
   read("../package-lock.json"),
 ]);
@@ -31,4 +32,12 @@ test("transitive image-size parser is pinned to the patched override in manifest
   if(installed!==undefined) assert.equal(installed,"2.0.4");
   assert.notEqual(installed,"2.0.2");
   assert.notEqual(installed,"2.0.3");
+});
+
+test("R2 multipart upload IDs are treated as opaque provider values",()=>{
+  assert.match(multipart,/R2 uploadId is an opaque provider-issued value/);
+  assert.match(multipart,/value\.length <= 1024/);
+  assert.match(multipart,/!\/\[\\u0000-\\u001f\\u007f\]\/\.test\(value\)/);
+  assert.doesNotMatch(multipart,/\[a-zA-Z0-9\._~\-\]/);
+  assert.match(multipart,/resumeMultipartUpload\([\s\S]*uploadId/);
 });
