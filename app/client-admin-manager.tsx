@@ -31,6 +31,8 @@ type ClientAdmin = {
   projectSlug?: string;
   publicHost: string | null;
   adminHost: string | null;
+  projectAdminCount: number;
+  projectActiveAdminCount: number;
   adminUrl?: string;
 };
 
@@ -393,9 +395,19 @@ export default function ClientAdminManager({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      const activeDelta = data.status === "active" ? 1 : -1;
       setUsers((current) =>
         current.map((item) =>
-          item.id === user.id ? { ...item, status: data.status } : item,
+          item.projectId === user.projectId
+            ? {
+                ...item,
+                ...(item.id === user.id ? { status: data.status } : {}),
+                projectActiveAdminCount: Math.max(
+                  0,
+                  Number(item.projectActiveAdminCount || 0) + activeDelta,
+                ),
+              }
+            : item,
         ),
       );
       notify(
@@ -457,13 +469,14 @@ export default function ClientAdminManager({
   }
 
   async function remove(user: ClientAdmin) {
-    const sameProject = Number(
-      projects.find((project) => project.id === user.projectId)?.adminCount || 1,
-    );
+    const sameProject = Math.max(1, Number(user.projectAdminCount || 1));
+    const activeAdmins = Math.max(0, Number(user.projectActiveAdminCount || 0));
+    const removingLastActive =
+      user.status === "active" && activeAdmins <= 1;
     const message =
-      sameProject > 1
-        ? `${user.name} का admin access हटाएँ? Project और बाकी admins सुरक्षित रहेंगे।`
-        : `${user.projectName} का आखिरी admin हटाने पर project archive होगा। Data, gallery, mapper और Geo files recoverable रहेंगी।`;
+      !removingLastActive
+        ? `${user.name} का admin access हटाएँ? Project और बाकी active admins सुरक्षित रहेंगे।`
+        : `${user.projectName} का आखिरी active admin हटाने पर project archive होगा। Data, gallery, mapper और Geo files recoverable रहेंगी।`;
     if (!confirm(message)) return;
     setBusy(user.id);
     try {
@@ -476,7 +489,20 @@ export default function ClientAdminManager({
       setUsers((current) =>
         data.projectDeleted
           ? current.filter((item) => item.projectId !== user.projectId)
-          : current.filter((item) => item.id !== user.id),
+          : current
+              .filter((item) => item.id !== user.id)
+              .map((item) =>
+                item.projectId === user.projectId
+                  ? {
+                      ...item,
+                      projectAdminCount: Math.max(0, sameProject - 1),
+                      projectActiveAdminCount: Math.max(
+                        0,
+                        activeAdmins - (user.status === "active" ? 1 : 0),
+                      ),
+                    }
+                  : item,
+              ),
       );
       setUsersTotal((current) =>
         Math.max(0, current - (data.projectDeleted ? sameProject : 1)),
