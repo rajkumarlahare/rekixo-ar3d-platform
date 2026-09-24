@@ -12,7 +12,7 @@ const [superCss,globalCss,sideCss,layout]=await Promise.all([
 test("normal and fullscreen toolbar share one canonical parity block",()=>{
   assert.match(superCss,/REKIXO_MAPPER_TOOLBAR_PARITY_V2/);
   const legacyStart=superCss.indexOf("REKIXO_FOCUS_TOOLBAR_ACTIONS_V1");
-  const parityStart=superCss.indexOf("REKIXO_MAPPER_TOOLBAR_PARITY_V2");
+  const parityStart=superCss.indexOf("/* REKIXO_MAPPER_TOOLBAR_PARITY_V2");
   const legacy=superCss.slice(legacyStart,parityStart);
   assert.doesNotMatch(legacy,/\.mapper-v4-canvas:fullscreen \.mapper-v4-toolbar\{/);
   assert.doesNotMatch(legacy,/\.mapper-focus-primary-action\{[\s\S]*display:none/);
