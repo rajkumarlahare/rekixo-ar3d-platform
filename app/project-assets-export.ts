@@ -18,6 +18,8 @@ export type ProjectAssetManifestFile = {
   sourceRef?: string;
   etag?: string;
   sha256?: string;
+  uploadedAt?: string;
+  customMetadata?: Record<string, string>;
 };
 
 export type ProjectAssetMissing = {
@@ -96,6 +98,8 @@ type R2Entry = {
   sizeBytes: number;
   objectKey: string;
   etag?: string;
+  uploadedAt?: string;
+  customMetadata?: Record<string, string>;
 };
 
 export type ProjectAssetExportEntry = GeneratedEntry | R2Entry;
@@ -265,24 +269,22 @@ async function addJsonAndCsv(
   section: string,
   rows: Row[],
 ) {
-  await Promise.all([
-    addGenerated(
-      entries,
-      `${basePath}.json`,
-      `${label} JSON`,
-      section,
-      "application/json; charset=utf-8",
-      jsonBytes(rows),
-    ),
-    addGenerated(
-      entries,
-      `${basePath}.csv`,
-      `${label} CSV`,
-      section,
-      "text/csv; charset=utf-8",
-      csvBytes(rows),
-    ),
-  ]);
+  await addGenerated(
+    entries,
+    `${basePath}.json`,
+    `${label} JSON`,
+    section,
+    "application/json; charset=utf-8",
+    jsonBytes(rows),
+  );
+  await addGenerated(
+    entries,
+    `${basePath}.csv`,
+    `${label} CSV`,
+    section,
+    "text/csv; charset=utf-8",
+    csvBytes(rows),
+  );
 }
 
 async function addR2(
@@ -329,6 +331,8 @@ async function addR2(
     sizeBytes: Number(object.size || 0),
     objectKey: args.objectKey,
     etag: object.httpEtag || undefined,
+    uploadedAt: object.uploaded?.toISOString?.(),
+    customMetadata: object.customMetadata,
   });
   return { contentType, sizeBytes: Number(object.size || 0) };
 }
@@ -423,23 +427,21 @@ async function addGeoWorkspace(
     );
   }
   if (geo.features.length) {
-    await Promise.all([
-      addJsonAndCsv(
-        entries,
-        `${basePath}/features`,
-        `${labelPrefix}Geo features`,
-        "geo",
-        geo.features,
-      ),
-      addGenerated(
-        entries,
-        `${basePath}/features.geojson`,
-        `${labelPrefix}GeoJSON`,
-        "geo",
-        "application/geo+json; charset=utf-8",
-        jsonBytes(rowsToGeoJson(geo.features)),
-      ),
-    ]);
+    await addJsonAndCsv(
+      entries,
+      `${basePath}/features`,
+      `${labelPrefix}Geo features`,
+      "geo",
+      geo.features,
+    );
+    await addGenerated(
+      entries,
+      `${basePath}/features.geojson`,
+      `${labelPrefix}GeoJSON`,
+      "geo",
+      "application/geo+json; charset=utf-8",
+      jsonBytes(rowsToGeoJson(geo.features)),
+    );
   }
   if (geo.versions.length) {
     await addGenerated(
@@ -498,6 +500,8 @@ function manifestFile(entry: ProjectAssetExportEntry): ProjectAssetManifestFile 
         contentType: entry.contentType,
         sourceRef: `r2:${entry.objectKey}`,
         etag: entry.etag,
+        uploadedAt: entry.uploadedAt,
+        customMetadata: entry.customMetadata,
       };
 }
 
@@ -774,6 +778,8 @@ export async function buildProjectAssetExport(
       sizeBytes: Number(head.size || 0),
       objectKey: asset.key,
       etag: head.httpEtag || undefined,
+      uploadedAt: head.uploaded?.toISOString?.(),
+      customMetadata: head.customMetadata,
     });
   }
 
@@ -828,6 +834,8 @@ export async function buildProjectAssetExport(
       sizeBytes: Number(head.size || 0),
       objectKey: share.key,
       etag: head.httpEtag || undefined,
+      uploadedAt: head.uploaded?.toISOString?.(),
+      customMetadata: head.customMetadata,
     });
   }
 
@@ -932,6 +940,8 @@ export async function buildProjectAssetExport(
         sizeBytes: Number(head.size || 0),
         objectKey: key,
         etag: head.httpEtag || undefined,
+        uploadedAt: head.uploaded?.toISOString?.(),
+        customMetadata: head.customMetadata,
       });
     }
 
@@ -950,6 +960,8 @@ export async function buildProjectAssetExport(
           sizeBytes: Number(head.size || 0),
           objectKey: key,
           etag: head.httpEtag || undefined,
+          uploadedAt: head.uploaded?.toISOString?.(),
+          customMetadata: head.customMetadata,
         });
       } else {
         missing.push({
@@ -989,17 +1001,15 @@ export async function buildProjectAssetExport(
     );
   }
   if (geo.features.length) {
-    await Promise.all([
-      addJsonAndCsv(entries, "06-geo/features", "Geo features", "geo", geo.features),
-      addGenerated(
-        entries,
-        "06-geo/features.geojson",
-        "GeoJSON",
-        "geo",
-        "application/geo+json; charset=utf-8",
-        jsonBytes(rowsToGeoJson(geo.features)),
-      ),
-    ]);
+    await addJsonAndCsv(entries, "06-geo/features", "Geo features", "geo", geo.features);
+    await addGenerated(
+      entries,
+      "06-geo/features.geojson",
+      "GeoJSON",
+      "geo",
+      "application/geo+json; charset=utf-8",
+      jsonBytes(rowsToGeoJson(geo.features)),
+    );
   }
   if (geo.versions.length) {
     await addGenerated(
@@ -1077,6 +1087,8 @@ export async function buildProjectAssetExport(
       sizeBytes: Number(head.size || 0),
       objectKey: key,
       etag: head.httpEtag || undefined,
+      uploadedAt: head.uploaded?.toISOString?.(),
+      customMetadata: head.customMetadata,
     });
   }
 
