@@ -117,6 +117,29 @@ test("project export remains read-only and excludes credential material", async 
   assert.match(exporter, /AR3D Engine binary models\/scenes\/textures/);
 });
 
+
+test("masterplan ready and source PDF export exact original stored bytes without ZIP compression", async () => {
+  const [exporter, manager] = await Promise.all([
+    source("../app/project-assets-export.ts"),
+    source("../app/project-assets-manager.tsx"),
+  ]);
+
+  assert.match(exporter, /Masterplan Ready — ORIGINAL \/ NO COMPRESSION/);
+  assert.match(exporter, /Source PDF — ORIGINAL \/ NO COMPRESSION/);
+  assert.match(exporter, /preferred: values\.sourcePdfName \|\| "source-plan\.pdf"/);
+  assert.match(exporter, /head\.customMetadata\?\.filename/);
+  assert.match(exporter, /head\.customMetadata\?\.expectedSize/);
+  assert.match(exporter, /byteFidelity: "original-upload"/);
+  assert.match(exporter, /zipMode: "streaming-store"/);
+  assert.match(exporter, /u16\(0\),\s*\/\/ compression method|u16\(0\),/);
+  assert.match(exporter, /object\.body\.getReader\(\)/);
+  assert.doesNotMatch(exporter, /CompressionStream/);
+  assert.doesNotMatch(exporter, /deflate/i);
+
+  assert.match(manager, /EXACT ORIGINAL BYTES · NO ZIP COMPRESSION/);
+  assert.match(manager, /byteFidelity === "original-upload"/);
+});
+
 test("ZIP is streamed with backpressure instead of buffering project binaries", async () => {
   const exporter = await source("../app/project-assets-export.ts");
 
