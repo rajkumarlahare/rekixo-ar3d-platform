@@ -2327,54 +2327,20 @@ export default function PlotMapper({
       [...inventoryPlots].reverse().find((plot) => plot.id !== plotId && parsePolygon(plot).length >= 3);
     if (!source) return notify("Clone करने के लिए पहले कोई mapped plot चाहिए");
     const polygon = parsePolygon(source);
-    const semantics = parsePlotSideSemantics(source.edgeSemantics, polygon.length);
     const clonedLayout: PlotSideLayout =
-      polygon.length === 3
-        ? "three"
-        : semantics?.layout === "three"
-          ? "three"
-          : "four";
-    const roleEdge = (role: PlotSideRole, fallback: number | null | undefined) => {
-      const semantic = semantics?.roles[role]?.[0];
-      return Number.isInteger(semantic)
-        ? String(semantic)
-        : Number.isInteger(fallback)
-          ? String(fallback)
-          : "";
-    };
+      polygon.length === 3 ? "three" : effectiveSideLayout();
+
+    // Clone geometry only. Measurements currently loaded for the target plot
+    // remain untouched, while source-plot edge bindings must never cross plots.
     setPoints(polygon.map(([x, y]) => [x, y] as MapperPoint));
     setShape(polygon.length === 4 && clonedLayout === "four" ? "quad" : "polygon");
     setSideLayout(clonedLayout);
-    setFrontEdgeIndex(roleEdge("front", source.frontEdgeIndex));
-    setBackEdgeIndex(roleEdge("back", source.backEdgeIndex));
-    setDepthEdgeIndex(roleEdge("depthA", source.depthEdgeIndex));
-    setDepth2EdgeIndex(
-      clonedLayout === "four" ? roleEdge("depthB", source.depth2EdgeIndex) : "",
-    );
-    setEdgeSemanticsDraft(
-      semantics
-        ? JSON.stringify(semantics)
-        : serializePlotSideSemantics(
-            polygon.length,
-            {
-              ...(Number.isInteger(source.frontEdgeIndex) ? { front: [Number(source.frontEdgeIndex)] } : {}),
-              ...(Number.isInteger(source.backEdgeIndex) ? { back: [Number(source.backEdgeIndex)] } : {}),
-              ...(Number.isInteger(source.depthEdgeIndex) ? { depthA: [Number(source.depthEdgeIndex)] } : {}),
-              ...(clonedLayout === "four" && Number.isInteger(source.depth2EdgeIndex)
-                ? { depthB: [Number(source.depth2EdgeIndex)] }
-                : {}),
-            },
-            clonedLayout,
-          ) || "",
-    );
-    setSemanticChainRole(null);
-    setSemanticChainStart(null);
-    frontFirstPendingRef.current = false;
+    resetGeometryDerivedSideAssignments();
     setManualPhase("details");
     setEditingId("");
     setToolMode("select");
     canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    notify(`Plot ${source.id} shape clone हुआ — handles drag करके ${plotId} पर fit करें`);
+    notify(`Plot ${source.id} geometry clone हुआ — ${plotId} की measurements सुरक्षित हैं; Front / Back / Depth side bindings target के हिसाब से select करें`);
   }
 
   function downloadPlotSheetTemplate() {
@@ -3476,17 +3442,18 @@ export default function PlotMapper({
       depth2EdgeValue === null &&
       points.length >= 4
     ) {
-      const frontFirst = shape === "quad" ? frontFirstFourSideEdges(points.length) : null;
+      // Do not fabricate "edge 0 = Front" for cloned or edited geometry.
+      // Fresh front-first tapping already commits semantics through the dedicated
+      // effect; fallback resolution here may only use target-specific metadata.
       const storedDirection = plotFrontDirections[id];
       const resolved =
-        frontFirst ||
-        (storedDirection
+        storedDirection
           ? resolveFourSideEdges(
               points,
               storedDirection,
               normalizeQuarterTurn(settings.publicRotation),
             )
-          : null);
+          : null;
       if (resolved) {
         const parsed = parsePlotSideSemantics(resolved.edgeSemantics, points.length);
         roleEdges = {
