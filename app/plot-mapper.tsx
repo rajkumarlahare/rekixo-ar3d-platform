@@ -2261,21 +2261,28 @@ export default function PlotMapper({
     }
   }
 
-  function clearCurrentPoints() {
-    setPoints([]);
-    setManualPhase("select");
-    setEditingId("");
+  function resetGeometryDerivedSideAssignments() {
+    // Side measurements are business/source data and remain untouched. These
+    // values are polygon-edge bindings, so any geometry mutation must make the
+    // operator/re-resolver establish them again instead of reusing stale edges.
     setFrontEdgeIndex("");
     setDepthEdgeIndex("");
     setBackEdgeIndex("");
     setDepth2EdgeIndex("");
     setEdgeSemanticsDraft("");
-    setSideLayout("four");
     setEdgeAssignMode(null);
     setSelectedSemanticEdge(null);
     setSemanticChainRole(null);
     setSemanticChainStart(null);
     frontFirstPendingRef.current = false;
+  }
+
+  function clearCurrentPoints() {
+    setPoints([]);
+    setManualPhase("select");
+    setEditingId("");
+    resetGeometryDerivedSideAssignments();
+    setSideLayout("four");
     setToolMode("select");
     try {
       window.localStorage.removeItem(mappingDraftKey(projectId, plotId));
@@ -2299,6 +2306,7 @@ export default function PlotMapper({
 
   function undoPoint() {
     setPoints((current) => current.slice(0, -1));
+    resetGeometryDerivedSideAssignments();
     setManualPhase("select");
     setToolMode("select");
   }
@@ -3334,6 +3342,7 @@ export default function PlotMapper({
     flushPendingHandleFrame();
     if (draggingPointRef.current !== null) {
       setPoints(pointsRef.current.map(([x, y]) => [x, y] as MapperPoint));
+      resetGeometryDerivedSideAssignments();
     }
     draggingPointRef.current = null;
     if (loupeRef.current) loupeRef.current.style.display = "none";
@@ -3623,7 +3632,15 @@ export default function PlotMapper({
     if (!confirm(`Plot ${plot.id} की saved clickable boundary हटाएँ? Plot details/status सुरक्षित रहेंगे।`)) return;
     setBusy(true);
     try {
-      const cleared: Plot = { ...plot, polygon: "" };
+      const cleared: Plot = {
+        ...plot,
+        polygon: "",
+        frontEdgeIndex: null,
+        backEdgeIndex: null,
+        depthEdgeIndex: null,
+        depth2EdgeIndex: null,
+        edgeSemantics: null,
+      };
       const response = await fetch("/api/super-mapper", {
         method: "POST",
         headers: { "content-type": "application/json" },
