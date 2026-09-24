@@ -38,11 +38,6 @@ export default async function PublicGeoMapPage({
 }) {
   if (panelMode() === "super") notFound();
 
-  // Emit connection hints in the server response so DNS/TLS can start before
-  // client hydration and before either Maps JS or public Geo data is requested.
-  preconnect("https://maps.googleapis.com");
-  preconnect("https://maps.gstatic.com", { crossOrigin: "anonymous" });
-
   const { slug } = await params;
   const host = (await headers()).get("host") || "";
   if (!isPlatformAccessHost(host)) notFound();
@@ -77,6 +72,10 @@ export default async function PublicGeoMapPage({
       </main>
     );
   }
+
+  // Emit connection hints only after the project passes the public kill switch.
+  preconnect("https://maps.googleapis.com");
+  preconnect("https://maps.gstatic.com", { crossOrigin: "anonymous" });
 
   const mapsApiKey = await publicGoogleMapsBrowserKey();
 
