@@ -1685,33 +1685,17 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
       const tick=4,x=atStart?segment.x1:segment.x2,y=atStart?segment.y1:segment.y2;
       makeLine(x-segment.nx*tick,y-segment.ny*tick,x+segment.nx*tick,y+segment.ny*tick,color,'1.2')
     };
-    for(const [role,title,value,color,dash] of diagramSideSpecs(p)){
+    for(const [role,,,color,dash] of diagramSideSpecs(p)){
       const geometry=semanticRoleDiagramGeometry(scaledPoints,semantics[role]||[],cx,cy);
       if(!geometry)continue;
 
       // A curved logical side may contain many polygon segments. Draw every
-      // segment so the guide follows the real boundary, but annotate the
-      // logical Front/Back/Depth side only once.
+      // segment so the guide follows the real boundary. Measurements stay in
+      // the responsive cards below the SVG so long labels never clip the plot.
       for(const segment of geometry.segments)
         makeLine(segment.x1,segment.y1,segment.x2,segment.y2,color,'1.55',dash);
       for(const segment of geometry.chainStarts)makeTick(segment,true,color);
       for(const segment of geometry.chainEnds)makeTick(segment,false,color);
-
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      const {x:tx,y:ty,angle}=geometry.label;
-      text.setAttribute('x',tx);text.setAttribute('y',ty);
-      text.setAttribute('transform',`rotate(${angle} ${tx} ${ty})`);
-      text.setAttribute('fill',color);
-      text.setAttribute('font-size','9');
-      text.setAttribute('font-weight','900');
-      text.setAttribute('text-anchor','middle');
-      text.setAttribute('dominant-baseline','central');
-      text.setAttribute('paint-order','stroke');
-      text.setAttribute('stroke','#081225');
-      text.setAttribute('stroke-width','3');
-      text.setAttribute('stroke-linejoin','round');
-      text.textContent=title+(value?' · '+value:'');
-      group.appendChild(text);
       rendered++
     }
     group.style.display=rendered?'':'none';
