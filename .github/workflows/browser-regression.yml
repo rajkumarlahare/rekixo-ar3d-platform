@@ -45,6 +45,11 @@ jobs:
           mv /tmp/0024_mangal_raj_park_measurement_backfill.sql drizzle/0024_mangal_raj_park_measurement_backfill.sql
           npx wrangler d1 execute site-creator-d1 --local --config wrangler.e2e.jsonc --file=artifacts/full-admin-e2e/seed.sql
 
+          # The installed local workerd trails the production compatibility date.
+          # Change only this disposable CI checkout; production wrangler.jsonc is untouched.
+          cp wrangler.jsonc /tmp/wrangler.phase11.production.jsonc
+          sed -i 's/"compatibility_date": "2026-09-06"/"compatibility_date": "2026-05-22"/' wrangler.jsonc
+
           SERVER_PID=""
           stop_server() {
             if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
@@ -67,6 +72,7 @@ jobs:
           node scripts/wait-http.mjs http://localhost:4173/projects/phase-11-e2e
           E2E_STAGE=customer E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
           stop_server
+          cp /tmp/wrangler.phase11.production.jsonc wrangler.jsonc
           trap - EXIT
         env:
           PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
