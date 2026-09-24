@@ -57,6 +57,8 @@ const PUBLIC_SETTING_KEYS = new Set([
   "shareImage",
 ]);
 
+const LEGACY_PROJECT = "tiyansh-prime-square";
+
 type PublishedSnapshot = {
   publishVersion: number;
   projectName: string;
@@ -197,8 +199,32 @@ export async function GET(request: Request) {
       Number(snapshot?.publishVersion || -1) === Number(project.publishVersion || 0);
 
     if (!previewId && project.publicStatus === "published" && !snapshotReady) {
+      // Modern customer projects must never fall through to editable draft
+      // structure when their published snapshot is missing/stale. Production
+      // deploy preflight verifies this condition is false for every current
+      // non-legacy published client before a Worker is changed.
+      if (projectId !== LEGACY_PROJECT) {
+        console.error(
+          "Published project snapshot missing or stale; failing closed",
+          projectId,
+          project.publishVersion,
+        );
+        return Response.json(
+          {
+            error: "Published project snapshot unavailable",
+            code: "PUBLISHED_SNAPSHOT_UNAVAILABLE",
+          },
+          {
+            status: 503,
+            headers: {
+              "cache-control": "no-store",
+              "retry-after": "60",
+            },
+          },
+        );
+      }
       console.warn(
-        "Published project snapshot missing or stale; using compatibility fallback",
+        "Legacy published project snapshot missing or stale; using compatibility fallback",
         projectId,
         project.publishVersion,
       );
