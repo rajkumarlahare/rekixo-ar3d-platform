@@ -209,6 +209,39 @@ export async function promotePublishedAssets(
   );
 }
 
+export function finalizeInactivePlotInventoryStatements(projectId: string) {
+  return [
+    env.DB.prepare(
+      `UPDATE geo_features
+       SET linked_plot_id=NULL
+       WHERE project_id=?
+         AND linked_plot_id IN (
+           SELECT id FROM plots
+           WHERE project_id=? AND inventory_active=0
+         )`,
+    ).bind(projectId, projectId),
+    env.DB.prepare(
+      `DELETE FROM plot_edge_measurements
+       WHERE project_id=?
+         AND plot_id IN (
+           SELECT id FROM plots
+           WHERE project_id=? AND inventory_active=0
+         )`,
+    ).bind(projectId, projectId),
+    env.DB.prepare(
+      `DELETE FROM plot_pricing
+       WHERE project_id=?
+         AND plot_id IN (
+           SELECT id FROM plots
+           WHERE project_id=? AND inventory_active=0
+         )`,
+    ).bind(projectId, projectId),
+    env.DB.prepare(
+      "DELETE FROM plots WHERE project_id=? AND inventory_active=0",
+    ).bind(projectId),
+  ];
+}
+
 export function capturePublishedSnapshotStatements(
   projectId: string,
   publishVersion: number,
@@ -241,7 +274,7 @@ export function capturePublishedSnapshotStatements(
         dimension_unit,front_edge_index,depth_edge_index,back_edge_index,
         depth2_edge_index,front_label,depth_label,back_label,depth2_label,
         side_dimensions,edge_semantics,polygon,status,featured,updated_at
-      FROM plots WHERE project_id=?`,
+      FROM plots WHERE project_id=? AND inventory_active=1`,
     ).bind(projectId),
     env.DB.prepare(
       `INSERT INTO published_plot_edge_measurements (
