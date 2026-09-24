@@ -17,6 +17,8 @@ test("long Super Admin lists are collapsed and paged on demand", () => {
   assert.match(clients, /Security activity/);
   assert.match(clients, /super-collapse-toggle/);
   assert.match(clients, /section=clients&limit=/);
+  assert.match(clients, /section=archived&limit=/);
+  assert.match(clients, /section=project_options&limit=/);
   assert.match(clients, /section=audits&limit=/);
   assert.match(clients, /Load \$\{Math\.min\(CLIENT_PAGE_SIZE/);
   assert.match(clients, /Load \$\{Math\.min\(AUDIT_PAGE_SIZE/);
@@ -24,8 +26,12 @@ test("long Super Admin lists are collapsed and paged on demand", () => {
   assert.match(css, /rekixo-super-list-reveal/);
 });
 
-test("client list summary stays lightweight while legacy full GET remains compatible", () => {
+test("client list summary stays count-only while projects and archives page independently", () => {
   assert.match(usersApi, /section==="summary"/);
+  assert.match(usersApi, /projectCount:Number/);
+  assert.match(usersApi, /archivedCount:Number/);
+  assert.match(usersApi, /section==="project_options"/);
+  assert.match(usersApi, /section==="archived"/);
   assert.match(usersApi, /section==="clients"/);
   assert.match(usersApi, /section==="audits"/);
   assert.match(usersApi, /LIMIT \? OFFSET \?/);
@@ -44,7 +50,12 @@ test("domain cards do not load until expansion and use server pagination", () =>
   assert.match(domainsApi, /hasMore/);
 });
 
-test("paged client deletion confirmation uses canonical project admin count", () => {
-  assert.match(clients, /projects\.find\(\(project\) => project\.id === user\.projectId\)\?\.adminCount/);
+test("paged client deletion uses server-returned canonical active admin counts", () => {
+  assert.match(clients, /user\.projectAdminCount/);
+  assert.match(clients, /user\.projectActiveAdminCount/);
+  assert.match(clients, /removingLastActive/);
+  assert.match(usersApi, /projectAdminCount/);
+  assert.match(usersApi, /projectActiveAdminCount/);
+  assert.match(usersApi, /id<>\? AND status='active'/);
   assert.doesNotMatch(clients, /users\.filter\(\(item\) => item\.projectId === user\.projectId\)\.length/);
 });
