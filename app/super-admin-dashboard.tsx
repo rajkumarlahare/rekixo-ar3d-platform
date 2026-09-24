@@ -45,6 +45,7 @@ export default function SuperAdminDashboard({
   const [tab, setTab] = useState<WorkspaceTab>("clients");
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const notify = useCallback((message: string) => {
@@ -56,29 +57,43 @@ export default function SuperAdminDashboard({
   useEffect(() => {
     if (tab === "clients") return;
     let live = true;
-    fetch("/api/admin/users", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((data) => {
-        if (!live) return;
-        const list = (data.projects || []).filter(
-          (project: Project) => project.status !== "deleted",
-        );
-        setProjects(list);
-        setProjectId((current) =>
-          current && list.some((project: Project) => project.id === current)
-            ? current
-            : list[0]?.id || "",
-        );
-      })
-      .catch(() => notify("Projects load नहीं हुए"));
+    const timer = window.setTimeout(() => {
+      const query = new URLSearchParams({
+        section: "projects",
+        limit: "50",
+        offset: "0",
+      });
+      if (projectSearch.trim()) query.set("q", projectSearch.trim());
+      fetch(`/api/admin/users?${query.toString()}`, { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : Promise.reject()))
+        .then((data) => {
+          if (!live) return;
+          const list = (data.projects || []) as Project[];
+          setProjects(list);
+          setProjectId((current) =>
+            current && list.some((project: Project) => project.id === current)
+              ? current
+              : list[0]?.id || "",
+          );
+        })
+        .catch(() => notify("Projects load नहीं हुए"));
+    }, 220);
     return () => {
       live = false;
+      window.clearTimeout(timer);
     };
-  }, [tab, notify]);
+  }, [tab, notify, projectSearch]);
 
   const projectPicker = (
     <div className="super-project-picker">
       <label htmlFor="workspace-project">Client project</label>
+      <input
+        className="super-project-search"
+        value={projectSearch}
+        onChange={(event) => setProjectSearch(event.target.value)}
+        placeholder="Search project name / slug"
+        aria-label="Search client projects"
+      />
       <select
         id="workspace-project"
         value={projectId}
