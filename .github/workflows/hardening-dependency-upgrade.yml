@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: consolidated-hardening-dependency-lock
-  cancel-in-progress: true
 
 jobs:
   resolve-and-verify:
