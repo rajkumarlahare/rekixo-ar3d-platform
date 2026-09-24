@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 const read=(path)=>readFile(new URL(path,import.meta.url),"utf8");
@@ -21,19 +22,44 @@ test("session signatures use WebCrypto verification and owner sessions are serve
   assert.match(migration,/CREATE TABLE IF NOT EXISTS super_admin_security/);
 });
 
-test("login throttling is bounded by IP and identifier with indexed cleanup",()=>{
+test("login throttling atomically reserves IP and identifier attempts before auth",()=>{
   assert.match(login,/const IDENTIFIER_MAX=5/);
   assert.match(login,/const IP_MAX=20/);
   assert.match(login,/digestKey\("ip"/);
   assert.match(login,/digestKey\("ip\+identifier"/);
   assert.match(login,/DELETE FROM login_attempts WHERE window_start < \?/);
   assert.match(migration,/idx_login_attempts_window_start/);
+  assert.match(login,/ON CONFLICT\(key\) DO UPDATE SET/);
+  assert.match(login,/login_attempts\.attempts\+1/);
+  assert.match(login,/RETURNING attempts, window_start AS windowStart/);
+  assert.match(login,/ipRow\.attempts>IP_MAX\|\|identifierRow\.attempts>IDENTIFIER_MAX/);
   assert.match(login,/retry-after/);
 
-  const blockedAt=login.indexOf("if(blocked(ipRow,now,IP_MAX)||blocked(identifierRow,now,IDENTIFIER_MAX))");
+  const reserveAt=login.indexOf("consumeAttempt(ipKey,now)");
+  const blockedAt=login.indexOf("if(ipRow.attempts>IP_MAX||identifierRow.attempts>IDENTIFIER_MAX)");
   const authAt=login.indexOf("const session=await authenticateAdmin");
-  const identifierWriteAt=login.indexOf("recordFailure(identifierKey,identifierRow,now)");
-  assert.ok(blockedAt>=0&&authAt>blockedAt&&identifierWriteAt>authAt);
+  assert.ok(reserveAt>=0&&blockedAt>reserveAt&&authAt>blockedAt);
+  assert.doesNotMatch(login,/async function recordFailure/);
+});
+
+test("login counter SQL increments atomically and resets only after the window",()=>{
+  const match=login.match(/env\.DB\.prepare\(\s*`([\s\S]*?RETURNING attempts, window_start AS windowStart)`\s*\)/);
+  assert.ok(match?.[1],"atomic login counter SQL not found");
+
+  const db=new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE login_attempts (key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, window_start INTEGER NOT NULL)");
+  const statement=db.prepare(match[1]);
+  const windowMs=15*60*1000;
+  const counts=[];
+  for(let index=0;index<6;index+=1){
+    const row=statement.get("same-key",1_000,windowMs,windowMs);
+    counts.push(Number(row.attempts));
+  }
+  assert.deepEqual(counts,[1,2,3,4,5,6]);
+
+  const reset=statement.get("same-key",1_000+windowMs,windowMs,windowMs);
+  assert.equal(Number(reset.attempts),1);
+  assert.equal(Number(reset.windowStart),1_000+windowMs);
 });
 
 test("anonymous platform health is minimized while owner diagnostics remain available",()=>{

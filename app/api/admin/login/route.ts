@@ -80,16 +80,23 @@ function loginFailure(request:Request,nativeForm:boolean,returnPath:string,error
   return Response.json({error},{status,headers:responseHeaders});
 }
 
-function blocked(row:AttemptRow|null,now:number,max:number){
-  return Boolean(row&&now-row.windowStart<WINDOW&&row.attempts>=max);
-}
-
-async function recordFailure(key:string,row:AttemptRow|null,now:number){
-  if(!row||now-row.windowStart>=WINDOW){
-    await env.DB.prepare("INSERT INTO login_attempts (key, attempts, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts=1, window_start=excluded.window_start").bind(key,now).run();
-    return;
-  }
-  await env.DB.prepare("UPDATE login_attempts SET attempts=attempts+1 WHERE key=?").bind(key).run();
+async function consumeAttempt(key:string,now:number){
+  const row=await env.DB.prepare(
+    `INSERT INTO login_attempts (key, attempts, window_start)
+     VALUES (?, 1, ?)
+     ON CONFLICT(key) DO UPDATE SET
+       attempts=CASE
+         WHEN excluded.window_start-login_attempts.window_start>=? THEN 1
+         ELSE login_attempts.attempts+1
+       END,
+       window_start=CASE
+         WHEN excluded.window_start-login_attempts.window_start>=? THEN excluded.window_start
+         ELSE login_attempts.window_start
+       END
+     RETURNING attempts, window_start AS windowStart`
+  ).bind(key,now,WINDOW,WINDOW).first<AttemptRow>();
+  if(!row)throw new Error("Login rate-limit counter unavailable");
+  return row;
 }
 
 export async function POST(request:Request){
@@ -110,12 +117,30 @@ export async function POST(request:Request){
   // The window_start index in migration 0030 keeps this bounded as D1 grows.
   await db.prepare("DELETE FROM login_attempts WHERE window_start < ?").bind(now-CLEANUP_AGE).run();
 
-  const [ipRow,identifierRow]=await Promise.all([
-    db.prepare("SELECT attempts, window_start AS windowStart FROM login_attempts WHERE key=?").bind(ipKey).first<AttemptRow>(),
-    db.prepare("SELECT attempts, window_start AS windowStart FROM login_attempts WHERE key=?").bind(identifierKey).first<AttemptRow>(),
-  ]);
+  if(!identifier||!password){
+    const ipRow=await consumeAttempt(ipKey,now);
+    if(ipRow.attempts>IP_MAX){
+      return loginFailure(
+        request,
+        parsed.nativeForm,
+        returnPath,
+        "Too many attempts. 15 minutes baad try karein.",
+        429,
+        "rate",
+        {"retry-after":"900"},
+      );
+    }
+    return loginFailure(request,parsed.nativeForm,returnPath,"Login ID ya password required hai.",400,"invalid");
+  }
 
-  if(blocked(ipRow,now,IP_MAX)||blocked(identifierRow,now,IDENTIFIER_MAX)){
+  // Reserve both counters atomically before password verification. The first
+  // IDENTIFIER_MAX/IP_MAX requests are allowed; any parallel request beyond
+  // those limits is rejected before authenticateAdmin runs.
+  const [ipRow,identifierRow]=await Promise.all([
+    consumeAttempt(ipKey,now),
+    consumeAttempt(identifierKey,now),
+  ]);
+  if(ipRow.attempts>IP_MAX||identifierRow.attempts>IDENTIFIER_MAX){
     return loginFailure(
       request,
       parsed.nativeForm,
@@ -127,22 +152,11 @@ export async function POST(request:Request){
     );
   }
 
-  if(!identifier||!password){
-    await recordFailure(ipKey,ipRow,now);
-    return loginFailure(request,parsed.nativeForm,returnPath,"Login ID ya password required hai.",400,"invalid");
-  }
-
   const session=await authenticateAdmin(identifier,password,host,{
     projectId:String(body.projectId||""),
     projectSlug:String(body.projectSlug||""),
   });
   if(!session){
-    // IP-wide accounting bounds random-identifier abuse: once the IP bucket is
-    // exhausted, no further identifier rows are created during the window.
-    await Promise.all([
-      recordFailure(ipKey,ipRow,now),
-      recordFailure(identifierKey,identifierRow,now),
-    ]);
     return loginFailure(request,parsed.nativeForm,returnPath,"Login ID ya password galat hai.",401,"invalid");
   }
 

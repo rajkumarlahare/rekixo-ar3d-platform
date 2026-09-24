@@ -103,3 +103,28 @@ test("public metadata, share image and 3D link stay on published snapshot", asyn
   assert.match(publicData, /publicProject3DLinkFromSnapshot/);
   assert.match(engine, /publicProject3DLinkFromSnapshot/);
 });
+
+
+test("modern published clients fail closed on stale snapshots and deploy preflights production first", async () => {
+  const [publicData, page, shareImage, deploy] = await Promise.all([
+    read("../app/api/public-data/route.ts"),
+    read("../app/projects/[slug]/page.tsx"),
+    read("../app/projects/[slug]/share-image/[version]/route.ts"),
+    read("../.github/workflows/deploy-cloudflare.yml"),
+  ]);
+
+  assert.match(publicData, /PUBLISHED_SNAPSHOT_UNAVAILABLE/);
+  assert.match(publicData, /projectId !== LEGACY_PROJECT/);
+  assert.match(publicData, /status: 503/);
+  assert.match(page, /snapshotReady/);
+  assert.match(page, /project\.id !== LEGACY_PROJECT/);
+  assert.match(shareImage, /snapshotReady/);
+  assert.match(shareImage, /disabled: true/);
+
+  const preflightAt = deploy.indexOf("Preflight current published client snapshots");
+  const migrationAt = deploy.indexOf("Apply D1 migrations");
+  assert.ok(preflightAt >= 0 && migrationAt > preflightAt);
+  assert.match(deploy, /project_public_snapshots/);
+  assert.match(deploy, /s\.publish_version<>p\.publish_version/);
+  assert.match(deploy, /cancel-in-progress: false/);
+});
