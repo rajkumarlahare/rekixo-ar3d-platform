@@ -180,10 +180,50 @@ export async function POST(request:Request){
   return Response.json({user:{id,email:loginType==="email"?email:null,loginType,loginId,mobile,name,projectId,projectName:resolvedName,projectSlug:slug,publicHost,adminHost,role:"client_admin",status:"active",mustChangePassword:true,createdAt:now,updatedAt:now,lastLoginAt:null,adminUrl:clientAdminUrl(slug,adminHost)},clientAdminUrl:clientAdminUrl(slug,adminHost)},{status:201});
 }
 
+async function restoreArchivedProject(projectId:string,now:string){
+  const snapshot=await env.DB.prepare("SELECT COUNT(*) AS total FROM project_archive_access_snapshot WHERE project_id=?").bind(projectId).first<{total:number}>();
+  const hasSnapshot=Number(snapshot?.total||0)>0;
+  if(!hasSnapshot){
+    await env.DB.prepare("UPDATE projects SET status='active',deleted_at=NULL,updated_at=? WHERE id=?").bind(now,projectId).run();
+    return {accessRestored:false};
+  }
+  await env.DB.batch([
+    env.DB.prepare("UPDATE projects SET status='active',deleted_at=NULL,public_host=(SELECT public_host FROM project_archive_access_snapshot WHERE project_id=? AND entity_type='project' LIMIT 1),admin_host=(SELECT admin_host FROM project_archive_access_snapshot WHERE project_id=? AND entity_type='project' LIMIT 1),updated_at=? WHERE id=?").bind(projectId,projectId,now,projectId),
+    env.DB.prepare("UPDATE admin_users SET status=COALESCE((SELECT s.status FROM project_archive_access_snapshot s WHERE s.project_id=? AND s.entity_type='admin' AND s.entity_id=admin_users.id),status),session_version=session_version+1,updated_at=? WHERE project_id=?").bind(projectId,now,projectId),
+    env.DB.prepare("UPDATE project_memberships SET status=COALESCE((SELECT s.status FROM project_archive_access_snapshot s WHERE s.project_id=? AND s.entity_type='membership' AND s.entity_id=project_memberships.user_id),status),is_primary=COALESCE((SELECT s.is_primary FROM project_archive_access_snapshot s WHERE s.project_id=? AND s.entity_type='membership' AND s.entity_id=project_memberships.user_id),is_primary),updated_at=? WHERE project_id=?").bind(projectId,projectId,now,projectId),
+    env.DB.prepare("UPDATE project_domains SET status=COALESCE((SELECT s.status FROM project_archive_access_snapshot s WHERE s.project_id=? AND s.entity_type='domain' AND s.entity_id=project_domains.host),status),public_primary=COALESCE((SELECT s.public_primary FROM project_archive_access_snapshot s WHERE s.project_id=? AND s.entity_type='domain' AND s.entity_id=project_domains.host),public_primary),admin_primary=COALESCE((SELECT s.admin_primary FROM project_archive_access_snapshot s WHERE s.project_id=? AND s.entity_type='domain' AND s.entity_id=project_domains.host),admin_primary),updated_at=? WHERE project_id=?").bind(projectId,projectId,projectId,now,projectId),
+    env.DB.prepare("DELETE FROM project_archive_access_snapshot WHERE project_id=?").bind(projectId),
+  ]);
+  return {accessRestored:true};
+}
+
+function archiveAccessSnapshotStatements(projectId:string,archivedAt:string){
+  return [
+    env.DB.prepare("DELETE FROM project_archive_access_snapshot WHERE project_id=?").bind(projectId),
+    env.DB.prepare("INSERT INTO project_archive_access_snapshot (project_id,entity_type,entity_id,status,public_host,admin_host,archived_at) SELECT id,'project',id,status,public_host,admin_host,? FROM projects WHERE id=?").bind(archivedAt,projectId),
+    env.DB.prepare("INSERT INTO project_archive_access_snapshot (project_id,entity_type,entity_id,status,archived_at) SELECT project_id,'admin',id,status,? FROM admin_users WHERE project_id=?").bind(archivedAt,projectId),
+    env.DB.prepare("INSERT INTO project_archive_access_snapshot (project_id,entity_type,entity_id,status,is_primary,archived_at) SELECT project_id,'membership',user_id,status,is_primary,? FROM project_memberships WHERE project_id=?").bind(archivedAt,projectId),
+    env.DB.prepare("INSERT INTO project_archive_access_snapshot (project_id,entity_type,entity_id,status,public_primary,admin_primary,archived_at) SELECT project_id,'domain',host,status,public_primary,admin_primary,? FROM project_domains WHERE project_id=?").bind(archivedAt,projectId),
+  ];
+}
+
 export async function PATCH(request:Request){
   const actor=await requireSuperAdmin();if(!actor)return unauthorized();if(!sameOrigin(request))return Response.json({error:"Invalid request origin"},{status:403});
   const body=await request.json().catch(()=>({})) as {id?:string;projectId?:string;action?:string;name?:string;password?:string;publicHost?:string;adminHost?:string},id=String(body.id||""),action=String(body.action||""),now=new Date().toISOString();
-  if(action==="restore_project"){const projectId=String(body.projectId||"").trim();if(!projectId)return Response.json({error:"Project required"},{status:400});const project=await env.DB.prepare("SELECT id,name FROM projects WHERE id=? AND status='deleted' LIMIT 1").bind(projectId).first<{id:string;name:string}>();if(!project)return Response.json({error:"Archived project nahi mila"},{status:404});await env.DB.prepare("UPDATE projects SET status='active',deleted_at=NULL,updated_at=? WHERE id=?").bind(now,projectId).run();await writeAudit(actor,"client.project_restored",projectId,null);return Response.json({ok:true,project:{id:project.id,name:project.name,status:"active"}})}
+  if(action==="restore_project"){
+    const projectId=String(body.projectId||"").trim();
+    if(!projectId)return Response.json({error:"Project required"},{status:400});
+    const project=await env.DB.prepare("SELECT id,name FROM projects WHERE id=? AND status='deleted' LIMIT 1").bind(projectId).first<{id:string;name:string}>();
+    if(!project)return Response.json({error:"Archived project nahi mila"},{status:404});
+    try{
+      const restored=await restoreArchivedProject(projectId,now);
+      await writeAudit(actor,"client.project_restored",projectId,null,restored);
+      return Response.json({ok:true,accessRestored:restored.accessRestored,project:{id:project.id,name:project.name,status:"active"}});
+    }catch(error){
+      console.error("Project restore failed",error);
+      return Response.json({error:"Project restore nahi hua. Purana domain kisi aur project me use ho raha ho sakta hai."},{status:409});
+    }
+  }
   const current=await env.DB.prepare("SELECT id,status,project_id AS projectId FROM admin_users WHERE id=? LIMIT 1").bind(id).first<{id:string;status:string;projectId:string}>();if(!current)return Response.json({error:"Client admin nahi mila"},{status:404});
   if(action==="toggle"){const status=current.status==="active"?"disabled":"active";await env.DB.batch([env.DB.prepare("UPDATE admin_users SET status=?,session_version=session_version+1,updated_at=? WHERE id=?").bind(status,now,id),env.DB.prepare("UPDATE project_memberships SET status=?,updated_at=? WHERE user_id=? AND project_id=?").bind(status,now,id,current.projectId)]);await writeAudit(actor,`client.${status}`,current.projectId,id);return Response.json({ok:true,status})}
   if(action==="domains"){if(await isGeoLab(current.projectId))return Response.json({error:"Geo Lab project par domain attach disabled hai"},{status:409});const publicHost=cleanHost(body.publicHost),adminHost=cleanHost(body.adminHost);if(!validHost(publicHost)||!validHost(adminHost))return Response.json({error:"Valid domain लिखें, https:// या path नहीं"},{status:400});try{await upsertPrimaryProjectDomain(current.projectId,"public",publicHost,now);await upsertPrimaryProjectDomain(current.projectId,"admin",adminHost,now)}catch{return Response.json({error:"Domain kisi aur project me use ho raha hai"},{status:409})}await writeAudit(actor,"project.domains_updated",current.projectId,id,{publicHost,adminHost});return Response.json({ok:true,publicHost,adminHost})}
@@ -200,6 +240,7 @@ export async function DELETE(request:Request){
   if(Number(count?.total||0)>1){await env.DB.batch([env.DB.prepare("DELETE FROM project_memberships WHERE user_id=? AND project_id=?").bind(id,current.projectId),env.DB.prepare("DELETE FROM admin_users WHERE id=?").bind(id)]);await writeAudit(actor,"client.admin_removed",current.projectId,id);return Response.json({ok:true,projectDeleted:false})}
   const deletedAt=new Date().toISOString();
   await env.DB.batch([
+    ...archiveAccessSnapshotStatements(current.projectId,deletedAt),
     env.DB.prepare("UPDATE projects SET status='deleted',deleted_at=?,public_status='draft',public_host=NULL,admin_host=NULL,updated_at=? WHERE id=?").bind(deletedAt,deletedAt,current.projectId),
     env.DB.prepare("UPDATE admin_users SET status='disabled',session_version=session_version+1,updated_at=? WHERE project_id=?").bind(deletedAt,current.projectId),
     env.DB.prepare("UPDATE project_memberships SET status='disabled',updated_at=? WHERE project_id=?").bind(deletedAt,current.projectId),
