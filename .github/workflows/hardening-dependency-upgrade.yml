@@ -1,0 +1,48 @@
+name: Resolve Hardening Dependency Lock
+
+on:
+  push:
+    branches: [hardening/phases-5-12-20260924]
+    paths: [package.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hardening-dependency-lock
+  cancel-in-progress: true
+
+jobs:
+  resolve-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hardening/phases-5-12-20260924
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Resolve lockfile from controlled package versions
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Clean install
+        run: npm ci
+      - name: Source syntax
+        run: npm run verify:source
+      - name: Production build
+        run: npm run build
+      - name: Full regression suite
+        run: node --test tests/*.test.mjs
+      - name: Commit verified lockfile
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "Lockfile already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Lock verified security dependency upgrades"
+          git push origin HEAD:hardening/phases-5-12-20260924
