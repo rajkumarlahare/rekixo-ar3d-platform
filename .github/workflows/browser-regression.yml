@@ -52,25 +52,27 @@ jobs:
 
           SERVER_PID=""
           stop_server() {
-            if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
-              kill "${SERVER_PID}" || true
+            if [ -n "${SERVER_PID}" ]; then
+              # Wrangler spawns workerd as a child process. Kill the whole process
+              # group so a stale child cannot keep the old PANEL_MODE/port alive.
+              kill -TERM -- "-${SERVER_PID}" 2>/dev/null || kill "${SERVER_PID}" 2>/dev/null || true
               wait "${SERVER_PID}" 2>/dev/null || true
             fi
             SERVER_PID=""
           }
           trap stop_server EXIT
 
-          npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/super-server.log 2>&1 &
+          setsid npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/super-server.log 2>&1 &
           SERVER_PID=$!
           node scripts/wait-http.mjs http://localhost:4173/admin/login
           E2E_STAGE=admin E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
           stop_server
 
           sed -i 's/^PANEL_MODE=super$/PANEL_MODE=client/' .dev.vars
-          npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/client-server.log 2>&1 &
+          setsid npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4174 > artifacts/full-admin-e2e/client-server.log 2>&1 &
           SERVER_PID=$!
-          node scripts/wait-http.mjs http://localhost:4173/projects/phase-11-e2e
-          E2E_STAGE=customer E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
+          node scripts/wait-http.mjs http://localhost:4174/projects/phase-11-e2e
+          E2E_STAGE=customer E2E_BASE_URL=http://localhost:4174 node scripts/verify-admin-customer-e2e.mjs
           stop_server
           cp /tmp/wrangler.phase11.production.jsonc wrangler.jsonc
           trap - EXIT
