@@ -265,8 +265,12 @@ export async function DELETE(request:Request){
   const actor=await requireSuperAdmin();if(!actor)return unauthorized();if(!sameOrigin(request))return Response.json({error:"Invalid request origin"},{status:403});
   const id=new URL(request.url).searchParams.get("id");if(!id)return Response.json({error:"Missing id"},{status:400});
   const current=await env.DB.prepare("SELECT u.project_id AS projectId,p.name AS projectName,p.kind AS projectKind FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE u.id=?").bind(id).first<{projectId:string;projectName:string;projectKind:string}>();if(!current)return Response.json({error:"Client admin nahi mila"},{status:404});
-  const count=await env.DB.prepare("SELECT COUNT(*) AS total FROM admin_users WHERE project_id=?").bind(current.projectId).first<{total:number}>();
-  if(Number(count?.total||0)>1){await env.DB.batch([env.DB.prepare("DELETE FROM project_memberships WHERE user_id=? AND project_id=?").bind(id,current.projectId),env.DB.prepare("DELETE FROM admin_users WHERE id=?").bind(id)]);await writeAudit(actor,"client.admin_removed",current.projectId,id);return Response.json({ok:true,projectDeleted:false})}
+  // Never leave an active project without an active admin. Disabled admins do
+  // not count as usable access for this decision.
+  const otherActive=await env.DB.prepare(
+    "SELECT COUNT(*) AS total FROM admin_users WHERE project_id=? AND id<>? AND status='active'",
+  ).bind(current.projectId,id).first<{total:number}>();
+  if(Number(otherActive?.total||0)>0){await env.DB.batch([env.DB.prepare("DELETE FROM project_memberships WHERE user_id=? AND project_id=?").bind(id,current.projectId),env.DB.prepare("DELETE FROM admin_users WHERE id=?").bind(id)]);await writeAudit(actor,"client.admin_removed",current.projectId,id);return Response.json({ok:true,projectDeleted:false})}
   const deletedAt=new Date().toISOString();
   await env.DB.batch([
     ...archiveAccessSnapshotStatements(current.projectId,deletedAt),
