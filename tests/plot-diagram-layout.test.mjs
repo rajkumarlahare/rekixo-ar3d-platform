@@ -61,7 +61,7 @@ test('both mapper SQL paths save four sides and preserve sales state',()=>{
   const names=('project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,'+
     'dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,'+
     'front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,'+
-    'polygon,status,notes,featured,updated_at').split(',');
+    'polygon,status,notes,featured,inventory_active,updated_at').split(',');
   assert.equal(sqls.length,2);
   for(const [index,sql] of sqls.entries()){
     const db=new DatabaseSync(':memory:');
@@ -69,7 +69,7 @@ test('both mapper SQL paths save four sides and preserve sales state',()=>{
       db.exec('CREATE TABLE plots ('+names.map(n=>n+' TEXT').join(',')+
         ',PRIMARY KEY(project_id,id))');
       const row=Object.fromEntries(names.map(n=>[n,n+'-old']));
-      Object.assign(row,{project_id:'test',id:'test',status:'sold',featured:'1'});
+      Object.assign(row,{project_id:'test',id:'test',status:'sold',featured:'1',inventory_active:'1'});
       const values=r=>names.map(n=>r[n]);
       db.prepare(sql).run(...values(row));
       const next={...row,back:'12',depth2:'42',back_label:'12 ft',
