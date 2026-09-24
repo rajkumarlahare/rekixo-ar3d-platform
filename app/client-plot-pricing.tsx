@@ -26,6 +26,8 @@ type PricingResponse = {
   error?: string;
 };
 
+const PRICING_PAGE_SIZE = 100;
+
 const UNIT_LABELS = {
   sqyd: "Sq. Yards",
   sqft: "Sq. Feet",
@@ -90,12 +92,12 @@ export default function ClientPlotPricing({
   const [pricing, setPricing] = useState<PricingRow[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
-  const [visibleLimit, setVisibleLimit] = useState(200);
   const [pricingType, setPricingType] = useState<"rate" | "fixed">("rate");
   const [unit, setUnit] = useState<"sqyd" | "sqft" | "sqm">("sqyd");
   const [rate, setRate] = useState("");
   const [fixedPrice, setFixedPrice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(0);
 
   const pricingByPlot = useMemo(
     () => new Map(pricing.map((row) => [row.plotId, row])),
@@ -107,14 +109,27 @@ export default function ClientPlotPricing({
       ? plots.filter((plot) => plot.id.toLowerCase().includes(needle))
       : plots;
   }, [plots, query]);
+  const pageCount = Math.max(1, Math.ceil(filteredPlots.length / PRICING_PAGE_SIZE));
   const visiblePlots = useMemo(
-    () => filteredPlots.slice(0, visibleLimit),
-    [filteredPlots, visibleLimit],
+    () =>
+      filteredPlots.slice(
+        page * PRICING_PAGE_SIZE,
+        (page + 1) * PRICING_PAGE_SIZE,
+      ),
+    [filteredPlots, page],
   );
   const selectedPlots = useMemo(() => {
     const selected = new Set(selectedIds);
     return plots.filter((plot) => selected.has(plot.id));
   }, [plots, selectedIds]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, Math.max(0, pageCount - 1)));
+  }, [pageCount]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [query]);
 
   useEffect(() => {
     let active = true;
@@ -243,17 +258,14 @@ export default function ClientPlotPricing({
           <input
             value={query}
             placeholder="Plot number search"
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setVisibleLimit(200);
-            }}
+            onChange={(event) => setQuery(event.target.value)}
           />
         </label>
         <button
           type="button"
-          onClick={() => applySelection(filteredPlots.map((plot) => plot.id))}
+          onClick={() => applySelection(visiblePlots.map((plot) => plot.id))}
         >
-          Select visible ({filteredPlots.length})
+          Select page ({visiblePlots.length})
         </button>
         <button type="button" onClick={() => applySelection([])}>
           Clear selection
@@ -288,16 +300,33 @@ export default function ClientPlotPricing({
             </label>
           );
         })}
-        {visibleLimit < filteredPlots.length ? (
+      </div>
+
+      {filteredPlots.length > PRICING_PAGE_SIZE ? (
+        <div className="admin-list-pager">
           <button
             type="button"
-            className="client-pricing-load-more"
-            onClick={() => setVisibleLimit((current) => current + 200)}
+            disabled={page === 0}
+            onClick={() => setPage((current) => Math.max(0, current - 1))}
           >
-            Show next {Math.min(200, filteredPlots.length - visibleLimit)} plots
+            Previous
           </button>
-        ) : null}
-      </div>
+          <span>
+            Page {page + 1} / {pageCount} · {page * PRICING_PAGE_SIZE + 1}-
+            {Math.min(filteredPlots.length, (page + 1) * PRICING_PAGE_SIZE)} of{" "}
+            {filteredPlots.length}
+          </span>
+          <button
+            type="button"
+            disabled={page + 1 >= pageCount}
+            onClick={() =>
+              setPage((current) => Math.min(pageCount - 1, current + 1))
+            }
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
 
       <div className="client-pricing-form">
         <div className="client-pricing-selected">
