@@ -24,8 +24,6 @@ test("shared boss domain routes are narrow and never hijack the Vercel root", as
   assert.doesNotMatch(deploy, /`\$\{platformHost\}\/\*`/);
   assert.match(deploy, /if \(mode === "client" && sharedDomainRoutes\.length\)/);
   assert.match(deploy, /delete config\.routes/);
-  assert.match(deploy, /if \(mode === "client"\) config\.assets\.html_handling = "none"/);
-  assert.match(deploy, /else delete config\.assets\.html_handling/);
 });
 
 test("query-bearing Rekixo API routes terminate in wildcard so Cloudflare matches query strings", async () => {
@@ -77,6 +75,10 @@ test("Rekixo static assets use a native isolated namespace plus compatibility fa
   assert.equal(sharedPublicRuntimeAssetPath("/__rekixo/project/project-geometry.js"), "/project/project-geometry.js");
   assert.equal(sharedPublicRuntimeAssetPath("/__rekixo/_next/static/a.js"), null);
   assert.match(worker, /stripSharedAssetPrefix/);
+  assert.match(worker, /publicProjectRuntimeHtml/);
+  assert.match(worker, /\.\.\/public\/project\/index\.html\?raw/);
+  assert.match(worker, /assetPath === "\/project\/index\.html"/);
+  assert.match(worker, /new Response\(request\.method === "HEAD" \? null : publicProjectRuntimeHtml/);
   assert.match(worker, /fetchPrefixedPublicRuntimeAsset/);
   assert.match(worker, /directPublicRuntimeAsset/);
   assert.match(worker, /fetchPrefixedFrameworkAsset/);
