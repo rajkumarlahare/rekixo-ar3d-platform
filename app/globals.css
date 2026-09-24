@@ -3071,3 +3071,40 @@ body {
   }
 }
 
+
+
+/* REKIXO_ADMIN_LIST_PAGER_V1 */
+.admin-list-pager{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:10px 4px 2px;
+  color:#91a2ba;
+  font-size:11px;
+  font-weight:800;
+}
+.admin-list-pager button{
+  min-height:36px;
+  padding:0 12px;
+  border:1px solid #30425d;
+  border-radius:9px;
+  background:#0d1a2b;
+  color:#cad5e5;
+  font-weight:850;
+  cursor:pointer;
+}
+.admin-list-pager button:disabled{
+  opacity:.45;
+  cursor:default;
+}
+@media(max-width:560px){
+  .admin-list-pager{
+    flex-wrap:wrap;
+  }
+  .admin-list-pager span{
+    width:100%;
+    text-align:center;
+    order:-1;
+  }
+}
