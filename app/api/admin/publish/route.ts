@@ -6,6 +6,7 @@ import { currentProjectLinks } from "@/modules/projects";
 import { missingRequiredProjectContact } from "@/modules/projects";
 import {
   capturePublishedSnapshotStatements,
+  finalizeInactivePlotInventoryStatements,
   promotePublishedAssets,
 } from "@/modules/public-publish-snapshot";
 
@@ -143,7 +144,7 @@ async function publishState(projectId: string) {
 
   const [plotResult, settingsResult] = await Promise.all([
     env.DB.prepare(
-      "SELECT id,polygon,dimensions,road,front,back,depth,depth2,front_label AS frontLabel,back_label AS backLabel,depth_label AS depthLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=? ORDER BY id",
+      "SELECT id,polygon,dimensions,road,front,back,depth,depth2,front_label AS frontLabel,back_label AS backLabel,depth_label AS depthLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=? AND inventory_active=1 ORDER BY id",
     )
       .bind(projectId)
       .all<PublishPlotRow>(),
@@ -276,6 +277,7 @@ export async function POST(request: Request) {
       env.DB.prepare(
         "UPDATE projects SET public_status='published',published_at=?,publish_version=?,updated_at=? WHERE id=?",
       ).bind(now, nextVersion, now, projectId),
+      ...finalizeInactivePlotInventoryStatements(projectId),
     ]);
     await writeAudit(actor, "project.published", projectId, null, {
       mapped: state.mapped,
