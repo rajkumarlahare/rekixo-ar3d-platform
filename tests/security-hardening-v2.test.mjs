@@ -47,4 +47,5 @@ test("dependency baseline uses patched Next and React RSC versions",()=>{
   assert.equal(data.dependencies["react-dom"],"19.2.8");
   assert.equal(data.devDependencies["react-server-dom-webpack"],"19.2.8");
   assert.equal(data.devDependencies["eslint-config-next"],"16.3.6");
+  assert.equal(data.overrides["image-size"],"2.0.4");
 });
