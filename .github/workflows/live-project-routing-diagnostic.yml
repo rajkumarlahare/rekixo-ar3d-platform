@@ -42,6 +42,8 @@ jobs:
           check_url data_tj "https://ar3dstudio.in/api/public-data?projectSlug=tj-lands-43f339"
           check_url iframe_tiyansh "https://ar3dstudio.in/__rekixo/project/?projectSlug=tiyansh-prime-square&pv=1&v=66"
           check_url iframe_tj "https://ar3dstudio.in/__rekixo/project/?projectSlug=tj-lands-43f339&pv=9&v=66"
+          check_url iframe_noslash_tiyansh "https://ar3dstudio.in/__rekixo/project?projectSlug=tiyansh-prime-square&pv=1&v=66"
+          check_url iframe_noslash_tj "https://ar3dstudio.in/__rekixo/project?projectSlug=tj-lands-43f339&pv=9&v=66"
           check_url iframe_index_tj "https://ar3dstudio.in/__rekixo/project/index.html?projectSlug=tj-lands-43f339&pv=9&v=66"
       - name: Check remote D1 project state
         env:
