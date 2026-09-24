@@ -20,6 +20,7 @@ export type ProjectAssetManifestFile = {
   sha256?: string;
   uploadedAt?: string;
   customMetadata?: Record<string, string>;
+  byteFidelity?: "original-upload" | "system-copy" | "generated";
 };
 
 export type ProjectAssetMissing = {
@@ -100,6 +101,7 @@ type R2Entry = {
   etag?: string;
   uploadedAt?: string;
   customMetadata?: Record<string, string>;
+  byteFidelity?: "original-upload" | "system-copy";
 };
 
 export type ProjectAssetExportEntry = GeneratedEntry | R2Entry;
@@ -490,6 +492,7 @@ function manifestFile(entry: ProjectAssetExportEntry): ProjectAssetManifestFile 
         sizeBytes: entry.bytes.byteLength,
         contentType: entry.contentType,
         sha256: entry.sha256,
+        byteFidelity: "generated",
       }
     : {
         path: entry.path,
@@ -502,6 +505,7 @@ function manifestFile(entry: ProjectAssetExportEntry): ProjectAssetManifestFile 
         etag: entry.etag,
         uploadedAt: entry.uploadedAt,
         customMetadata: entry.customMetadata,
+        byteFidelity: entry.byteFidelity || "system-copy",
       };
 }
 
@@ -673,34 +677,38 @@ export async function buildProjectAssetExport(
     {
       id: "masterplan-original",
       key: originalKey,
-      base: "masterplan-original",
+      base: "masterplan-ready-original",
       preferred: values.masterplanOriginalName,
-      label: "Masterplan original",
+      label: "Masterplan Ready — ORIGINAL / NO COMPRESSION",
       fallbackExt: "bin",
+      byteFidelity: "original-upload" as const,
     },
     {
       id: "masterplan-working",
       key: `${mapperPrefix}masterplan`,
       base: "masterplan-working",
       preferred: undefined,
-      label: "Masterplan working",
+      label: "System working masterplan — optimized copy",
       fallbackExt: "webp",
+      byteFidelity: "system-copy" as const,
     },
     {
       id: "masterplan-public",
       key: `${mapperPrefix}masterplanPublic`,
       base: "masterplan-public",
       preferred: undefined,
-      label: "Masterplan public optimized",
+      label: "Public masterplan — optimized copy",
       fallbackExt: "webp",
+      byteFidelity: "system-copy" as const,
     },
     {
       id: "source-pdf",
       key: `${mapperPrefix}sourcePdf`,
-      base: "source-plan",
-      preferred: "source-plan.pdf",
-      label: "Source PDF",
+      base: "source-pdf-original",
+      preferred: values.sourcePdfName || "source-plan.pdf",
+      label: "Source PDF — ORIGINAL / NO COMPRESSION",
       fallbackExt: "pdf",
+      byteFidelity: "original-upload" as const,
     },
     {
       id: "source-cad",
@@ -764,10 +772,22 @@ export async function buildProjectAssetExport(
       continue;
     }
     const contentType = head.httpMetadata?.contentType || "application/octet-stream";
+    const preferredName =
+      asset.id === "masterplan-original"
+        ? String(head.customMetadata?.filename || asset.preferred || "")
+        : asset.preferred;
+    if (asset.id === "masterplan-original") {
+      const expectedSize = Number(head.customMetadata?.expectedSize || 0);
+      if (Number.isFinite(expectedSize) && expectedSize > 0 && expectedSize !== Number(head.size || 0)) {
+        warnings.push(
+          `Masterplan original metadata size ${expectedSize} bytes differs from stored R2 size ${Number(head.size || 0)} bytes.`,
+        );
+      }
+    }
     entries.push({
       kind: "r2",
       path: `02-mapper/${filenameForStoredObject(
-        asset.preferred,
+        preferredName,
         asset.base,
         contentType,
         asset.fallbackExt,
@@ -780,6 +800,7 @@ export async function buildProjectAssetExport(
       etag: head.httpEtag || undefined,
       uploadedAt: head.uploaded?.toISOString?.(),
       customMetadata: head.customMetadata,
+      byteFidelity: asset.byteFidelity || "system-copy",
     });
   }
 
@@ -1153,6 +1174,14 @@ This ZIP is a read-only recovery/export package for one explicit Rekixo project.
 It contains the current editable project state, current published snapshot (when
 available), mapper source assets, branding/gallery, Geo data and Platform-to-3D
 link metadata.
+
+Original-file fidelity
+----------------------
+"Masterplan Ready — ORIGINAL / NO COMPRESSION" and "Source PDF — ORIGINAL / NO
+COMPRESSION" are streamed from the exact R2 objects saved at upload time. The ZIP
+writer uses STORE mode (no deflate/re-encoding), so these files keep their original
+stored bytes and R2 byte size. Separate working/public masterplan copies are clearly
+labeled optimized system copies.
 
 Authoritative data
 ------------------
