@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -114,9 +114,11 @@ export default function ProjectAssetsManager({
   const [error, setError] = useState("");
   const [includeLinkedGeoLab, setIncludeLinkedGeoLab] = useState(false);
   const [downloadStarting, setDownloadStarting] = useState(false);
+  const requestSerial = useRef(0);
 
   const load = useCallback(async () => {
     if (!projectId) return;
+    const requestId = ++requestSerial.current;
     setLoading(true);
     setError("");
     try {
@@ -129,15 +131,17 @@ export default function ProjectAssetsManager({
         error?: string;
       };
       if (!response.ok) throw new Error(data.error || "Project assets load nahi hue");
+      if (requestId !== requestSerial.current) return;
       setManifest(data);
     } catch (loadError) {
+      if (requestId !== requestSerial.current) return;
       const message =
         loadError instanceof Error ? loadError.message : "Project assets load nahi hue";
       setError(message);
       setManifest(null);
       notify(message);
     } finally {
-      setLoading(false);
+      if (requestId === requestSerial.current) setLoading(false);
     }
   }, [includeLinkedGeoLab, notify, projectId]);
 
