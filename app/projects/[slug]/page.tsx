@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { panelMode } from "@/modules/auth";
 import { isPlatformAccessHost, projectBySlug } from "@/modules/public-project";
+import { publicSiteEnabled } from "@/modules/public-site-access";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,19 @@ type MetaSettings = Record<string, string>;
 async function readProjectMeta(slug: string) {
   const project = await projectBySlug(slug);
   if (!project) return null;
+  if (!(await publicSiteEnabled(project.id))) {
+    return {
+      project,
+      paused: true as const,
+      title: "Project Temporarily Unavailable",
+      description: "This project is temporarily unavailable. Please try again later.",
+      imageUrl: "",
+      logoUrl: "",
+      hasShareImage: false,
+      brandName: "Rekixo",
+      origin: "",
+    };
+  }
 
   const snapshot = await env.DB.prepare(
     "SELECT project_name AS projectName FROM project_public_snapshots WHERE project_id=? LIMIT 1",
@@ -64,6 +78,7 @@ async function readProjectMeta(slug: string) {
 
   return {
     project,
+    paused: false as const,
     title,
     description,
     imageUrl,
@@ -129,6 +144,36 @@ export default async function SharedProjectPage({
 
   const project = await projectBySlug(slug);
   if (!project) notFound();
+
+  if (!(await publicSiteEnabled(project.id))) {
+    return (
+      <main
+        style={{
+          position: "fixed",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+          background: "#050914",
+          color: "#f7f9ff",
+        }}
+      >
+        <section
+          style={{
+            width: "min(560px, 100%)",
+            padding: 32,
+            border: "1px solid #26344b",
+            borderRadius: 18,
+            background: "#0b1424",
+            textAlign: "center",
+          }}
+        >
+          <h1>Project Temporarily Unavailable</h1>
+          <p>This project is temporarily unavailable. Please try again later.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main style={{ position: "fixed", inset: 0, background: "#050914" }}>
