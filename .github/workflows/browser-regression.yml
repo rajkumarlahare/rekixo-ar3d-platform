@@ -35,6 +35,39 @@ jobs:
         run: node scripts/verify-plot-diagram-browser.mjs
         env:
           PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
+      - name: Full Super Admin to customer E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare-full-admin-e2e.mjs
+          npx wrangler d1 migrations apply tiyansh-production --local --config wrangler.jsonc
+          npx wrangler d1 execute tiyansh-production --local --config wrangler.jsonc --file=artifacts/full-admin-e2e/seed.sql
+
+          SERVER_PID=""
+          stop_server() {
+            if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
+              kill "${SERVER_PID}" || true
+              wait "${SERVER_PID}" 2>/dev/null || true
+            fi
+            SERVER_PID=""
+          }
+          trap stop_server EXIT
+
+          npm run dev -- --host 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/super-server.log 2>&1 &
+          SERVER_PID=$!
+          node scripts/wait-http.mjs http://localhost:4173/admin/login
+          E2E_STAGE=admin E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
+          stop_server
+
+          sed -i 's/^PANEL_MODE=super$/PANEL_MODE=client/' .dev.vars
+          npm run dev -- --host 127.0.0.1 --port 4173 > artifacts/full-admin-e2e/client-server.log 2>&1 &
+          SERVER_PID=$!
+          node scripts/wait-http.mjs http://localhost:4173/projects/phase-11-e2e
+          E2E_STAGE=customer E2E_BASE_URL=http://localhost:4173 node scripts/verify-admin-customer-e2e.mjs
+          stop_server
+          trap - EXIT
+        env:
+          PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
