@@ -19,6 +19,20 @@ test("migration backfills a structural snapshot for already-published projects",
   assert.match(migration, /INSERT OR REPLACE INTO published_settings/);
 });
 
+test("published snapshot preserves legacy public-data plot serialization", async () => {
+  const [migration, route, snapshot] = await Promise.all([
+    read("../drizzle/0028_rekixo_publish_snapshot_parity.sql"),
+    read("../app/api/public-data/route.ts"),
+    read("../app/public-publish-snapshot.ts"),
+  ]);
+  assert.match(migration, /ALTER TABLE published_plots ADD COLUMN updated_at TEXT/);
+  assert.match(migration, /p\.updated_at/);
+  assert.match(snapshot, /featured,updated_at/);
+  assert.match(route, /updated_at AS updatedAt/);
+  assert.match(route, /featured: Boolean\(publicPlot\.featured\)/);
+  assert.match(route, /roadFrontage: Boolean\(item\.roadFrontage\)/);
+});
+
 test("Publish Update captures D1 state and versioned R2 assets before moving live pointer", async () => {
   const [publishRoute, snapshot] = await Promise.all([
     read("../app/api/admin/publish/route.ts"),
