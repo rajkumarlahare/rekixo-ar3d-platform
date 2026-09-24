@@ -39,9 +39,10 @@ test("manual Retry and browser online recovery are both wired", () => {
   assert.match(html, /id="rekixoBootRetry"/);
   assert.match(
     html,
-    /rekixoBootRetryButton\.addEventListener\('click',\(\)=>rekixoStartPublicBoot\(\)\)/,
+    /rekixoBootRetryButton\.addEventListener\('click',\(\)=>\{[\s\S]*REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot\(\)/,
   );
-  assert.match(html, /window\.REKIXO_RETRY_PUBLIC_BOOT=\(\)=>rekixoStartPublicBoot\(\);/);
+  assert.match(html, /window\.REKIXO_RETRY_PUBLIC_BOOT=\(\)=>\{/);
+  assert.match(html, /window\.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot\(\)/);
   assert.match(html, /window\.addEventListener\('online'/);
 });
 
