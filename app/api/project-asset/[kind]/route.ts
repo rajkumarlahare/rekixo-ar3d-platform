@@ -22,23 +22,69 @@ async function activeProjectId(projectId: string) {
   return row?.id || null;
 }
 
-async function authorizedProjectId(request: Request) {
+type AssetAccess = {
+  projectId: string;
+  mode: "admin" | "public";
+  session: Awaited<ReturnType<typeof getAdminSession>>;
+};
+
+async function authorizedAssetAccess(request: Request, kind: string) {
   const session = await getAdminSession();
-  const requested = new URL(request.url).searchParams.get("projectId");
+  const url = new URL(request.url);
+  const requested = url.searchParams.get("projectId");
+  const variant = url.searchParams.get("variant") || "";
+  const explicitPublic =
+    PUBLIC_KINDS.has(kind) &&
+    (url.searchParams.get("public") === "1" ||
+      variant === "public" ||
+      variant === "public-canonical");
 
-  // Super Admin works across many tenants. The selected project must always
-  // win over the legacy Tiyansh session fallback.
+  // Resolve the public project independently of any admin cookie. A browser may
+  // legitimately be logged into Client A while viewing Client B's published site.
+  // Public resolution is published-only, so this never grants draft/private access.
+  const publicId = PUBLIC_KINDS.has(kind)
+    ? await publicProjectId(request)
+    : null;
+
+  if (explicitPublic) {
+    return publicId
+      ? ({ projectId: publicId, mode: "public", session } satisfies AssetAccess)
+      : null;
+  }
+
+  // Super Admin canonical/preview requests still require an explicit project.
   if (session?.role === "super_admin") {
-    return requested ? activeProjectId(requested) : null;
+    const projectId = requested ? await activeProjectId(requested) : null;
+    return projectId
+      ? ({ projectId, mode: "admin", session } satisfies AssetAccess)
+      : null;
   }
 
-  // Client admins remain hard tenant-scoped.
+  // Client admins stay tenant-scoped for private/canonical assets. If the request
+  // independently resolves to another published project, serve only its public
+  // contract instead of letting the unrelated cookie turn a public request into 404.
   if (session?.role === "client_admin") {
+    if (
+      publicId &&
+      publicId !== session.projectId &&
+      (!requested || requested === publicId)
+    ) {
+      return {
+        projectId: publicId,
+        mode: "public",
+        session,
+      } satisfies AssetAccess;
+    }
     if (requested && requested !== session.projectId) return null;
-    return activeProjectId(session.projectId);
+    const projectId = await activeProjectId(session.projectId);
+    return projectId
+      ? ({ projectId, mode: "admin", session } satisfies AssetAccess)
+      : null;
   }
 
-  return publicProjectId(request);
+  return publicId
+    ? ({ projectId: publicId, mode: "public", session } satisfies AssetAccess)
+    : null;
 }
 
 export async function GET(
@@ -49,18 +95,18 @@ export async function GET(
   if (![...PUBLIC_KINDS, ...ADMIN_KINDS, ...SUPER_ADMIN_ONLY].includes(kind))
     return new Response("Not found", { status: 404 });
 
-  const session = await getAdminSession();
+  const access = await authorizedAssetAccess(request, kind);
+  if (!access) return new Response("Not found", { status: 404 });
+  const { projectId, mode, session } = access;
+
   if (SUPER_ADMIN_ONLY.has(kind) && session?.role !== "super_admin")
     return new Response("Not found", { status: 404 });
-  if (ADMIN_KINDS.has(kind) && !session)
+  if (ADMIN_KINDS.has(kind) && mode !== "admin")
     return new Response("Not found", { status: 404 });
-
-  const projectId = await authorizedProjectId(request);
-  if (!projectId) return new Response("Not found", { status: 404 });
 
   const requestUrl = new URL(request.url);
   const previewRequest = requestUrl.searchParams.get("preview") === "1";
-  const authorizedPreview = previewRequest && Boolean(session);
+  const authorizedPreview = previewRequest && mode === "admin";
   const variant = requestUrl.searchParams.get("variant") || "";
   const publicVariant =
     variant === "public" || variant === "public-canonical";
@@ -71,8 +117,8 @@ export async function GET(
   // requests read immutable bytes captured for the current publishVersion.
   const shouldServePublished =
     (kind === "masterplan" || kind === "logo") &&
-    !authorizedPreview &&
-    (!session || publicVariant);
+    mode === "public" &&
+    !authorizedPreview;
 
   const objectKind = wantsPublicMasterplan
     ? "masterplanPublic"
@@ -188,7 +234,7 @@ export async function GET(
   const headers = new Headers({
     "content-type": object.httpMetadata?.contentType || "application/octet-stream",
     "cache-control":
-      authorizedPreview || (session && !publicVariant)
+      mode === "admin"
         ? "no-store"
         : kind === "masterplan" && publicVariant && versionedRequest
           ? "public,max-age=31536000,immutable"
@@ -204,6 +250,7 @@ export async function GET(
     "x-content-type-options": "nosniff",
   });
   headers.set("x-rekixo-project", projectId);
+  headers.set("x-rekixo-access-mode", mode);
   if (shouldServePublished) {
     headers.set(
       "x-rekixo-publish-asset",
