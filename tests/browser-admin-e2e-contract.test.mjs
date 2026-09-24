@@ -32,3 +32,12 @@ test("Phase 11 journey covers login mapping semantics preview publish and custom
   assert.match(journey,/name: "mobile"/);
   assert.match(journey,/\/projects\/\$\{projectSlug\}/);
 });
+
+
+test("mapper mutations refresh publish readiness without changing workspace tabs",async()=>{
+  const mapper=await readFile(new URL("../app/plot-mapper.tsx",import.meta.url),"utf8");
+  const publishPanel=await readFile(new URL("../app/project-publish-panel.tsx",import.meta.url),"utf8");
+  assert.match(mapper,/rekixo:mapper-data-updated/);
+  assert.match(mapper,/verifyPlotPersistence\(saved\)[\s\S]{0,260}announceMapperDataUpdated\(\)/);
+  assert.match(publishPanel,/rekixo:mapper-data-updated/);
+});
