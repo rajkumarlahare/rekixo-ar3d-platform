@@ -1,16 +1,18 @@
-name: Resolve Hardening Dependency Lock
+name: Resolve Consolidated Hardening Dependency Lock
 
 on:
   push:
-    branches: [hardening/phases-5-12-20260924]
-    paths: [package.json]
+    branches: [hardening/consolidated-phases-5-12-20260924]
+    paths:
+      - package.json
+      - .github/workflows/hardening-dependency-upgrade.yml
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: hardening-dependency-lock
+  group: consolidated-hardening-dependency-lock
   cancel-in-progress: true
 
 jobs:
@@ -20,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: hardening/phases-5-12-20260924
+          ref: hardening/consolidated-phases-5-12-20260924
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -44,5 +46,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package-lock.json
-          git commit -m "Lock verified security dependency upgrades"
-          git push origin HEAD:hardening/phases-5-12-20260924
+          git commit -m "Lock verified consolidated dependency upgrades"
+          git push origin HEAD:hardening/consolidated-phases-5-12-20260924
