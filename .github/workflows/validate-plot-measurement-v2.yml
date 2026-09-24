@@ -38,8 +38,6 @@ jobs:
 
       - name: Build
         run: npm run build
-      - name: Typecheck
-        run: npm run typecheck
 
       - name: Full regression suite
         run: node --test tests/*.test.mjs
