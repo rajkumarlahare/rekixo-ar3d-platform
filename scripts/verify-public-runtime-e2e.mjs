@@ -19,6 +19,8 @@ function json(res, value, headers = {}) {
   res.end(JSON.stringify(value));
 }
 
+let liveStatus = "booked";
+
 const structure = {
   projectId: "e2e-project",
   projectName: "Browser Regression Project",
@@ -86,7 +88,7 @@ const server = http.createServer((req, res) => {
       projectId: "e2e-project",
       pricingEnabled: true,
       settings: { phone1: "+911234567890", whatsapp: "+911234567890" },
-      statuses: [{ id: "P-1", status: "booked" }],
+      statuses: [{ id: "P-1", status: liveStatus }],
       pricing: [
         {
           plotId: "P-1",
@@ -108,7 +110,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/gallery/g1") {
     res.writeHead(200, {
       "content-type": "image/png",
-      "cache-control": "public,max-age=300,must-revalidate",
+      "cache-control": "no-store",
       "content-length": String(tinyPng.length),
     });
     return res.end(tinyPng);
@@ -148,6 +150,7 @@ try {
     { name: "desktop", viewport: { width: 1440, height: 1000 } },
     { name: "mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
   ]) {
+    liveStatus = "booked";
     const context = await browser.newContext({
       viewport: target.viewport,
       isMobile: Boolean(target.isMobile),
@@ -176,6 +179,17 @@ try {
       "1",
       target.name + " booked count",
     );
+
+    // A customer can keep the site open while an admin changes live status.
+    // Exercise the immediate visibility-refresh path instead of waiting 30s.
+    liveStatus = "sold";
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForFunction(() => {
+      const plot = document.querySelector('.plot[data-plot-id="P-1"]');
+      return plot?.getAttribute("data-status") === "sold";
+    });
+    assert.equal(await page.locator("#countSold").textContent(), "1", target.name + " sold refresh");
+    assert.equal(await page.locator("#countBooked").textContent(), "0", target.name + " booked refresh");
 
     await page.locator("#galleryBtn").click();
     await page.waitForSelector(".client-gallery article");
