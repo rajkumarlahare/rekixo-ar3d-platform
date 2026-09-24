@@ -91,6 +91,6 @@ test("runtime cache is bumped so public clients receive measurement v2", () => {
     "app/preview/[projectId]/page.tsx",
     "app/projects/[slug]/page.tsx",
   ]) {
-    assert.match(read(file), /v=65/);
+    assert.match(read(file), /v=66/);
   }
 });
