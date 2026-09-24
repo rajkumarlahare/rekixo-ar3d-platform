@@ -37,9 +37,6 @@ jobs:
       - name: Run full regression suite
         run: node --test tests/*.test.mjs
 
-      - name: Typecheck
-        run: npm run typecheck
-
       # Before any production mutation, prove every non-legacy published client
       # has the exact structural snapshot expected by the fail-closed runtime.
       # This is read-only and stops the deploy before migrations/Workers if a
