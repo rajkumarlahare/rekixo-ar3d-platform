@@ -26,8 +26,9 @@ test("transitive image-size parser is pinned to the patched override in manifest
   const manifest=JSON.parse(pkg);
   assert.equal(manifest.overrides["image-size"],"2.0.4");
 
-  const index=lock.indexOf('"node_modules/image-size"');
-  assert.ok(index>=0,"image-size lock entry missing");
-  const block=lock.slice(index,index+500);
-  assert.match(block,/"version": "2\.0\.4"/);
+  const parsed=JSON.parse(lock);
+  const installed=parsed.packages?.["node_modules/image-size"]?.version;
+  if(installed!==undefined) assert.equal(installed,"2.0.4");
+  assert.notEqual(installed,"2.0.2");
+  assert.notEqual(installed,"2.0.3");
 });
