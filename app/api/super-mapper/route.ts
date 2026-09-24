@@ -1223,7 +1223,7 @@ export async function POST(request: Request) {
       // Safety contract: this importer never creates plots and never touches area,
       // dimensions, Front/Back/Depth, polygons, pricing, or Booked/Sold status.
       const existing = await env.DB.prepare(
-        "SELECT id FROM plots WHERE project_id=? AND inventory_active=1 AND inventory_active=1",
+        "SELECT id FROM plots WHERE project_id=? AND inventory_active=1",
       )
         .bind(projectId)
         .all<{ id: string }>();
