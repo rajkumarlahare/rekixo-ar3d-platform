@@ -28,11 +28,12 @@ export async function GET(request:Request){
   const readPage=(name:string,fallback:number,max:number)=>{const value=Number(url.searchParams.get(name));return Number.isFinite(value)?Math.max(0,Math.min(max,Math.floor(value))):fallback};
   const projectQuery="SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status!='deleted' GROUP BY p.id ORDER BY p.created_at DESC";
   const archivedQuery="SELECT p.id,p.name,p.kind,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id WHERE p.status='deleted' GROUP BY p.id ORDER BY p.deleted_at DESC,p.updated_at DESC";
+  const projectPageSelect="SELECT p.id,p.name,p.slug,p.kind,p.public_host AS publicHost,p.admin_host AS adminHost,p.status,p.deleted_at AS deletedAt,COUNT(u.id) AS adminCount,COALESCE((SELECT s.value FROM settings s WHERE s.project_id=p.id AND s.key='clientLoginMode' LIMIT 1),'email') AS loginMode FROM projects p LEFT JOIN admin_users u ON u.project_id=p.id";
 
   if(section==="summary"){
     const [projects,archived,userCount,auditCount]=await Promise.all([
-      env.DB.prepare(projectQuery).all<ProjectRow>(),
-      env.DB.prepare(archivedQuery).all(),
+      env.DB.prepare(projectQuery+" LIMIT 100").all<ProjectRow>(),
+      env.DB.prepare(archivedQuery+" LIMIT 50").all(),
       env.DB.prepare("SELECT COUNT(*) AS total FROM admin_users u JOIN projects p ON p.id=u.project_id WHERE p.status!='deleted'").first<{total:number}>(),
       env.DB.prepare("SELECT COUNT(*) AS total FROM audit_logs").first<{total:number}>(),
     ]);
@@ -42,6 +43,34 @@ export async function GET(request:Request){
       userCount:Number(userCount?.total||0),
       auditCount:Number(auditCount?.total||0),
       clientAdminUrl:clientAdminUrl(),
+    },{headers:{"cache-control":"no-store"}});
+  }
+
+  if(section==="projects"){
+    const limit=Math.max(1,readPage("limit",50,100)),offset=readPage("offset",0,1_000_000);
+    const q=String(url.searchParams.get("q")||"").trim().toLowerCase().slice(0,120);
+    const filter=q?" WHERE p.status!='deleted' AND (lower(p.name) LIKE ? OR lower(p.slug) LIKE ?)":" WHERE p.status!='deleted'";
+    const group=" GROUP BY p.id ORDER BY p.created_at DESC LIMIT ? OFFSET ?";
+    const countSql=q
+      ?"SELECT COUNT(*) AS total FROM projects p WHERE p.status!='deleted' AND (lower(p.name) LIKE ? OR lower(p.slug) LIKE ?)"
+      :"SELECT COUNT(*) AS total FROM projects p WHERE p.status!='deleted'";
+    const like=`%${q}%`;
+    const query=env.DB.prepare(projectPageSelect+filter+group);
+    const count=env.DB.prepare(countSql);
+    const [result,total]=q
+      ? await Promise.all([
+          query.bind(like,like,limit,offset).all<ProjectRow>(),
+          count.bind(like,like).first<{total:number}>(),
+        ])
+      : await Promise.all([
+          query.bind(limit,offset).all<ProjectRow>(),
+          count.first<{total:number}>(),
+        ]);
+    return Response.json({
+      projects:result.results.map(project=>({...project,loginMode:project.loginMode==="mobile"?"mobile":"email"})),
+      total:Number(total?.total||0),
+      nextOffset:offset+result.results.length,
+      hasMore:offset+result.results.length<Number(total?.total||0),
     },{headers:{"cache-control":"no-store"}});
   }
 
