@@ -9,6 +9,23 @@ export function stripSharedAssetPath(pathname) {
   return pathname.slice(SHARED_ASSET_PREFIX.length) || "/";
 }
 
+export function sharedPublicRuntimeAssetPath(pathname) {
+  if (!isSharedAssetPath(pathname)) return null;
+  const stripped = stripSharedAssetPath(pathname);
+  if (stripped === "/project" || stripped === "/project/") {
+    return "/project/index.html";
+  }
+  if (
+    stripped === "/project/index.html" ||
+    stripped === "/project/project-geometry.js" ||
+    stripped === "/project/three-view.js" ||
+    stripped === "/project/plots-data.js"
+  ) {
+    return stripped;
+  }
+  return null;
+}
+
 export function isPrefixedFrameworkAssetPath(pathname) {
   if (!isSharedAssetPath(pathname)) return false;
   const stripped = stripSharedAssetPath(pathname);
