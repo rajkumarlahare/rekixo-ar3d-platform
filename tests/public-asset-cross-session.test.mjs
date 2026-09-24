@@ -48,7 +48,7 @@ test("public gallery works even when another client session cookie is present", 
   );
   assert.match(
     gallery,
-    /mode === "public"[\s\S]*"public, max-age=300, must-revalidate"[\s\S]*"private, no-store"/,
+    /mode === "public"[\s\S]*\? "no-store"[\s\S]*"private, no-store"/,
   );
 });
 
