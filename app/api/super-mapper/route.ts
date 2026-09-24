@@ -346,16 +346,19 @@ function cleanPlot(projectId: string, p: Record<string, unknown>, now: string) {
     back,
     depth2,
     dimensionUnit,
-    frontEdgeIndex,
-    depthEdgeIndex,
-    backEdgeIndex,
-    depth2EdgeIndex,
+    // A plot without a persisted boundary must never retain geometry-derived
+    // edge assignments. Measurement values/labels stay intact and can be
+    // rebound after the next boundary is confirmed.
+    frontEdgeIndex: polygonPointCount >= 3 ? frontEdgeIndex : null,
+    depthEdgeIndex: polygonPointCount >= 3 ? depthEdgeIndex : null,
+    backEdgeIndex: polygonPointCount >= 3 ? backEdgeIndex : null,
+    depth2EdgeIndex: polygonPointCount >= 3 ? depth2EdgeIndex : null,
     frontLabel,
     depthLabel,
     backLabel,
     depth2Label,
     sideDimensions,
-    edgeSemantics,
+    edgeSemantics: polygonPointCount >= 3 ? edgeSemantics : null,
     polygon,
     status,
     notes: String(p.notes || "").slice(0, 2000),
@@ -1560,7 +1563,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare(
-        "UPDATE plots SET polygon='',updated_at=? WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
+        "UPDATE plots SET polygon='',front_edge_index=NULL,back_edge_index=NULL,depth_edge_index=NULL,depth2_edge_index=NULL,edge_semantics=NULL,updated_at=? WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
       ).bind(now, projectId),
       env.DB.prepare(
         "INSERT INTO audit_logs (id,actor_id,actor_email,action,project_id,target_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)",
