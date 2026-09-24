@@ -23,10 +23,22 @@ function watchPage(page, errors) {
 }
 
 async function chooseProject(page) {
-  await page.getByRole("button", { name: "Plot Mapper" }).click();
+  const mapperButton = page.getByRole("button", { name: "Plot Mapper" });
+  // A freshly-created mobile context can paint SSR before React hydration attaches
+  // the tab handler. Retry the real nav click until the mapper workspace is mounted.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await mapperButton.click();
+    try {
+      await page.locator(".super-project-search").waitFor({ state: "visible", timeout: 3000 });
+      break;
+    } catch {
+      if (attempt === 2) throw new Error("Plot Mapper workspace did not hydrate");
+      await page.waitForTimeout(350);
+    }
+  }
   // Pin the fixture through the real server-side project search so this journey
   // stays deterministic even when migrations seed more than the first 50 projects.
-  await page.getByRole("textbox", { name: "Search client projects" }).fill(projectSlug);
+  await page.locator(".super-project-search").fill(projectSlug);
   await page.waitForFunction(
     (id) => [...document.querySelectorAll("#workspace-project option")].some((o) => o.value === id),
     projectId,
