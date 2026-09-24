@@ -20,6 +20,7 @@ type ManifestFile = {
   source: "generated" | "r2";
   sizeBytes: number;
   contentType: string;
+  byteFidelity?: "original-upload" | "system-copy" | "generated";
 };
 
 type MissingFile = {
@@ -378,6 +379,11 @@ export default function ProjectAssetsManager({
                     <span>
                       <b>{file.label}</b>
                       <small>{file.path}</small>
+                      {file.byteFidelity === "original-upload" ? (
+                        <strong className="project-assets-original-badge">
+                          EXACT ORIGINAL BYTES · NO ZIP COMPRESSION
+                        </strong>
+                      ) : null}
                     </span>
                     <em>{bytes(file.sizeBytes)}</em>
                   </article>
