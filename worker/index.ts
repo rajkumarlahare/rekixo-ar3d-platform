@@ -1,6 +1,7 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import publicProjectRuntimeHtml from "../public/project/index.html?raw";
 import {
   isPrefixedFrameworkAssetPath,
   isSharedAssetPath,
@@ -113,10 +114,22 @@ async function fetchPrefixedPublicRuntimeAsset(request: Request, env: Env) {
   if (!assetPath) return null;
   if (request.method !== "GET" && request.method !== "HEAD") return null;
 
-  // Serve the standalone customer runtime directly from the static asset
-  // binding. Never pass /__rekixo/project/ through Vinext canonical routing:
-  // its /project redirect would escape the isolated namespace and fall through
-  // to the boss/Vercel origin on the shared domain.
+  // The HTML shell is embedded into the Worker bundle at build time. This is
+  // intentionally NOT fetched from the Static Assets binding: Cloudflare HTML
+  // canonicalization can redirect /project/index.html to /project and escape
+  // the reserved /__rekixo namespace on a shared domain.
+  if (assetPath === "/project/index.html") {
+    return new Response(request.method === "HEAD" ? null : publicProjectRuntimeHtml, {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-cache",
+      },
+    });
+  }
+
+  // Runtime helper scripts are non-HTML static assets, so exact ASSETS binding
+  // reads are safe and keep the Worker bundle smaller.
   const assetUrl = new URL(request.url);
   assetUrl.pathname = assetPath;
   const response = await fetchAssetCandidate(
