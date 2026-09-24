@@ -3789,6 +3789,13 @@ export default function PlotMapper({
     try {
       const payload = pending.map(({ plot, points: polygon }) => ({
         ...plot,
+        // CAD auto-match creates new geometry. Preserve source measurements,
+        // but force geometry-derived side bindings to be resolved for this polygon.
+        frontEdgeIndex: null,
+        backEdgeIndex: null,
+        depthEdgeIndex: null,
+        depth2EdgeIndex: null,
+        edgeSemantics: null,
         polygon: JSON.stringify(
           polygon.map(([x, y]) => [
             Math.max(0, Math.min(1, x)),
