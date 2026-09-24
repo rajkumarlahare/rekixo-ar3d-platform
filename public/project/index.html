@@ -1976,6 +1976,7 @@ rekixoStartPublicBoot();
     });
   }
   function applyPublicData(data){
+    window.REKIXO_PUBLIC_DATA=data;
     ACTIVE_PROJECT_ID=String(data.projectId||'').trim();
 
     // public-data is the canonical tenant resolver. After it returns, every
@@ -2217,9 +2218,15 @@ rekixoStartPublicBoot();
 
   async function loadProjectSettings(){
     try{
+      const existing=window.REKIXO_PUBLIC_DATA;
+      if(existing&&typeof existing==="object"){
+        const settings=existing.settings||existing;
+        return { ...FALLBACK, ...settings };
+      }
       const response = await fetch(buildPublicDataUrl(), { headers: { accept: "application/json" }, credentials: "same-origin" });
       if(!response.ok) throw new Error("public-data " + response.status);
       const data = await response.json();
+      window.REKIXO_PUBLIC_DATA=data;
       const settings = data && typeof data === "object" ? (data.settings || data) : {};
       return { ...FALLBACK, ...settings };
     }catch(error){
