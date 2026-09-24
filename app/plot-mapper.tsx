@@ -1246,6 +1246,12 @@ export default function PlotMapper({
     );
   }
 
+  function announceMapperDataUpdated() {
+    window.dispatchEvent(
+      new CustomEvent("rekixo:mapper-data-updated", { detail: { projectId } }),
+    );
+  }
+
   async function persistMapperSettings(next: Record<string, string>) {
     const response = await fetch("/api/super-mapper", {
       method: "POST",
@@ -2158,6 +2164,7 @@ export default function PlotMapper({
       });
       await apiResult(response);
       await reload();
+      announceMapperDataUpdated();
       setBulkSemanticIds(new Set());
       const roleLabel =
         kind === "front" ? "Front" :
@@ -2641,6 +2648,7 @@ export default function PlotMapper({
         notify("Project logo save ho gaya — customer site aur Client Admin me sync hoga");
       } else notify("Technical PDF reference save हो गया");
       await reload();
+      announceMapperDataUpdated();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload नहीं हुआ";
       notify(
@@ -3573,6 +3581,7 @@ export default function PlotMapper({
       const verified = await verifyPlotPersistence(saved);
       setPlots(verified.plots);
       setLastVerifiedId(verified.plot.id);
+      announceMapperDataUpdated();
       try {
         window.localStorage.removeItem(mappingDraftKey(projectId, verified.plot.id));
       } catch {
@@ -3616,6 +3625,7 @@ export default function PlotMapper({
       const verified = await verifyPlotPersistence(saved);
       setPlots(verified.plots);
       setLastVerifiedId(verified.plot.id);
+      announceMapperDataUpdated();
       setPoints([]);
       setEditingId("");
       setManualPhase("select");
@@ -3671,6 +3681,7 @@ export default function PlotMapper({
       setToolMode("select");
       setLastVerifiedId("");
       setExcludedAutoIds(new Set());
+      announceMapperDataUpdated();
       try {
         for (const plot of plots) {
           window.localStorage.removeItem(mappingDraftKey(projectId, plot.id));
@@ -3779,6 +3790,7 @@ export default function PlotMapper({
       const saved = (result.plots || []) as Plot[];
       const byId = new Map(saved.map((plot) => [plot.id, plot]));
       setPlots((current) => current.map((plot) => byId.get(plot.id) || plot));
+      announceMapperDataUpdated();
       notify(`${saved.length} plots एक साथ 2D + 3D clickable publish हुए`);
     } catch (error) {
       notify(error instanceof Error ? error.message : "Auto publish नहीं हुआ");
