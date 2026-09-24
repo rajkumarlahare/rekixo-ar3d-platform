@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const mapper = await readFile(new URL("../app/plot-mapper.tsx", import.meta.url), "utf8");
-const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+const [css, sideCss] = await Promise.all([
+  readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  readFile(new URL("../app/mapper-side-controls.css", import.meta.url), "utf8"),
+]);
 
 test("side assignment and Update share one structural footer action row", () => {
   const bottom = mapper.indexOf("mapper-v4-bottom-bar");
@@ -19,7 +22,11 @@ test("side assignment and Update share one structural footer action row", () => 
   assert.match(css, /\.mapper-v4-bottom-action-row\{display:grid;grid-template-columns:minmax\(112px,1fr\)/);
   assert.match(css, /\.mapper-v4-bottom-action-row\.has-side-dock\{grid-template-columns:minmax\(112px,150px\) minmax\(0,1fr\)\}/);
   assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-v4-bottom-action-row\.has-side-dock/);
-  assert.match(css, /\.mapper-v4-canvas:fullscreen \.mapper-side-dock\{position:static!important/);
+  assert.doesNotMatch(css, /\.mapper-v4-canvas:fullscreen \.mapper-side-dock\{[^}]*transform:none!important/);
+  assert.match(
+    sideCss,
+    /\.mapper-v4-canvas:fullscreen \.plot-side-assigner \{[\s\S]*position: fixed !important;[\s\S]*transform: translateX\(-50%\) !important;/,
+  );
 });
 
 test("bottom tools stay on their own row and mobile stacks only inside the action row", () => {
