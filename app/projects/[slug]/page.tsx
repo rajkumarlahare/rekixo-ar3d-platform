@@ -8,32 +8,57 @@ import { publicSiteEnabled } from "@/modules/public-site-access";
 
 export const dynamic = "force-dynamic";
 
+const LEGACY_PROJECT = "tiyansh-prime-square";
+
 type MetaSettings = Record<string, string>;
+
+function unavailableMeta(project: Awaited<ReturnType<typeof projectBySlug>>) {
+  if (!project) return null;
+  return {
+    project,
+    paused: true as const,
+    title: "Project Temporarily Unavailable",
+    description: "This project is temporarily unavailable. Please try again later.",
+    imageUrl: "",
+    logoUrl: "",
+    hasShareImage: false,
+    brandName: "Rekixo",
+    origin: "",
+  };
+}
 
 async function readProjectMeta(slug: string) {
   const project = await projectBySlug(slug);
   if (!project) return null;
   if (!(await publicSiteEnabled(project.id))) {
-    return {
-      project,
-      paused: true as const,
-      title: "Project Temporarily Unavailable",
-      description: "This project is temporarily unavailable. Please try again later.",
-      imageUrl: "",
-      logoUrl: "",
-      hasShareImage: false,
-      brandName: "Rekixo",
-      origin: "",
-    };
+    return unavailableMeta(project);
   }
 
   const snapshot = await env.DB.prepare(
-    "SELECT project_name AS projectName FROM project_public_snapshots WHERE project_id=? LIMIT 1",
+    `SELECT
+       s.project_name AS projectName,
+       s.publish_version AS publishVersion,
+       p.publish_version AS currentPublishVersion
+     FROM projects p
+     LEFT JOIN project_public_snapshots s ON s.project_id=p.id
+     WHERE p.id=?
+     LIMIT 1`,
   )
     .bind(project.id)
-    .first<{ projectName: string }>();
+    .first<{
+      projectName: string | null;
+      publishVersion: number | null;
+      currentPublishVersion: number;
+    }>();
+  const snapshotReady =
+    snapshot?.publishVersion != null &&
+    Number(snapshot.publishVersion) === Number(snapshot.currentPublishVersion);
 
-  const rows = snapshot
+  if (!snapshotReady && project.id !== LEGACY_PROJECT) {
+    return unavailableMeta(project);
+  }
+
+  const rows = snapshotReady
     ? await env.DB.prepare(
         "SELECT key,value FROM published_settings WHERE project_id=? AND key IN ('projectName','brandName','location','address','logoName','logoVersion','shareTitle','shareDescription','shareImage','shareVersion')",
       )
@@ -49,7 +74,7 @@ async function readProjectMeta(slug: string) {
     (rows.results || []).map((row) => [row.key, row.value]),
   );
 
-  const publishedProjectName = snapshot?.projectName || project.name;
+  const publishedProjectName = snapshotReady ? snapshot?.projectName || project.name : project.name;
   const title =
     settings.shareTitle || settings.projectName || publishedProjectName || "Project";
   const description =
@@ -176,10 +201,49 @@ export default async function SharedProjectPage({
   }
 
   const published = await env.DB.prepare(
-    "SELECT publish_version AS publishVersion FROM projects WHERE id=? LIMIT 1",
+    `SELECT
+       p.publish_version AS publishVersion,
+       s.publish_version AS snapshotVersion
+     FROM projects p
+     LEFT JOIN project_public_snapshots s ON s.project_id=p.id
+     WHERE p.id=?
+     LIMIT 1`,
   )
     .bind(project.id)
-    .first<{ publishVersion: number }>();
+    .first<{ publishVersion: number; snapshotVersion: number | null }>();
+
+  const snapshotReady =
+    published?.snapshotVersion != null &&
+    Number(published.snapshotVersion) === Number(published.publishVersion);
+  if (!snapshotReady && project.id !== LEGACY_PROJECT) {
+    return (
+      <main
+        style={{
+          position: "fixed",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+          background: "#050914",
+          color: "#f7f9ff",
+        }}
+      >
+        <section
+          style={{
+            width: "min(560px, 100%)",
+            padding: 32,
+            border: "1px solid #26344b",
+            borderRadius: 18,
+            background: "#0b1424",
+            textAlign: "center",
+          }}
+        >
+          <h1>Project Temporarily Unavailable</h1>
+          <p>This project is temporarily unavailable. Please try again later.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main style={{ position: "fixed", inset: 0, background: "#050914" }}>
