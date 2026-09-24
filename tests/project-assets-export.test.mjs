@@ -64,7 +64,8 @@ test("export captures canonical D1 recovery datasets and current published state
   }
 
   assert.match(exporter, /05-published\/snapshot\.json/);
-  assert.match(exporter, /published\/\$\{version\}\/masterplan/);
+  assert.match(exporter, /const publishedPrefix = `projects\/\$\{projectId\}\/published\/\$\{version\}\/`/);
+  assert.match(exporter, /kind: "masterplan"/);
   assert.match(exporter, /Published share card/);
   assert.match(exporter, /Canonical pricing/);
   assert.match(exporter, /Plot edge measurements/);
@@ -134,7 +135,7 @@ test("linked Geo Lab is opt-in and normal project export does not silently merge
   assert.match(exporter, /kind='geo_lab'/);
   assert.match(
     exporter,
-    /linked Geo Lab workspace is not included unless the advanced option is enabled/i,
+    /full working workspace is not included unless the advanced option is enabled/i,
   );
   assert.match(exporter, /allowedGeoPrefixes/);
   assert.match(exporter, /outside the selected\/linked project safety boundary/);
