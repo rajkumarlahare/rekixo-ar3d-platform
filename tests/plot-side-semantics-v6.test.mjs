@@ -99,7 +99,9 @@ test("customer irregular diagram uses actual-edge dimensions and no guessed fall
   assert.doesNotMatch(html, /plotEdgeMeasurementValue\(p,role,edge\)\|\|value/);
   assert.match(html, /const irregular=.*includes\('irregular'\)/);
   assert.match(html, /setLegacyDiagramDimensionsVisible\(!canonicalRendered&&!irregular\)/);
-  assert.match(html, /diagram-legend\{display:none!important\}/);
+  assert.match(html, /diagram-legend\{[^}]*display:grid/);
+  assert.match(html, /diagram-legend\[hidden\]\{display:none!important\}/);
+  assert.doesNotMatch(html, /text\.textContent=title\+\(value\?' · '\+value:''\)/);
 });
 
 test("runtime has no VISTAR tenant hardcode", () => {
