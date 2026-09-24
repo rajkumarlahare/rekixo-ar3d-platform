@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { publicProjectId } from "@/modules/projects";
+import { PROJECT_CONTACT_KEYS, publicProjectId, withProjectContactFallbacks } from "@/modules/projects";
 import { publicSiteEnabled, publicSiteUnavailableResponse } from "@/modules/public-site-access";
 
 type StatusRow={id:string;status:string};
@@ -10,18 +10,22 @@ export async function GET(request:Request){
   if(!projectId)return Response.json({error:"Published project nahi mila"},{status:404,headers:{"cache-control":"no-store"}});
   if(!(await publicSiteEnabled(projectId)))return publicSiteUnavailableResponse();
 
-  const [statusResult,pricingSetting,pricingResult]=await Promise.all([
+  const contactPlaceholders=PROJECT_CONTACT_KEYS.map(()=>"?").join(",");
+  const [statusResult,pricingSetting,pricingResult,contactResult]=await Promise.all([
     env.DB.prepare("SELECT id,status FROM plots WHERE project_id=?").bind(projectId).all<StatusRow>(),
     env.DB.prepare("SELECT value FROM settings WHERE project_id=? AND key='pricingEnabled' LIMIT 1").bind(projectId).first<{value:string}>(),
     env.DB.prepare("SELECT plot_id AS plotId,pricing_type AS pricingType,unit,rate,fixed_price AS fixedPrice,currency FROM plot_pricing WHERE project_id=? ORDER BY plot_id").bind(projectId).all<PricingRow>(),
+    env.DB.prepare(`SELECT key,value FROM settings WHERE project_id=? AND key IN (${contactPlaceholders})`).bind(projectId,...PROJECT_CONTACT_KEYS).all<{key:string;value:string}>(),
   ]);
   const pricingEnabled=pricingSetting?.value==="1";
+  const settings=withProjectContactFallbacks(Object.fromEntries(contactResult.results.map(row=>[row.key,row.value])));
   return Response.json(
     {
       projectId,
       statuses:statusResult.results,
       pricingEnabled,
       pricing:pricingEnabled?pricingResult.results:[],
+      settings,
       fetchedAt:new Date().toISOString(),
     },
     {headers:{"cache-control":"no-store","x-rekixo-live-state":"1"}},
