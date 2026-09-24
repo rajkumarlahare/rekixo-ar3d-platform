@@ -1,8 +1,7 @@
 import { env } from "cloudflare:workers";
 import { requireSuperAdmin, sameOrigin } from "@/modules/auth";
 import { writeAudit } from "@/modules/audit";
-
-const PUBLIC_SITE_SETTING = "publicSiteEnabled";
+import { PUBLIC_SITE_SETTING } from "@/modules/public-site-access";
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
 

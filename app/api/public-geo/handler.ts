@@ -7,6 +7,10 @@ import {
   type GeoPublicSnapshot,
 } from "@/modules/geo";
 import { publicGoogleMapsBrowserKey } from "@/modules/geo";
+import {
+  publicSiteEnabled,
+  publicSiteUnavailableResponse,
+} from "@/modules/public-site-access";
 
 const LIVE_SETTING_KEYS = [
   "geoPublicEnabled",
@@ -180,13 +184,18 @@ export async function GET(request: Request) {
     const slug = url.searchParams.get("projectSlug")?.trim() || "";
     if (!slug) return Response.json({ error: "Project slug required" }, { status: 400 });
 
+    const source = await projectBySlug(slug);
+    if (!source) return Response.json({ error: "Published project nahi mila" }, { status: 404 });
+    if (!(await publicSiteEnabled(source.id))) {
+      return publicSiteUnavailableResponse();
+    }
+
+    // Access gate runs before the manual edge cache so Public Site OFF takes
+    // effect immediately even if a Geo response was cached seconds earlier.
     const cache = edgeCache();
     const cacheKey = publicGeoCacheKey(request, slug);
     const cached = await cache.match(cacheKey);
     if (cached) return cached;
-
-    const source = await projectBySlug(slug);
-    if (!source) return Response.json({ error: "Published project nahi mila" }, { status: 404 });
 
     const live = await sourceLiveSettings(source.id);
     if (live.get("geoPublicEnabled") !== "1")

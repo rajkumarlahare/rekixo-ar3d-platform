@@ -3,6 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/modules/db";
 import { gallery } from "@/modules/db/schema";
 import { publicProjectId } from "@/modules/projects";
+import {
+  publicSiteEnabled,
+  publicSiteUnavailableResponse,
+} from "@/modules/public-site-access";
 import { getAdminSession } from "@/modules/auth";
 
 async function activeProjectId(projectId: string) {
@@ -63,6 +67,9 @@ export async function GET(
     const access = await galleryAccess(request);
     if (!access) return new Response("Not found", { status: 404 });
     const { projectId, mode } = access;
+    if (mode === "public" && !(await publicSiteEnabled(projectId))) {
+      return publicSiteUnavailableResponse();
+    }
     const [item] = await getDb()
       .select()
       .from(gallery)

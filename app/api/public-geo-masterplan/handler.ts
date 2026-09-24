@@ -1,6 +1,10 @@
 import { env, waitUntil } from "cloudflare:workers";
 import { projectBySlug } from "@/modules/public-project";
 import { createGeoOverlayVariant } from "@/modules/geo";
+import {
+  publicSiteEnabled,
+  publicSiteUnavailableResponse,
+} from "@/modules/public-site-access";
 
 const LIVE_SETTING_KEYS = [
   "geoPublicEnabled",
@@ -91,6 +95,9 @@ export async function GET(request: Request) {
 
   const source = await projectBySlug(slug);
   if (!source) return new Response("Not found", { status: 404 });
+  if (!(await publicSiteEnabled(source.id))) {
+    return publicSiteUnavailableResponse();
+  }
 
   const live = await liveSettings(source.id);
   if (live.get("geoPublicEnabled") !== "1")

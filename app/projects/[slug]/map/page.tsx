@@ -6,6 +6,7 @@ import { preconnect } from "react-dom";
 import { panelMode } from "@/modules/auth";
 import { publicGoogleMapsBrowserKey } from "@/modules/geo";
 import { isPlatformAccessHost, projectBySlug } from "@/modules/public-project";
+import { publicSiteEnabled } from "@/modules/public-site-access";
 import GeoPublicMap from "./geo-public-map";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const project = await publishedProjectBySlug(slug);
-  if (!project) return { title: "Satellite Map" };
+  if (!project || !(await publicSiteEnabled(project.id)))
+    return {
+      title: "Project Temporarily Unavailable",
+      description: "This project is temporarily unavailable. Please try again later.",
+    };
   return {
     title: `${project.name} · Satellite Map`,
     description: `${project.name} satellite masterplan and live plot availability.`,
@@ -33,20 +38,46 @@ export default async function PublicGeoMapPage({
 }) {
   if (panelMode() === "super") notFound();
 
-  // Emit connection hints in the server response so DNS/TLS can start before
-  // client hydration and before either Maps JS or public Geo data is requested.
-  preconnect("https://maps.googleapis.com");
-  preconnect("https://maps.gstatic.com", { crossOrigin: "anonymous" });
-
   const { slug } = await params;
   const host = (await headers()).get("host") || "";
   if (!isPlatformAccessHost(host)) notFound();
 
-  const [project, mapsApiKey] = await Promise.all([
-    publishedProjectBySlug(slug),
-    publicGoogleMapsBrowserKey(),
-  ]);
+  const project = await publishedProjectBySlug(slug);
   if (!project) notFound();
+  if (!(await publicSiteEnabled(project.id))) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+          background: "#050914",
+          color: "#f7f9ff",
+        }}
+      >
+        <section
+          style={{
+            width: "min(560px, 100%)",
+            padding: 32,
+            border: "1px solid #26344b",
+            borderRadius: 18,
+            background: "#0b1424",
+            textAlign: "center",
+          }}
+        >
+          <h1>Project Temporarily Unavailable</h1>
+          <p>This project is temporarily unavailable. Please try again later.</p>
+        </section>
+      </main>
+    );
+  }
+
+  // Emit connection hints only after the project passes the public kill switch.
+  preconnect("https://maps.googleapis.com");
+  preconnect("https://maps.gstatic.com", { crossOrigin: "anonymous" });
+
+  const mapsApiKey = await publicGoogleMapsBrowserKey();
 
   return (
     <GeoPublicMap

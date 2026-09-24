@@ -2,6 +2,10 @@ import { env } from "cloudflare:workers";
 import { getAdminSession } from "@/modules/auth";
 import { publicProjectId } from "@/modules/projects";
 import { publishedAssetKey } from "@/modules/public-publish-snapshot";
+import {
+  publicSiteEnabled,
+  publicSiteUnavailableResponse,
+} from "@/modules/public-site-access";
 
 const PUBLIC_KINDS = new Set(["masterplan", "logo", "shareCard"]);
 const ADMIN_KINDS = new Set(["sourcePdf"]);
@@ -98,6 +102,10 @@ export async function GET(
   const access = await authorizedAssetAccess(request, kind);
   if (!access) return new Response("Not found", { status: 404 });
   const { projectId, mode, session } = access;
+
+  if (mode === "public" && !(await publicSiteEnabled(projectId))) {
+    return publicSiteUnavailableResponse();
+  }
 
   if (SUPER_ADMIN_ONLY.has(kind) && session?.role !== "super_admin")
     return new Response("Not found", { status: 404 });

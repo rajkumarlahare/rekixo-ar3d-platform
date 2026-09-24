@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { panelMode } from "@/modules/auth";
 import { projectHostRole } from "@/modules/public-project";
+import { publicSiteEnabled } from "@/modules/public-site-access";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,18 @@ export default async function Home() {
       <Message
         title="Project domain not configured"
         text="इस domain को Rekixo Super Admin में सही client project से जोड़ें।"
+      />
+    );
+
+  if (
+    target.role === "public" &&
+    target.projectId &&
+    !(await publicSiteEnabled(target.projectId))
+  )
+    return (
+      <Message
+        title="Project Temporarily Unavailable"
+        text="This project is temporarily unavailable. Please try again later."
       />
     );
 
