@@ -1,5 +1,9 @@
 import { env } from "cloudflare:workers";
 import { projectBySlug } from "../../../../project-context";
+import {
+  publicSiteEnabled,
+  publicSiteUnavailableResponse,
+} from "@/modules/public-site-access";
 
 type RouteParams = Promise<{ slug: string; version: string }>;
 
@@ -8,10 +12,13 @@ function validVersion(value: string) {
 }
 
 async function shareAsset(slug: string, version: string) {
-  if (!validVersion(version)) return null;
+  if (!validVersion(version)) return { object: null, disabled: false };
 
   const project = await projectBySlug(slug);
-  if (!project) return null;
+  if (!project) return { object: null, disabled: false };
+  if (!(await publicSiteEnabled(project.id))) {
+    return { object: null, disabled: true };
+  }
 
   const snapshot = await env.DB.prepare(
     "SELECT 1 AS ok FROM project_public_snapshots WHERE project_id=? LIMIT 1",
@@ -45,7 +52,7 @@ async function shareAsset(slug: string, version: string) {
     const canonical = await env.BUCKET.get(
       `projects/${project.id}/share/card`,
     );
-    if (!canonical) return null;
+    if (!canonical) return { object: null, disabled: false };
 
     const bytes = await canonical.arrayBuffer();
     const contentType =
@@ -62,7 +69,7 @@ async function shareAsset(slug: string, version: string) {
     object = await env.BUCKET.get(versionedKey);
   }
 
-  return object;
+  return { object, disabled: false };
 }
 
 function responseHeaders(object: R2ObjectBody) {
@@ -81,9 +88,7 @@ function responseHeaders(object: R2ObjectBody) {
   return headers;
 }
 
-async function resolve(
-  params: RouteParams,
-): Promise<R2ObjectBody | null> {
+async function resolve(params: RouteParams) {
   const { slug, version } = await params;
   return shareAsset(slug, version);
 }
@@ -92,12 +97,13 @@ export async function GET(
   _request: Request,
   { params }: { params: RouteParams },
 ) {
-  const object = await resolve(params);
-  if (!object) return new Response("Not found", { status: 404 });
+  const result = await resolve(params);
+  if (result.disabled) return publicSiteUnavailableResponse();
+  if (!result.object) return new Response("Not found", { status: 404 });
 
-  return new Response(object.body, {
+  return new Response(result.object.body, {
     status: 200,
-    headers: responseHeaders(object),
+    headers: responseHeaders(result.object),
   });
 }
 
@@ -105,11 +111,12 @@ export async function HEAD(
   _request: Request,
   { params }: { params: RouteParams },
 ) {
-  const object = await resolve(params);
-  if (!object) return new Response(null, { status: 404 });
+  const result = await resolve(params);
+  if (result.disabled) return publicSiteUnavailableResponse();
+  if (!result.object) return new Response(null, { status: 404 });
 
   return new Response(null, {
     status: 200,
-    headers: responseHeaders(object),
+    headers: responseHeaders(result.object),
   });
 }
