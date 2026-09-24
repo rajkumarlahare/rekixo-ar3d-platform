@@ -9,12 +9,14 @@ const [workflow,journey,prepare]=await Promise.all([
 ]);
 
 test("browser CI exercises real local D1 Super Admin and customer modes",()=>{
-  assert.match(workflow,/wrangler d1 migrations apply tiyansh-production --local/);
+  assert.match(workflow,/wrangler d1 migrations apply site-creator-d1 --local --config wrangler\.e2e\.jsonc/);
   assert.match(workflow,/E2E_STAGE=admin/);
   assert.match(workflow,/PANEL_MODE=client/);
   assert.match(workflow,/E2E_STAGE=customer/);
   assert.match(prepare,/randomBytes/);
   assert.match(prepare,/e2e-phase11/);
+  assert.match(prepare,/00000000-0000-4000-8000-000000000000/);
+  assert.match(workflow,/REKIXO_E2E_LOCAL=1 npm run dev/);
 });
 
 test("Phase 11 journey covers login mapping semantics preview publish and customer",()=>{
