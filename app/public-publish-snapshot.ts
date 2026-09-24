@@ -282,9 +282,16 @@ export function capturePublishedSnapshotStatements(
         raw_label,road_frontage,road_access
       )
       SELECT
-        project_id,plot_id,role,segment_index,edge_index,point_count,length,unit,
-        raw_label,road_frontage,road_access
-      FROM plot_edge_measurements WHERE project_id=?`,
+        m.project_id,m.plot_id,m.role,m.segment_index,m.edge_index,m.point_count,
+        m.length,m.unit,m.raw_label,m.road_frontage,m.road_access
+      FROM plot_edge_measurements m
+      WHERE m.project_id=?
+        AND EXISTS (
+          SELECT 1 FROM plots p
+          WHERE p.project_id=m.project_id
+            AND p.id=m.plot_id
+            AND p.inventory_active=1
+        )`,
     ).bind(projectId),
     env.DB.prepare(
       `INSERT INTO published_settings (project_id,key,value)
