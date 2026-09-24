@@ -595,7 +595,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   const [plots, settings, cadGeometry] = await Promise.all([
     env.DB.prepare(
-      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,back AS back,depth2 AS depth2,back_label AS backLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,status,notes,featured,polygon FROM plots WHERE project_id=? ORDER BY id",
+      "SELECT id,sqft,sqm,sqyd,dimensions,road,front,depth,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,back AS back,depth2 AS depth2,back_label AS backLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,status,notes,featured,polygon FROM plots WHERE project_id=? AND inventory_active=1 ORDER BY id",
     )
       .bind(projectId)
       .all(),
@@ -939,7 +939,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "Side Mapping CSV me valid rows nahi mili" }, { status: 400 });
 
       const plotRows = await env.DB.prepare(
-        "SELECT id,polygon FROM plots WHERE project_id=?",
+        "SELECT id,polygon FROM plots WHERE project_id=? AND inventory_active=1",
       )
         .bind(projectId)
         .all<{ id: string; polygon: string | null }>();
@@ -1022,7 +1022,7 @@ export async function POST(request: Request) {
         );
 
       const plotRows = await env.DB.prepare(
-        "SELECT id,polygon,road,edge_semantics AS edgeSemantics,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=?",
+        "SELECT id,polygon,road,edge_semantics AS edgeSemantics,front_edge_index AS frontEdgeIndex,back_edge_index AS backEdgeIndex,depth_edge_index AS depthEdgeIndex,depth2_edge_index AS depth2EdgeIndex FROM plots WHERE project_id=? AND inventory_active=1",
       )
         .bind(projectId)
         .all<{
@@ -1223,7 +1223,7 @@ export async function POST(request: Request) {
       // Safety contract: this importer never creates plots and never touches area,
       // dimensions, Front/Back/Depth, polygons, pricing, or Booked/Sold status.
       const existing = await env.DB.prepare(
-        "SELECT id FROM plots WHERE project_id=?",
+        "SELECT id FROM plots WHERE project_id=? AND inventory_active=1 AND inventory_active=1",
       )
         .bind(projectId)
         .all<{ id: string }>();
@@ -1379,7 +1379,7 @@ export async function POST(request: Request) {
             .bind(projectId)
             .first<{ value: string }>(),
           env.DB.prepare(
-            "SELECT id,polygon FROM plots WHERE project_id=? AND TRIM(COALESCE(polygon,''))<>''",
+            "SELECT id,polygon FROM plots WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
           )
             .bind(projectId)
             .all<{ id: string; polygon: string }>(),
@@ -1495,7 +1495,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Clear all confirmation invalid है" }, { status: 400 });
     }
     const count = await env.DB.prepare(
-      "SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND TRIM(COALESCE(polygon,''))<>''",
+      "SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
     )
       .bind(projectId)
       .first<{ total: number }>();
@@ -1505,7 +1505,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     await env.DB.batch([
       env.DB.prepare(
-        "UPDATE plots SET polygon='',updated_at=? WHERE project_id=? AND TRIM(COALESCE(polygon,''))<>''",
+        "UPDATE plots SET polygon='',updated_at=? WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
       ).bind(now, projectId),
       env.DB.prepare(
         "INSERT INTO audit_logs (id,actor_id,actor_email,action,project_id,target_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -1535,7 +1535,7 @@ export async function POST(request: Request) {
         if (key === "sqmToSqftFactor") {
           const factor = normalizeSqmToSqftFactor(validated);
           await env.DB.prepare(
-            "UPDATE plots SET sqft=ROUND(sqm * ?, 3),updated_at=? WHERE project_id=? AND sqm>0",
+            "UPDATE plots SET sqft=ROUND(sqm * ?, 3),updated_at=? WHERE project_id=? AND inventory_active=1 AND sqm>0",
           )
             .bind(factor, now, projectId)
             .run();
