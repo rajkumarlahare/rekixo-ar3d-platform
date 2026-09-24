@@ -1286,6 +1286,8 @@ export async function POST(request: Request) {
         );
 
       const quality = assessPlotSheetRows(rows);
+      const incomingIds = Array.from(new Set(rows.map((row) => row.id)));
+      const inventory = await plotInventoryDiff(projectId, incomingIds);
       await writeAudit(actor, "mapper.plotSheet_preflight", projectId, null, {
         filename: file.name,
         count: rows.length,
@@ -1296,12 +1298,18 @@ export async function POST(request: Request) {
         partialSideMeasurements: quality.partialSideMeasurements.length,
         genericAreaOnlyDimensions: quality.genericAreaOnlyDimensions.length,
         missingFrontDirection: quality.missingFrontDirection.length,
+        inventoryExisting: inventory.existingActiveCount,
+        inventoryIncoming: inventory.incomingCount,
+        inventoryAdded: inventory.addedIds.length,
+        inventoryRestored: inventory.restoredIds.length,
+        inventoryPendingRemoval: inventory.missingIds.length,
       });
       return Response.json({
         ok: true,
         name: file.name,
         count: rows.length,
         quality,
+        inventory,
       });
     }
 
@@ -1322,8 +1330,29 @@ export async function POST(request: Request) {
       if (rows.length > 2000)
         return Response.json({ error: "Ek project me adhiktam 2000 plot rows import karein" }, { status: 400 });
       const quality = assessPlotSheetRows(rows);
-      // Store only after parsing succeeds, so a bad upload does not replace the
-      // last known-good source sheet.
+      const incomingIds = Array.from(new Set(rows.map((row) => row.id)));
+      const inventory = await plotInventoryDiff(projectId, incomingIds);
+      const inventoryConfirmation = String(
+        form.get("inventoryConfirmation") || "",
+      );
+      if (
+        inventory.confirmationRequired &&
+        inventoryConfirmation !== inventory.confirmationToken
+      ) {
+        return Response.json(
+          {
+            error:
+              "Canonical Plot Data me existing plots missing hain. Inventory reconciliation confirm karein.",
+            code: "PLOT_INVENTORY_CONFIRMATION_REQUIRED",
+            reconciliationRequired: true,
+            inventory,
+          },
+          { status: 409 },
+        );
+      }
+
+      // Store only after parsing and inventory confirmation both succeed, so a
+      // bad/accidental replacement never overwrites the last known-good source.
       await env.BUCKET.put(objectKey, file.stream(), {
         httpMetadata: { contentType: file.type || "text/csv" },
       });
@@ -1333,7 +1362,16 @@ export async function POST(request: Request) {
         rows.map((row) => ({ ...row, polygon: "", status: "available", featured: false })),
         true,
       );
+      await setPlotInventoryActive(
+        projectId,
+        inventory.missingIds,
+        false,
+        now,
+      );
 
+      // Missing canonical rows are draft-inactive, not immediately deleted.
+      // This preserves the currently published customer inventory/status/pricing
+      // until Publish Update atomically promotes the new canonical inventory.
       // Normal new-project flow uses ONE canonical plot sheet. Front Direction
       // is stored even before polygons exist, then automatically converted to
       // canonical Front/Back/Depth A/Depth B edge semantics as soon as geometry
