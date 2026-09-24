@@ -2399,7 +2399,7 @@ body {
 .mapper-side-dock .plot-side-assigner-help{display:none}
 .mapper-v4-canvas:fullscreen .mapper-v4-bottom-bar{padding-bottom:max(9px,env(safe-area-inset-bottom,0px))}
 .mapper-v4-canvas:fullscreen .mapper-v4-bottom-action-row.has-side-dock{grid-template-columns:minmax(112px,150px) minmax(0,1fr)}
-.mapper-v4-canvas:fullscreen .mapper-side-dock{position:static!important;inset:auto!important;transform:none!important;box-shadow:0 0 0 1px #152a45 inset}
+/* fullscreen side-dock positioning is canonical in mapper-side-controls.css */
 .mapper-shape-error{position:sticky;z-index:10;bottom:64px;margin:0 9px 8px;padding:9px 11px;border:1px solid #9b3545;border-radius:10px;background:#431821;color:#ff9cac;font-size:11px;font-weight:800}
 .mapper-point-handle.draggable{width:30px!important;height:30px!important;font-size:11px!important;box-shadow:0 2px 9px #000c,0 0 0 2px #ffb30055!important}
 .mapper-loupe{width:132px!important;height:132px!important}
