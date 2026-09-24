@@ -53,4 +53,3 @@ test("fullscreen side dock keeps only its viewport-width delta",()=>{
   );
   assert.ok((sideCss.match(/!important/g)||[]).length<=41);
 });
-
