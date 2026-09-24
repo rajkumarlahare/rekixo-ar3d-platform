@@ -20,6 +20,10 @@ import {
   publicProject3DLink,
   publicProject3DLinkFromSnapshot,
 } from "@/modules/engine-integration";
+import {
+  publicSiteEnabled,
+  publicSiteUnavailableResponse,
+} from "@/modules/public-site-access";
 
 const PUBLIC_SETTING_KEYS = new Set([
   "projectName",
@@ -139,31 +143,10 @@ export async function GET(request: Request) {
       );
     }
 
-    // REKIXO_PUBLIC_ACCESS_GATE_V1
-    // Authenticated previews intentionally bypass this public-only pause switch.
-    // Missing setting means ON, preserving all existing and future project behavior.
-    if (!previewId) {
-      const publicAccess = await env.DB.prepare(
-        "SELECT value FROM settings WHERE project_id=? AND key='publicSiteEnabled' LIMIT 1",
-      )
-        .bind(projectId)
-        .first<{ value: string }>();
-      if (publicAccess?.value === "0") {
-        return Response.json(
-          {
-            error: "Project temporarily unavailable",
-            code: "PROJECT_TEMPORARILY_UNAVAILABLE",
-          },
-          {
-            status: 503,
-            headers: {
-              "cache-control": "no-store",
-              "retry-after": "60",
-              "x-rekixo-public-access": "disabled",
-            },
-          },
-        );
-      }
+    // REKIXO_PUBLIC_ACCESS_GATE_V2
+    // Authenticated previews intentionally bypass this public-only kill switch.
+    if (!previewId && !(await publicSiteEnabled(projectId))) {
+      return publicSiteUnavailableResponse();
     }
 
     const project = await env.DB.prepare(
