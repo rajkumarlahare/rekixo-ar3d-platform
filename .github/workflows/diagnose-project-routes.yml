@@ -1,0 +1,57 @@
+name: Diagnose public project routes
+
+on:
+  push:
+    branches:
+      - diagnostic/project-route-404-20260924
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Read production project routing state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute tiyansh-production --remote --json --command="SELECT id,name,slug,status,public_status AS publicStatus,publish_version AS publishVersion,published_at AS publishedAt FROM projects ORDER BY created_at,id" > /tmp/projects.json
+          cat /tmp/projects.json
+      - name: Probe every active project route
+        env:
+          REKIXO_PLATFORM_HOST: ${{ vars.REKIXO_PLATFORM_HOST }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const raw=JSON.parse(await readFile('/tmp/projects.json','utf8'));
+          const rows=Array.isArray(raw)?(raw[0]?.results||[]):(raw?.results||[]);
+          const host=String(process.env.REKIXO_PLATFORM_HOST||'ar3dstudio.in').trim();
+          const results=[];
+          for(const p of rows.filter(p=>p.status==='active')){
+            const url='https://'+host+'/projects/'+encodeURIComponent(p.slug);
+            let status=0,location='',server='',cfRay='',body='',error='';
+            try{
+              const res=await fetch(url,{redirect:'manual',headers:{accept:'text/html','user-agent':'Rekixo-Route-Diagnostic/1.0'}});
+              status=res.status;
+              location=res.headers.get('location')||'';
+              server=res.headers.get('server')||'';
+              cfRay=res.headers.get('cf-ray')||'';
+              body=(await res.text()).slice(0,12000);
+            }catch(e){error=String(e)}
+            const shell=body.includes('projectSlug='+p.slug)||body.includes('projectSlug='+encodeURIComponent(p.slug));
+            const boss404=/Vision Builders/i.test(body)&&/Page Not Found/i.test(body);
+            const generic404=/404: This page could not be found/i.test(body);
+            results.push({id:p.id,name:p.name,slug:p.slug,publicStatus:p.publicStatus,publishVersion:p.publishVersion,status,location,server,cfRay,shell,boss404,generic404,error});
+          }
+          console.log('ROUTE_DIAGNOSTIC='+JSON.stringify(results));
+          NODE
