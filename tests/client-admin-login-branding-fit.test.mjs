@@ -7,13 +7,12 @@ const [form, css] = await Promise.all([
   readFile(new URL("../app/admin/login/login-critical.ts", import.meta.url), "utf8"),
 ]);
 
-test("client project login is branded as Builder Admin with an inline crane mark", () => {
-  assert.match(form, /function BuilderAdminMark\(\)/);
-  assert.match(form, /aria-label="Builder crane"/);
+test("client project login is branded as Builder Admin with the construction emoji mark", () => {
   assert.match(form, /"Builder Admin"/);
   assert.match(form, /login-icon--builder/);
-  assert.match(form, /builder-mark-gold/);
-  assert.match(form, /builder-mark-red/);
+  assert.match(form, /builder-emoji/);
+  assert.match(form, /🏗️/);
+  assert.doesNotMatch(form, /BuilderAdminMark/);
 });
 
 test("desktop login is compact enough to fit common laptop viewports", () => {
