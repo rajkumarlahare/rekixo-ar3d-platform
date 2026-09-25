@@ -482,10 +482,10 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
 @media(prefers-reduced-motion:reduce){.brand-subtitle-track{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto}}
 
 
-/* REKIXO_DESKTOP_HUD_LAYOUT_V2
+/* REKIXO_DESKTOP_HUD_LAYOUT_V3
    Desktop/tablet customer-site HUD only. Mobile <=700px stays unchanged.
-   Status uses the same compact vertical card language as mobile; masterplan,
-   plot geometry, filters, counts and toggle behavior stay untouched. */
+   Status and customer actions use compact vertical stacks; masterplan,
+   plot geometry, filters, counts, actions and toggle behavior stay untouched. */
 @media(min-width:701px){
   .status{
     left:20px;
@@ -570,17 +570,17 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
     right:20px;
     left:auto;
     bottom:78px;
-    flex-direction:row;
-    align-items:center;
-    gap:10px;
+    flex-direction:column;
+    align-items:flex-end;
+    gap:8px;
     transform:none;
   }
   .pill{
-    width:auto;
+    width:118px;
     min-width:118px;
     height:44px;
     padding:0 14px;
-    justify-content:center;
+    justify-content:flex-start;
     gap:7px;
     border-radius:13px;
     font-size:10.5px;
@@ -622,7 +622,7 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
   .status-line b{font-size:12px}
   .status-body .status-line.total{padding:8px 0 0}
   .bottom-links{right:14px;bottom:70px;gap:7px}
-  .pill{min-width:96px;height:40px;padding:0 10px;font-size:9px}
+  .pill{width:104px;min-width:104px;height:40px;padding:0 10px;font-size:9px}
   .controls{right:14px;bottom:14px;gap:6px}
   .ctrl,.percent{width:40px;height:40px;border-radius:11px}
   .percent{width:52px}
