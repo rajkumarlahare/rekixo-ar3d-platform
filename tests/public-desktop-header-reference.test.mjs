@@ -36,9 +36,10 @@ test("desktop header has Call, grid/admin and built-in WhatsApp in that order", 
 test("desktop subtitle is clipped to its brand lane and ping-pongs only when overflowing", () => {
   assert.match(page, /\.brand\{[\s\S]*?max-width:360px;[\s\S]*?overflow:hidden/);
   assert.match(page, /\.brand-subtitle\{display:block;[\s\S]*?overflow:hidden;white-space:nowrap/);
-  assert.match(page, /\.brand-subtitle\.is-desktop-pan \.brand-subtitle-track\{[\s\S]*?ease-in-out infinite/);
-  assert.match(page, /--rekixo-subtitle-desktop-shift/);
-  assert.match(page, /--rekixo-subtitle-desktop-duration/);
+  assert.match(page, /\.brand-subtitle\.is-desktop-pan \.brand-subtitle-track\{animation:none\}/);
+  assert.match(page, /subtitleDesktopAnimation=subtitleTrack\.animate\(/);
+  assert.match(page, /duration:durationSeconds\*1000/);
+  assert.match(page, /easing:'ease-in-out'/);
 });
 
 test("mobile header remains on its existing compact contract and does not show top WhatsApp", () => {
