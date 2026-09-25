@@ -30,19 +30,25 @@ test("mobile subtitle right edge is capped at the visual viewport midpoint", () 
   assert.match(page, /subtitleLane\.style\.setProperty\('--rekixo-subtitle-lane-width',laneWidth\+'px'\)/);
 });
 
-test("left-half sizing happens before ticker overflow is measured", () => {
+test("left-half sizing happens before ticker width is measured", () => {
   const sizeCall=page.indexOf("syncBrandSubtitleLaneWidth();");
-  const overflowRead=page.indexOf("const overflow=Math.ceil(subtitleTrack.scrollWidth-subtitleLane.clientWidth)");
-  assert.ok(sizeCall >= 0 && overflowRead > sizeCall);
+  const widthRead=page.indexOf("const originalWidth=Math.ceil(subtitleTrack.scrollWidth)");
+  assert.ok(sizeCall >= 0 && widthRead > sizeCall);
 });
 
-test("only actual overflow activates measured ping-pong motion", () => {
-  assert.match(page, /const overflow=Math\.ceil\(subtitleTrack\.scrollWidth-subtitleLane\.clientWidth\)/);
+test("mobile overflow keeps measured ping-pong motion while desktop uses a continuous one-direction loop", () => {
+  assert.match(page, /const originalWidth=Math\.ceil\(subtitleTrack\.scrollWidth\)/);
+  assert.match(page, /const laneWidth=Math\.ceil\(subtitleLane\.clientWidth\)/);
+  assert.match(page, /const overflow=originalWidth-laneWidth/);
   assert.match(page, /if\(overflow<=3\)return/);
-  assert.match(page, /subtitleTrack\.style\.setProperty\('--rekixo-subtitle-shift',`-\$\{overflow\}px`\)/);
+  assert.match(page, /if\(viewportWidth>900\)\{/);
+  assert.match(page, /subtitleLane\.classList\.add\('is-desktop-marquee'\)/);
+  assert.match(page, /const loopDistance=Math\.max\(1,Math\.round\(\(duplicatedWidth\+gap\)\/2\)\)/);
+  assert.match(page, /--rekixo-subtitle-loop-shift/);
+  assert.match(page, /\.brand-subtitle\.is-desktop-marquee \.brand-subtitle-track\{[\s\S]*?animation:rekixo-subtitle-loop/);
+  assert.match(page, /@keyframes rekixo-subtitle-loop/);
   assert.match(page, /subtitleLane\.classList\.add\('is-overflowing'\)/);
-  assert.match(page, /\.brand-subtitle\.is-overflowing \.brand-subtitle-track\{animation:rekixo-subtitle-pan var\(--rekixo-subtitle-duration,20s\) ease-in-out infinite\}/);
-  assert.match(page, /@keyframes rekixo-subtitle-pan\{0%,14%,100%\{transform:translate3d\(0,0,0\)\}42%,64%\{transform:translate3d\(var\(--rekixo-subtitle-shift,0px\),0,0\)\}\}/);
+  assert.match(page, /\.brand-subtitle\.is-overflowing \.brand-subtitle-track\{animation:rekixo-subtitle-pan/);
 });
 
 test("ticker remeasures for project data viewport fonts and layout", () => {
@@ -56,7 +62,8 @@ test("ticker remeasures for project data viewport fonts and layout", () => {
 test("reduced motion keeps static ellipsis fallback", () => {
   assert.match(page, /const subtitleMotionMQ=window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
   assert.match(page, /if\(subtitleMotionMQ\.matches\)return/);
-  assert.match(page, /@media\(prefers-reduced-motion:reduce\)\{\.brand-subtitle-track\{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto\}\}/);
+  assert.match(page, /@media\(prefers-reduced-motion:reduce\)\{\.brand-subtitle-track\{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto\}/);
+  assert.match(page, /\.brand-subtitle-track::after\{display:none!important\}/);
 });
 
 test("map geometry remains untouched", () => {
@@ -66,9 +73,9 @@ test("map geometry remains untouched", () => {
   assert.match(page, /const mapped=normalized\.map\(\(\[x,y\]\)=>\[x\*W,y\*H\]\)/);
 });
 
-test("customer subtitle ticker runs 60 percent slower without changing travel distance", () => {
+test("mobile subtitle ticker keeps the existing slower travel timing", () => {
   assert.match(page, /const baseDuration=Math\.max\(7,Math\.min\(12,7\+overflow\/45\)\)/);
   assert.match(page, /const duration=baseDuration\/0\.4/);
-  assert.match(page, /same travel distance takes 2\.5x longer/);
+  assert.match(page, /Mobile customer-site subtitle ticker keeps the existing slower measured ping-pong motion/);
 });
 
