@@ -59,17 +59,12 @@ body {
   border-radius: 0;
   background: transparent;
 }
-.login-icon--builder svg {
-  width: 58px;
-  height: 52px;
-  overflow: visible;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.2;
+.login-icon--builder .builder-emoji {
+  display: block;
+  font-size: 48px;
+  line-height: 1;
+  transform: translateY(-1px);
 }
-.login-icon--builder .builder-mark-gold { stroke: #f4b01f; }
-.login-icon--builder .builder-mark-red { stroke: #ff4a67; }
 .login-card h1 {
   margin: 0;
   color: #f9fbff;
@@ -217,7 +212,7 @@ body {
   .login-icon { width: 54px; height: 54px; margin-bottom: 12px; border-radius: 16px; }
   .login-icon svg { width: 30px; height: 30px; }
   .login-icon--builder { width: 60px; height: 50px; margin-bottom: 8px; border-radius: 0; }
-  .login-icon--builder svg { width: 54px; height: 48px; }
+  .login-icon--builder .builder-emoji { font-size: 44px; }
   .login-card h1 { font-size: clamp(27px, 8vw, 32px); }
   .login-context { margin: 7px 0 20px; font-size: 13px; }
   .login-card label { margin-bottom: 16px; }
@@ -231,7 +226,7 @@ body {
   .login-card { padding: 22px 34px 18px; }
   .login-icon { width: 50px; height: 50px; margin-bottom: 9px; }
   .login-icon--builder { width: 56px; height: 46px; margin-bottom: 6px; }
-  .login-icon--builder svg { width: 50px; height: 44px; }
+  .login-icon--builder .builder-emoji { font-size: 42px; }
   .login-card h1 { font-size: 28px; }
   .login-context { margin: 6px 0 18px; }
   .login-card label { margin-bottom: 14px; }

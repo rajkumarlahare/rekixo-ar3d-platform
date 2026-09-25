@@ -16,16 +16,6 @@ type LoginFormProps = {
   initialError?: string;
 };
 
-function BuilderAdminMark() {
-  return (
-    <svg viewBox="0 0 64 64" role="img" aria-label="Builder crane">
-      <path className="builder-mark-gold" d="M17 8h29M21 8v44M13 52h22M21 16h21M42 16v22M42 38h7M49 38v6" />
-      <path className="builder-mark-gold" d="M21 13l-5 6h10l-5-6Zm0 9-5 6h10l-5-6Zm0 9-5 6h10l-5-6Zm0 9-5 6h10l-5-6Z" />
-      <path className="builder-mark-red" d="M29 29h10l4 7H27l2-7Zm4-6h5v6h-5v-6Zm16 21c0 3-2 5-5 5" />
-    </svg>
-  );
-}
-
 export default function LoginForm({
   mode,
   loginType = "mixed",
@@ -95,7 +85,7 @@ export default function LoginForm({
       <style data-rekixo-login-critical>{LOGIN_CRITICAL_CSS}</style>
       <main className="login-page" data-rekixo-login>
         <section className="login-card" aria-labelledby="login-title">
-          <div className={`login-icon${isSuper ? "" : " login-icon--builder"}`} aria-hidden="true">{isSuper ? <Building2 /> : <BuilderAdminMark />}</div>
+          <div className={`login-icon${isSuper ? "" : " login-icon--builder"}`} aria-hidden="true">{isSuper ? <Building2 /> : <span className="builder-emoji">🏗️</span>}</div>
           <h1 id="login-title">{isSuper ? "Rekixo Super Admin" : "Builder Admin"}</h1>
           <p className="login-context">
             {isSuper ? "Central client & project management" : <>Project: <b>{tenantLabel}</b></>}
