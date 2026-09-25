@@ -32,7 +32,7 @@ const structure = {
     brandName: "Rekixo",
     brandShort: "RKP",
     location: "Test City",
-    address: "Test Address",
+    address: "Village Bivipur Bibipur, Tehsil Rajpura, District Patiala, Punjab, India - Browser Runtime Animation Verification Address",
     mapWidth: "1200",
     mapHeight: "2133",
     publicRotation: "0",
@@ -169,6 +169,59 @@ try {
     );
 
     await page.waitForSelector('.plot[data-plot-id="P-1"]', { state: "attached" });
+
+    if (target.name === "desktop") {
+      await page.waitForFunction(() => {
+        const lane = document.querySelector("#brandSubtitle");
+        const track = document.querySelector("#brandSubtitleTrack");
+        return Boolean(
+          lane?.classList.contains("is-desktop-pan") &&
+          track &&
+          track.scrollWidth > lane.clientWidth &&
+          track.getAnimations().length > 0
+        );
+      });
+      const desktopTicker = await page.evaluate(() => {
+        const lane = document.querySelector("#brandSubtitle");
+        const track = document.querySelector("#brandSubtitleTrack");
+        const animation = track?.getAnimations()?.[0];
+        if (!lane || !track || !animation) return null;
+        const timing = animation.effect?.getComputedTiming?.();
+        const duration = Number(timing?.duration || 0);
+        const startTransform = getComputedStyle(track).transform;
+        animation.currentTime = duration * 0.56;
+        const endTransform = getComputedStyle(track).transform;
+        animation.currentTime = duration * 0.98;
+        const returnTransform = getComputedStyle(track).transform;
+        return {
+          overflow: track.scrollWidth - lane.clientWidth,
+          duration,
+          startTransform,
+          endTransform,
+          returnTransform,
+        };
+      });
+      assert.ok(desktopTicker, "desktop subtitle animation should exist");
+      assert.ok(desktopTicker.overflow > 3, "desktop subtitle fixture must overflow");
+      assert.ok(desktopTicker.duration >= 20000, "desktop subtitle motion should stay deliberately slow");
+      assert.notEqual(
+        desktopTicker.endTransform,
+        desktopTicker.startTransform,
+        "desktop subtitle should move toward the last text",
+      );
+      assert.notEqual(
+        desktopTicker.endTransform,
+        desktopTicker.returnTransform,
+        "desktop subtitle should return toward its starting position",
+      );
+    } else {
+      assert.equal(
+        await page.locator("#brandSubtitle").evaluate((el) => el.classList.contains("is-desktop-pan")),
+        false,
+        "mobile must not use the desktop subtitle animation",
+      );
+    }
+
     assert.equal(
       await page.locator('.plot[data-plot-id="P-1"]').getAttribute("data-status"),
       "booked",
