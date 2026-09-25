@@ -27,6 +27,6 @@ test("desktop login is compact enough to fit common laptop viewports", () => {
 test("mobile login remains responsive and does not use fixed viewport height", () => {
   assert.match(css, /min-height: 100dvh/);
   assert.match(css, /@media \(max-width: 600px\)/);
-  assert.doesNotMatch(css, /height:\s*100vh/);
-  assert.doesNotMatch(css, /height:\s*100dvh/);
+  assert.doesNotMatch(css, /(^|\n)\s*height:\s*100vh/m);
+  assert.doesNotMatch(css, /(^|\n)\s*height:\s*100dvh/m);
 });
