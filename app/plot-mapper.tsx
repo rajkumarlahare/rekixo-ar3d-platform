@@ -1391,10 +1391,17 @@ export default function PlotMapper({
     setImageReady(false);
     setNaturalImageSize(null);
     const orderedNextPlots = [...nextPlots].sort(plotSort);
-    const firstUnmapped = orderedNextPlots.find((plot) => !plot.polygon);
-    if (firstUnmapped) loadPlotDetails(firstUnmapped, false);
-    else if (orderedNextPlots.length) loadPlotDetails(orderedNextPlots[0], false);
-    else setPlotId("1");
+    if (controlsWorkspace) {
+      const firstMapped = orderedNextPlots.find((plot) => Boolean(plot.polygon));
+      if (firstMapped) loadPlotDetails(firstMapped, true);
+      else if (orderedNextPlots.length) loadPlotDetails(orderedNextPlots[0], false);
+      else setPlotId("1");
+    } else {
+      const firstUnmapped = orderedNextPlots.find((plot) => !plot.polygon);
+      if (firstUnmapped) loadPlotDetails(firstUnmapped, false);
+      else if (orderedNextPlots.length) loadPlotDetails(orderedNextPlots[0], false);
+      else setPlotId("1");
+    }
     setExcludedAutoIds(new Set());
     const savedPairs = String(nextSettings.calibrationPairs || "");
     if (savedPairs) {
@@ -3590,16 +3597,21 @@ export default function PlotMapper({
       } catch {
         // Ignore local draft cleanup failures.
       }
-      setToolMode("pan");
-      const hasNextInventoryPlot = selectNextPlot(
+      if (controlsWorkspace) {
+        loadPlotDetails(verified.plot, true);
+        notify(`Plot ${verified.plot.id} manual details SERVER VERIFIED ✓`);
+      } else {
+        setToolMode("pan");
+        const hasNextInventoryPlot = selectNextPlot(
         verified.plot.id,
         verified.plots,
       );
-      notify(
-        hasNextInventoryPlot
-          ? `Plot ${verified.plot.id} SERVER VERIFIED ✓ — next inventory plot open`
-          : `Plot ${verified.plot.id} SERVER VERIFIED ✓ — all ${verified.plots.length} inventory plots mapped`,
-      );
+        notify(
+          hasNextInventoryPlot
+            ? `Plot ${verified.plot.id} SERVER VERIFIED ✓ — next inventory plot open`
+            : `Plot ${verified.plot.id} SERVER VERIFIED ✓ — all ${verified.plots.length} inventory plots mapped`,
+        );
+      }
     } catch (error) {
       notify(error instanceof Error ? error.message : "Plot save नहीं हुआ");
     } finally {
@@ -3908,6 +3920,122 @@ export default function PlotMapper({
     ? `${sourceAspect * 100}%`
     : "100%";
   const sourceSceneAspectRatio = `${sourceWidth} / ${sourceHeight}`;
+
+  function renderMappingControlsCard() {
+    return (
+        <div className="card manual-fallback-card">
+          <div className="manual-fallback-head">
+            <div>
+              <small>PLOT MAPPING CONTROLS</small>
+              <h3>{currentPlot ? `Plot ${currentPlot.id}` : `Plot ${plotId}`}</h3>
+              <p>
+                {controlsWorkspace
+                  ? "Mapped plot select karke Dimensions, Area, Facing/Road aur Front/Back/Depth size manually update karein."
+                  : "Main image source of truth है. Plot को full zoom करें, corners clockwise mark करें, handles से exact boundary fit करके Confirm करें."}
+              </p>
+            </div>
+            <select value={plotId} onChange={(event) => {
+              const id = event.target.value;
+              const plot = plots.find((item) => item.id === id);
+              if (plot) loadPlotDetails(plot, Boolean(plot.polygon));
+              else setPlotId(id);
+            }}>
+              {plots.length ? (controlsWorkspace ? mappedPlots : inventoryPlots).map((plot) => <option key={plot.id} value={plot.id}>{plot.id} · {plot.polygon ? "mapped" : autoMatchIds.has(plot.id) ? "auto" : "review"}</option>) : <option value={plotId}>{plotId}</option>}
+            </select>
+          </div>
+
+          {manualPhase === "select" ? <>
+            <div className="mapper-mode">
+              <button className={shape === "quad" ? "active" : ""} onClick={beginFourCornerBoundary}>
+                <FourCornerIcon />Front-first plot · 4 corners
+              </button>
+              <button className={shape === "polygon" ? "active" : ""} onClick={beginIrregularBoundary}>
+                <IrregularCornerIcon />Irregular · corner taps
+              </button>
+            </div>
+            <div className="mapper-actions compact">
+              <button disabled={!points.length} onClick={undoPoint}><Undo2 />Undo</button>
+              <button
+                disabled={busy || (!points.length && !currentHasSavedBoundary)}
+                onClick={clearCurrentSelection}
+              >{currentHasSavedBoundary ? "Remove saved boundary" : "Clear"}</button>
+              <button onClick={clonePreviousShape}><Copy />Clone previous</button>
+              {shape === "polygon" && <button
+                className="primary"
+                disabled={points.length < 3}
+                onClick={completeIrregularBoundary}
+              ><CheckCircle2 />Boundary complete</button>}
+            </div>
+            <small className="mapper-help">4-corner plot: Tap 1 + Tap 2 road-facing Front boundary ke dono endpoints par karein, phir same direction me clockwise baki 2 corners tap karein. Rekixo automatically Front → Depth A → Back → Depth B bind karega. Existing vertex/edge auto-snap hota hai.</small>
+          </> : <>
+            <div className="mapper-fields guided-fields">
+              <label><span>Plot number</span><input value={plotId} readOnly={Boolean(currentPlot)} onChange={(event) => setPlotId(event.target.value)} /></label>
+              <label><span>Dimensions (legacy/reference)</span><input value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="18 x 40 ft" /></label>
+              <label><span>Area (sq.ft)</span><input type="number" min="0" value={sqft} onChange={(event) => setSqft(event.target.value)} /></label>
+              <label><span>Facing / road</span><input value={road} onChange={(event) => setRoad(event.target.value)} placeholder="East face / 40 ft road" /></label>
+              <label><span>Front (road side)</span><input type="number" min="0" step="0.01" value={front} onChange={(event) => setFront(event.target.value)} placeholder="18" /></label>
+              <label><span>Back</span><input type="number" min="0" step="0.01" value={back} onChange={(event) => setBack(event.target.value)} placeholder="18" /></label>
+              <label><span>{effectiveSideLayout() === "three" ? "Depth" : "Depth A"}</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
+              {effectiveSideLayout() === "four" && (
+                <label><span>Depth B</span><input type="number" min="0" step="0.01" value={depth2} onChange={(event) => setDepth2(event.target.value)} placeholder="40" /></label>
+              )}
+              <label><span>Size unit</span><select value={dimensionUnit} onChange={(event) => setDimensionUnit(event.target.value === "m" ? "m" : "ft")}><option value="ft">ft (feet)</option><option value="m">m (metre)</option></select></label>
+            </div>
+            <div className="mapper-actions compact">
+              <button type="button" onClick={() => {
+                const parsed = dimensionPair(dimensions);
+                if (!parsed) return notify("Dimensions me 18 x 40 ft jaisa pair nahi mila");
+                setFront(String(parsed.first));
+                setDepth(String(parsed.second));
+                setDimensionUnit(parsed.unit);
+                notify("Dimensions se Front/Depth fill hua — road-facing Front edge verify karein; zarurat ho to Swap karein");
+              }}>Dimensions → Front/Depth</button>
+              <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
+            </div>
+            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular plot me numbered corner-range se logical sides assign karein. Triangle automatically 3-side mode use karta hai; 4+ corners par 3-side ya 4-side choose kar sakte hain. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
+            <div className="mapper-actions">
+              <button
+                onClick={() => {
+                  if (controlsWorkspace) {
+                    notify("Boundary edit ke liye Plot Mapper page use karein — Mapping Controls manual size/details ke liye focused hai");
+                    return;
+                  }
+                  setManualPhase("select");
+                }}
+              ><Pencil />Boundary बदलें</button>
+              <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : controlsWorkspace ? `Update ${plotId}` : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
+            </div>
+            <small className="mapper-help">Legacy Dimensions / area / facing optional metadata hain. Front/Depth semantic metadata alag save hota hai. Shape independent save hoti hai; plot-sheet re-import geometry aur live Booked/Sold status preserve karta hai.</small>
+            {controlsWorkspace && (
+              <small className="mapper-help mapping-controls-inline-disclaimer">
+                Update selected project ki editable mapping me save hota hai. Live customer site Publish Update ke bina change nahi hoti.
+              </small>
+            )}
+            {currentCenter && <small className="mapper-help">Boundary center {currentCenter[0].toFixed(4)}, {currentCenter[1].toFixed(4)} · normalized geometry यही SVG hit-area, 2D और 3D use करेंगे.</small>}
+          </>}
+        </div>
+    );
+  }
+
+  if (controlsWorkspace) {
+    return (
+      <section className="mapper-shell auto-cad-mapper mapping-controls-workspace">
+        {!settingsReady ? (
+          <div className="card mapping-controls-empty">Mapping Controls load ho raha hai…</div>
+        ) : !hasMasterplan ? (
+          <div className="card mapping-controls-empty">
+            Pehle Plot Mapper me masterplan aur plot mapping ready karein.
+          </div>
+        ) : !mappedPlots.length ? (
+          <div className="card mapping-controls-empty">
+            Abhi koi mapped plot nahi hai. Pehle Plot Mapper me boundary map karein; uske baad manual size/details yahan edit honge.
+          </div>
+        ) : (
+          renderMappingControlsCard()
+        )}
+      </section>
+    );
+  }
 
   return (
     <section
@@ -4289,26 +4417,6 @@ export default function PlotMapper({
         </details>
       )}
 
-      {controlsWorkspace && (
-        <div className="card mapping-controls-safety-note" role="note" aria-label="Mapping Controls safety notice">
-          <CheckCircle2 />
-          <div>
-            <small>SAFE MAPPING WORKSPACE</small>
-            <h2>Mapping Controls</h2>
-            <p>
-              Yeh koi duplicate mapper ya duplicate data store nahi hai. Isi project-scoped
-              canonical Plot Mapper state aur <code>/api/super-mapper</code> save/verify flow
-              ko reuse karta hai. Save/Update sirf selected project ki editable mapping ko
-              change karta hai; live customer site tab tak unchanged rehti hai jab tak
-              Publish Update nahi kiya jata.
-            </p>
-            <span>
-              Masterplan / Plot Data / PDF / CAD source upload aur publishing controls original
-              Plot Mapper page par hi rahenge.
-            </span>
-          </div>
-        </div>
-      )}
 
       <div className="mapper-work mapper-v4-work">
         <div
@@ -5080,78 +5188,7 @@ export default function PlotMapper({
         </div>
       )}
 
-      {!completedProject && hasMasterplan && (
-        <div className="card manual-fallback-card">
-          <div className="manual-fallback-head">
-            <div><small>PLOT MAPPING CONTROLS</small><h3>{currentPlot ? `Plot ${currentPlot.id}` : `Plot ${plotId}`}</h3><p>Main image source of truth है. Plot को full zoom करें, corners clockwise mark करें, handles से exact boundary fit करके Confirm करें.</p></div>
-            <select value={plotId} onChange={(event) => {
-              const id = event.target.value;
-              const plot = plots.find((item) => item.id === id);
-              if (plot) loadPlotDetails(plot, Boolean(plot.polygon));
-              else setPlotId(id);
-            }}>
-              {plots.length ? inventoryPlots.map((plot) => <option key={plot.id} value={plot.id}>{plot.id} · {plot.polygon ? "mapped" : autoMatchIds.has(plot.id) ? "auto" : "review"}</option>) : <option value={plotId}>{plotId}</option>}
-            </select>
-          </div>
-
-          {manualPhase === "select" ? <>
-            <div className="mapper-mode">
-              <button className={shape === "quad" ? "active" : ""} onClick={beginFourCornerBoundary}>
-                <FourCornerIcon />Front-first plot · 4 corners
-              </button>
-              <button className={shape === "polygon" ? "active" : ""} onClick={beginIrregularBoundary}>
-                <IrregularCornerIcon />Irregular · corner taps
-              </button>
-            </div>
-            <div className="mapper-actions compact">
-              <button disabled={!points.length} onClick={undoPoint}><Undo2 />Undo</button>
-              <button
-                disabled={busy || (!points.length && !currentHasSavedBoundary)}
-                onClick={clearCurrentSelection}
-              >{currentHasSavedBoundary ? "Remove saved boundary" : "Clear"}</button>
-              <button onClick={clonePreviousShape}><Copy />Clone previous</button>
-              {shape === "polygon" && <button
-                className="primary"
-                disabled={points.length < 3}
-                onClick={completeIrregularBoundary}
-              ><CheckCircle2 />Boundary complete</button>}
-            </div>
-            <small className="mapper-help">4-corner plot: Tap 1 + Tap 2 road-facing Front boundary ke dono endpoints par karein, phir same direction me clockwise baki 2 corners tap karein. Rekixo automatically Front → Depth A → Back → Depth B bind karega. Existing vertex/edge auto-snap hota hai.</small>
-          </> : <>
-            <div className="mapper-fields guided-fields">
-              <label><span>Plot number</span><input value={plotId} readOnly={Boolean(currentPlot)} onChange={(event) => setPlotId(event.target.value)} /></label>
-              <label><span>Dimensions (legacy/reference)</span><input value={dimensions} onChange={(event) => setDimensions(event.target.value)} placeholder="18 x 40 ft" /></label>
-              <label><span>Area (sq.ft)</span><input type="number" min="0" value={sqft} onChange={(event) => setSqft(event.target.value)} /></label>
-              <label><span>Facing / road</span><input value={road} onChange={(event) => setRoad(event.target.value)} placeholder="East face / 40 ft road" /></label>
-              <label><span>Front (road side)</span><input type="number" min="0" step="0.01" value={front} onChange={(event) => setFront(event.target.value)} placeholder="18" /></label>
-              <label><span>Back</span><input type="number" min="0" step="0.01" value={back} onChange={(event) => setBack(event.target.value)} placeholder="18" /></label>
-              <label><span>{effectiveSideLayout() === "three" ? "Depth" : "Depth A"}</span><input type="number" min="0" step="0.01" value={depth} onChange={(event) => setDepth(event.target.value)} placeholder="40" /></label>
-              {effectiveSideLayout() === "four" && (
-                <label><span>Depth B</span><input type="number" min="0" step="0.01" value={depth2} onChange={(event) => setDepth2(event.target.value)} placeholder="40" /></label>
-              )}
-              <label><span>Size unit</span><select value={dimensionUnit} onChange={(event) => setDimensionUnit(event.target.value === "m" ? "m" : "ft")}><option value="ft">ft (feet)</option><option value="m">m (metre)</option></select></label>
-            </div>
-            <div className="mapper-actions compact">
-              <button type="button" onClick={() => {
-                const parsed = dimensionPair(dimensions);
-                if (!parsed) return notify("Dimensions me 18 x 40 ft jaisa pair nahi mila");
-                setFront(String(parsed.first));
-                setDepth(String(parsed.second));
-                setDimensionUnit(parsed.unit);
-                notify("Dimensions se Front/Depth fill hua — road-facing Front edge verify karein; zarurat ho to Swap karein");
-              }}>Dimensions → Front/Depth</button>
-              <button type="button" disabled={!front && !depth} onClick={() => { setFront(depth); setDepth(front); }}>Swap Front ↔ Depth</button>
-            </div>
-            <small className="mapper-help">Normal 4-corner plot me first tapped boundary road-facing Front hai aur side roles auto-bind ho chuke hain. Irregular plot me numbered corner-range se logical sides assign karein. Triangle automatically 3-side mode use karta hai; 4+ corners par 3-side ya 4-side choose kar sakte hain. Measurements Plot Data ya AI Measurement Manifest se aati hain.</small>
-            <div className="mapper-actions">
-              <button onClick={() => setManualPhase("select")}><Pencil />Boundary बदलें</button>
-              <button className="primary mapper-confirm" disabled={busy || !shapeReady} onClick={confirmPlot}><Save />{busy ? "Saving…" : editingId ? `Update ${plotId}` : `Save shape ${plotId} & open next`}</button>
-            </div>
-            <small className="mapper-help">Legacy Dimensions / area / facing optional metadata hain. Front/Depth semantic metadata alag save hota hai. Shape independent save hoti hai; plot-sheet re-import geometry aur live Booked/Sold status preserve karta hai.</small>
-            {currentCenter && <small className="mapper-help">Boundary center {currentCenter[0].toFixed(4)}, {currentCenter[1].toFixed(4)} · normalized geometry यही SVG hit-area, 2D और 3D use करेंगे.</small>}
-          </>}
-        </div>
-      )}
+      {!completedProject && hasMasterplan && renderMappingControlsCard()}
     </section>
   );
 }

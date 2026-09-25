@@ -1381,68 +1381,21 @@
 }
 
 
-/* REKIXO_MAPPING_CONTROLS_WORKSPACE_V1
-   Dedicated UI surface; canonical mapper state/save path remains shared. */
+/* REKIXO_MAPPING_CONTROLS_WORKSPACE_V2
+   Manual-details-only UI; canonical mapper state/save path remains shared. */
 .mapping-controls-workspace{
   display:grid;
   gap:14px;
 }
-.mapping-controls-safety-note{
-  display:flex;
-  align-items:flex-start;
-  gap:12px;
-  padding:16px 18px;
-  border:1px solid #28553f;
-  background:linear-gradient(145deg,#0b1d19,#0a1722);
-}
-.mapping-controls-safety-note>svg{
-  width:22px;
-  height:22px;
-  flex:none;
-  margin-top:2px;
-  color:#58d69c;
-}
-.mapping-controls-safety-note>div{
-  min-width:0;
-  display:grid;
-  gap:4px;
-}
-.mapping-controls-safety-note small{
-  color:#68d7a1;
-  font-size:9px;
-  font-weight:950;
-  letter-spacing:.14em;
-}
-.mapping-controls-safety-note h2{
+.mapping-controls-workspace .manual-fallback-card{
   margin:0;
-  color:#f4f8fb;
-  font-size:18px;
 }
-.mapping-controls-safety-note p{
-  margin:2px 0 0;
-  max-width:980px;
-  color:#91a5b8;
-  font-size:11px;
+.mapping-controls-empty{
+  padding:18px;
+  color:#8799b2;
+  font-size:12px;
   line-height:1.55;
 }
-.mapping-controls-safety-note p code{
-  border:1px solid #294058;
-  border-radius:5px;
-  background:#071321;
-  color:#b8d4f5;
-  padding:1px 4px;
-  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-}
-.mapping-controls-safety-note span{
-  color:#71869d;
-  font-size:10px;
-  line-height:1.45;
-}
-@media(max-width:620px){
-  .mapping-controls-safety-note{
-    padding:13px 14px;
-  }
-  .mapping-controls-safety-note h2{
-    font-size:16px;
-  }
+.mapping-controls-inline-disclaimer{
+  color:#6fa88d;
 }

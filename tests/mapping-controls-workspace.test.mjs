@@ -34,33 +34,47 @@ test("Mapping Controls reuses the canonical PlotMapper instead of duplicating sa
   assert.doesNotMatch(dashboard, /api\/mapping-controls/);
 });
 
-test("controls mode removes source/publish-assistant surfaces but keeps mapping canvas and controls", async () => {
+test("controls mode renders only the existing manual mapping-control card", async () => {
   const mapper = await source("../app/plot-mapper.tsx");
 
-  assert.match(mapper, /!controlsWorkspace && \(\s*<div className="card mapper-tools mapper-v2-head">/);
-  assert.match(mapper, /cadGeometry && !completedProject && !controlsWorkspace/);
-  assert.match(mapper, /!controlsWorkspace && !completedProject && liveMatrix/);
-  assert.match(mapper, /<div className="mapper-work mapper-v4-work">/);
+  assert.match(mapper, /function renderMappingControlsCard\(\)/);
   assert.match(mapper, /PLOT MAPPING CONTROLS/);
-  assert.match(mapper, /Boundary बदलें/);
   assert.match(mapper, /Dimensions → Front\/Depth/);
   assert.match(mapper, /Swap Front ↔ Depth/);
+  assert.match(mapper, /Boundary बदलें/);
+  assert.match(mapper, /manual size\/details ke liye focused hai/);
+
+  const controlsStart = mapper.indexOf("if (controlsWorkspace) {\n    return (");
+  const fullStart = mapper.indexOf("\n  return (\n    <section", controlsStart + 1);
+  assert.ok(controlsStart >= 0 && fullStart > controlsStart, "focused controls return missing");
+  const controlsBranch = mapper.slice(controlsStart, fullStart);
+  assert.match(controlsBranch, /renderMappingControlsCard\(\)/);
+  assert.doesNotMatch(controlsBranch, /mapper-work mapper-v4-work/);
+  assert.doesNotMatch(controlsBranch, /mapper-precision-canvas/);
+  assert.doesNotMatch(controlsBranch, /mapper-source-grid/);
 });
 
-test("Mapping Controls shows explicit safety disclaimer and keeps live publish separate", async () => {
+test("controls mode starts on mapped plots and stays on the edited plot after save", async () => {
+  const mapper = await source("../app/plot-mapper.tsx");
+
+  assert.match(mapper, /const firstMapped = orderedNextPlots\.find\(\(plot\) => Boolean\(plot\.polygon\)\)/);
+  assert.match(mapper, /controlsWorkspace \? mappedPlots : inventoryPlots/);
+  assert.match(mapper, /loadPlotDetails\(verified\.plot, true\)/);
+  assert.match(mapper, /manual details SERVER VERIFIED/);
+});
+
+test("Mapping Controls keeps live publishing separate and shows compact inline disclaimer", async () => {
   const [mapper, dashboard, css] = await Promise.all([
     source("../app/plot-mapper.tsx"),
     source("../app/super-admin-dashboard.tsx"),
     source("../app/super-mapper.css"),
   ]);
 
-  assert.match(mapper, /SAFE MAPPING WORKSPACE/);
-  assert.match(mapper, /duplicate mapper ya duplicate data store nahi hai/);
-  assert.match(mapper, /live customer site tab tak unchanged rehti hai jab tak/);
-  assert.match(mapper, /Publish Update nahi kiya jata/);
-  assert.match(mapper, /source upload aur publishing controls original\s+Plot Mapper page par hi rahenge/);
+  assert.match(mapper, /Live customer site Publish Update ke bina change nahi hoti/);
+  assert.match(mapper, /Boundary edit ke liye Plot Mapper page use karein/);
   assert.match(dashboard, /tab !== "assets" && tab !== "mapping-controls"/);
-  assert.match(css, /REKIXO_MAPPING_CONTROLS_WORKSPACE_V1/);
+  assert.match(css, /REKIXO_MAPPING_CONTROLS_WORKSPACE_V2/);
+  assert.doesNotMatch(css, /mapping-controls-safety-note/);
 });
 
 test("existing Plot Mapper behavior remains the default", async () => {

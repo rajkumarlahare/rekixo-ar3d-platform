@@ -146,7 +146,7 @@ export default function SuperAdminDashboard({
         : tab === "mapper"
           ? "Company masterplan से client website के clickable plots तैयार करें।"
           : tab === "mapping-controls"
-            ? "Selected project ke canonical plot boundaries, Front/Back/Depth semantics aur measurements ko dedicated workspace me safely edit karein."
+            ? "Mapped plots ke Dimensions, Area, Facing/Road aur Front/Back/Depth sizes ko manually aur safely update karein."
             : tab === "geo"
             ? "Project boundaries, GPS control points aur GIS exchange data ko isolated Geo workspace me manage karein."
             : tab === "three-d"
