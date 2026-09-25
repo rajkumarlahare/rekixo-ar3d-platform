@@ -8,14 +8,14 @@ const page = await readFile(
 );
 
 test("desktop HUD keeps compact status card at bottom and groups customer actions above zoom controls", () => {
-  assert.match(page, /REKIXO_DESKTOP_HUD_LAYOUT_V2/);
+  assert.match(page, /REKIXO_DESKTOP_HUD_LAYOUT_V3/);
   assert.match(page, /@media\(min-width:701px\)\{[\s\S]*?\.status\{[\s\S]*?top:auto;[\s\S]*?bottom:20px;/);
-  assert.match(page, /@media\(min-width:701px\)\{[\s\S]*?\.bottom-links\{[\s\S]*?bottom:78px;[\s\S]*?flex-direction:row;/);
+  assert.match(page, /@media\(min-width:701px\)\{[\s\S]*?\.bottom-links\{[\s\S]*?bottom:78px;[\s\S]*?flex-direction:column;/);
   assert.match(page, /@media\(min-width:701px\)\{[\s\S]*?\.controls\{[\s\S]*?bottom:20px;[\s\S]*?flex-direction:row;/);
 });
 
 test("desktop status uses vertical reference-card layout instead of horizontal rail", () => {
-  const desktopStart = page.indexOf("/* REKIXO_DESKTOP_HUD_LAYOUT_V2");
+  const desktopStart = page.indexOf("/* REKIXO_DESKTOP_HUD_LAYOUT_V3");
   const desktopEnd = page.indexOf("/* REKIXO_UI_MOTION_SYSTEM_V1", desktopStart);
   assert.ok(desktopStart >= 0 && desktopEnd > desktopStart);
   const desktop = page.slice(desktopStart, desktopEnd);
@@ -28,6 +28,22 @@ test("desktop status uses vertical reference-card layout instead of horizontal r
   assert.match(desktop, /\.status-body \.status-line\.total\{[\s\S]*?display:flex!important;[\s\S]*?border-top:/);
   assert.doesNotMatch(desktop, /grid-template-columns:102px minmax\(0,1fr\)/);
   assert.doesNotMatch(desktop, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+});
+
+
+test("desktop customer actions stack Amenities, Gallery, Location vertically in DOM order", () => {
+  const desktopStart = page.indexOf("/* REKIXO_DESKTOP_HUD_LAYOUT_V3");
+  const desktopEnd = page.indexOf("/* REKIXO_UI_MOTION_SYSTEM_V1", desktopStart);
+  assert.ok(desktopStart >= 0 && desktopEnd > desktopStart);
+  const desktop = page.slice(desktopStart, desktopEnd);
+
+  assert.match(desktop, /\.bottom-links\{[\s\S]*?flex-direction:column;[\s\S]*?align-items:flex-end;/);
+  assert.match(desktop, /\.pill\{[\s\S]*?width:118px;[\s\S]*?justify-content:flex-start;/);
+  const actions = page.match(/<div class="bottom-links">([\s\S]*?)<\/div>/)?.[1] || "";
+  const amenities = actions.indexOf('id="amenitiesBtn"');
+  const gallery = actions.indexOf('id="galleryBtn"');
+  const location = actions.indexOf('id="locationBtn"');
+  assert.ok(amenities >= 0 && gallery > amenities && location > gallery);
 });
 
 test("mobile status contract remains unchanged", () => {
