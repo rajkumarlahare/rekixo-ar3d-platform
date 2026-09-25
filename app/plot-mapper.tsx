@@ -3603,9 +3603,9 @@ export default function PlotMapper({
       } else {
         setToolMode("pan");
         const hasNextInventoryPlot = selectNextPlot(
-          verified.plot.id,
-          verified.plots,
-        );
+        verified.plot.id,
+        verified.plots,
+      );
         notify(
           hasNextInventoryPlot
             ? `Plot ${verified.plot.id} SERVER VERIFIED ✓ — next inventory plot open`
