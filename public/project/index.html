@@ -482,33 +482,33 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
 @media(prefers-reduced-motion:reduce){.brand-subtitle-track{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto}}
 
 
-/* REKIXO_DESKTOP_HUD_LAYOUT_V1
+/* REKIXO_DESKTOP_HUD_LAYOUT_V2
    Desktop/tablet customer-site HUD only. Mobile <=700px stays unchanged.
-   Keep the masterplan/header geometry untouched; only reposition/resize HUD chrome. */
+   Status uses the same compact vertical card language as mobile; masterplan,
+   plot geometry, filters, counts and toggle behavior stay untouched. */
 @media(min-width:701px){
   .status{
     left:20px;
     top:auto;
     bottom:20px;
-    width:min(560px,calc(100% - 300px));
-    min-width:420px;
-    display:grid;
-    grid-template-columns:102px minmax(0,1fr);
-    align-items:center;
-    padding:10px 12px;
+    width:160px;
+    min-width:0;
+    display:block;
+    box-sizing:border-box;
+    padding:0 12px 10px;
     border:1px solid rgba(122,167,255,.22);
-    border-radius:16px;
+    border-radius:17px;
     background:rgba(8,18,34,.90);
-    box-shadow:0 14px 38px rgba(0,0,0,.48);
-    backdrop-filter:blur(14px) saturate(135%);
-    -webkit-backdrop-filter:blur(14px) saturate(135%);
+    box-shadow:0 12px 34px #0009;
+    backdrop-filter:blur(12px) saturate(135%);
+    -webkit-backdrop-filter:blur(12px) saturate(135%);
     overflow:hidden;
   }
   .status-head,.status.expanded .status-head{
     height:46px;
-    padding:0 12px 0 2px;
+    padding:0;
     border:0;
-    border-right:1px solid rgba(122,167,255,.18);
+    border-bottom:1px solid rgba(122,167,255,.16);
     border-radius:0;
     background:transparent;
     box-shadow:none;
@@ -516,35 +516,36 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
     -webkit-backdrop-filter:none;
   }
   .status-body,.status.expanded .status-body{
-    position:static;
+    position:relative;
     left:auto;
     bottom:auto;
     width:100%;
-    max-height:none;
-    display:grid;
-    grid-template-columns:repeat(4,minmax(0,1fr));
-    align-items:center;
-    padding:0 0 0 10px;
+    max-height:none!important;
+    display:block;
+    padding:0;
     opacity:1;
-    overflow:visible;
+    overflow:visible!important;
     pointer-events:auto;
     filter:none;
     transform:none;
+    clip-path:none;
   }
   .status-option,.status.expanded .status-option{
     opacity:1;
     transform:none;
-    margin:0;
-    padding:8px 10px;
-    border-radius:10px;
-    transition:background .14s ease,transform .12s ease;
+    margin:4px 0 0;
+    padding:6px 0;
+    border-radius:8px;
+    transition:background .14s ease,opacity .14s ease;
+    animation:none!important;
   }
-  .status-option:active{transform:scale(.98)}
+  .status-option::before,.status-option::after{display:none!important;animation:none!important}
+  .status-option.touch-glass,.status-option.active{transform:none!important;animation:none!important;box-shadow:none!important}
   .status-line{
     min-width:0;
-    min-height:42px;
-    margin:0;
-    padding:8px 10px;
+    min-height:0;
+    margin-top:2px;
+    padding:6px 0;
     gap:7px;
     font-size:11px;
   }
@@ -554,14 +555,16 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
     text-overflow:ellipsis;
     white-space:nowrap;
   }
-  .status-line b{font-size:13px}
-  .status-line.total{
-    margin:0;
-    padding:8px 10px 8px 14px;
-    border-left:1px solid rgba(122,167,255,.18);
+  .status-line b{font-size:12px}
+  .status-body .status-line.total{
+    display:flex!important;
+    margin-top:5px;
+    padding:8px 0 0;
+    border-top:1px solid rgba(122,167,255,.16);
+    border-left:0;
   }
-  .status-line.total b{font-size:16px}
-  .sdot{width:9px;height:9px;margin-right:5px}
+  .status-body .status-line.total b{font-size:15px}
+  .sdot{width:9px;height:9px;margin-right:6px}
 
   .bottom-links{
     right:20px;
@@ -610,14 +613,14 @@ body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sa
   .status{
     left:14px;
     bottom:14px;
-    width:min(500px,calc(100% - 250px));
-    min-width:390px;
-    grid-template-columns:92px minmax(0,1fr);
-    padding:8px 10px;
+    width:160px;
+    min-width:0;
+    display:block;
+    padding:0 10px 9px;
   }
-  .status-line{padding:7px 8px;font-size:10px}
+  .status-line{padding:6px 0;font-size:10px}
   .status-line b{font-size:12px}
-  .status-line.total{padding-left:10px}
+  .status-body .status-line.total{padding:8px 0 0}
   .bottom-links{right:14px;bottom:70px;gap:7px}
   .pill{min-width:96px;height:40px;padding:0 10px;font-size:9px}
   .controls{right:14px;bottom:14px;gap:6px}
