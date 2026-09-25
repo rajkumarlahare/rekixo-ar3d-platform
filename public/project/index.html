@@ -119,6 +119,13 @@ html.rekixo-project-error .rekixo-boot-error{display:grid}
 .bottom-links{position:absolute;right:9px;bottom:234px;z-index:7;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
 .pill{width:var(--action-pill-width);height:40px;padding:0 6px;border-radius:12px;border:1px solid #2b3854;background:#0a1325e8;color:#f2f5ff;display:flex;align-items:center;justify-content:center;gap:4px;font-size:9px;font-weight:950;letter-spacing:.05em;box-shadow:0 7px 18px #0007}.pill .pin{width:14px;height:17px;flex:none}.pill .gallery{width:14px;height:14px;flex:none;color:#f4c246;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .toast{position:absolute;left:50%;bottom:92px;z-index:12;transform:translateX(-50%) translateY(14px);opacity:0;background:#030711ec;border:1px solid #ffffff1c;border-radius:999px;padding:10px 15px;pointer-events:none;transition:.16s;white-space:nowrap}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* REKIXO_PLOT_PEEK_V1 — presentation-only hover/long-press details. */
+.plot-peek{--peek-rgb:var(--plot-available-rgb);position:absolute;z-index:14;width:min(270px,calc(100% - 24px));min-height:86px;padding:11px 13px 12px;border:1px solid rgba(var(--peek-rgb),.88);border-radius:14px;background:linear-gradient(145deg,rgba(11,21,39,.97),rgba(7,15,29,.95));box-shadow:0 14px 36px #000b,0 0 20px rgba(var(--peek-rgb),.12);backdrop-filter:blur(12px) saturate(125%);-webkit-backdrop-filter:blur(12px) saturate(125%);pointer-events:none;user-select:none;opacity:0;transform:translate3d(0,7px,0) scale(.965);transform-origin:50% 100%;transition:opacity .13s ease,transform .17s cubic-bezier(.22,1,.36,1),border-color .15s ease,box-shadow .15s ease;will-change:transform,opacity}
+.plot-peek.show{opacity:1;transform:translate3d(0,0,0) scale(1)}
+.plot-peek[data-status="available"]{--peek-rgb:var(--plot-available-rgb)}.plot-peek[data-status="booked"]{--peek-rgb:var(--plot-booked-rgb)}.plot-peek[data-status="sold"]{--peek-rgb:var(--plot-sold-rgb)}
+.plot-peek__head{display:flex;align-items:center;gap:8px;min-width:0}.plot-peek__badge{flex:none;border-radius:7px;padding:5px 9px;background:rgb(var(--peek-rgb));color:#fff;font-size:10px;font-weight:950;letter-spacing:.06em;line-height:1}.plot-peek__title{min-width:0;color:#b7c2d8;font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.plot-peek__area{display:block;margin-top:9px;color:#fff;font-size:13px;font-weight:950;line-height:1.2}.plot-peek__meta{display:block;margin-top:5px;color:#8593ac;font-size:10px;font-weight:700;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:700px){.plot-peek{width:min(245px,calc(100% - 20px));padding:10px 12px 11px;border-radius:13px}.plot-peek__badge{font-size:9px}.plot-peek__area{font-size:12px}.plot-peek__meta{font-size:9.5px}}
+@media(prefers-reduced-motion:reduce){.plot-peek{transition:none;transform:none}}
 .scrim{position:fixed;inset:0;z-index:29;background:#000a;opacity:0;pointer-events:none;transition:.18s;backdrop-filter:blur(4px)}.scrim.open{opacity:1;pointer-events:auto}
 .gallery-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:18px;background:#02050dcc;backdrop-filter:blur(8px)}.gallery-modal.open{display:flex}
 .amenities-modal{position:fixed;inset:0;z-index:125;display:none;align-items:center;justify-content:center;padding:18px;background:radial-gradient(circle at 50% 20%,rgba(27,65,108,.22),transparent 42%),#02050dee;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
@@ -1615,6 +1622,56 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
     document.documentElement.style.setProperty('--plot-sold-rgb',statusThemeRgb(sold));
   }
   function plotStatus(p){const s=String(p?.status||'available').trim().toLowerCase();return s==='enquire'?'available':(s==='booked'?'booked':(s==='sold'?'sold':'available'))}
+  const PLOT_PEEK_LONG_PRESS_MS=460,PLOT_PEEK_MOVE_CANCEL_PX=12;
+  let plotPeek=null,plotPeekRefs=null,plotPeekSignature='',plotPeekPlotId=null,plotPeekPoint=null;
+  let plotPeekPressTimer=0,plotPeekPressPointerId=null,plotPeekPressShown=false;
+  function ensurePlotPeek(){
+    if(plotPeek)return plotPeek;
+    const card=document.createElement('div'),head=document.createElement('div'),badge=document.createElement('span'),title=document.createElement('span'),area=document.createElement('strong'),meta=document.createElement('span');
+    card.className='plot-peek';card.setAttribute('aria-hidden','true');
+    head.className='plot-peek__head';badge.className='plot-peek__badge';title.className='plot-peek__title';area.className='plot-peek__area';meta.className='plot-peek__meta';
+    head.append(badge,title);card.append(head,area,meta);viewport.appendChild(card);
+    plotPeek=card;plotPeekRefs={badge,title,area,meta};return card
+  }
+  function plotPeekArea(p){
+    const items=[['sqyd','Sq.Yd'],['sqft','Sq.Ft'],['sqm','Sq.M']];
+    for(const [key,label] of items){const value=Number(p?.[key]);if(Number.isFinite(value)&&value>0)return value.toLocaleString('en-IN',{maximumFractionDigits:3})+' '+label}
+    return 'Area not available'
+  }
+  function positionPlotPeek(clientX,clientY){
+    const card=ensurePlotPeek(),vr=viewport.getBoundingClientRect(),cr=card.getBoundingClientRect(),margin=10,gap=15;
+    let x=clientX-vr.left+gap,y=clientY-vr.top-cr.height-gap;
+    if(x+cr.width>vr.width-margin)x=clientX-vr.left-cr.width-gap;
+    if(y<margin)y=clientY-vr.top+gap;
+    x=clamp(x,margin,Math.max(margin,vr.width-cr.width-margin));y=clamp(y,margin,Math.max(margin,vr.height-cr.height-margin));
+    card.style.left=Math.round(x)+'px';card.style.top=Math.round(y)+'px'
+  }
+  function showPlotPeek(p,clientX,clientY){
+    if(!p||drawer.classList.contains('open'))return;
+    const card=ensurePlotPeek(),st=plotStatus(p),dimensions=String(p.dimensions||'').trim(),facing=String(p.facing||p.road||'').trim(),area=plotPeekArea(p),detail=[dimensions,facing].filter(Boolean).join(' · ')||'Plot details';
+    const signature=[p.id,st,area,detail].join('|');
+    if(signature!==plotPeekSignature){plotPeekRefs.badge.textContent=st.toUpperCase();plotPeekRefs.title.textContent='Plot #'+p.id;plotPeekRefs.area.textContent=area;plotPeekRefs.meta.textContent=detail;plotPeekSignature=signature}
+    plotPeekPlotId=String(p.id);plotPeekPoint={x:clientX,y:clientY};card.dataset.status=st;positionPlotPeek(clientX,clientY);card.classList.add('show');card.setAttribute('aria-hidden','false')
+  }
+  function hidePlotPeek(){
+    if(plotPeek){plotPeek.classList.remove('show');plotPeek.setAttribute('aria-hidden','true')}
+    plotPeekPlotId=null;plotPeekPoint=null;plotPeekSignature=''
+  }
+  function cancelPlotPeekPress(hide=true){
+    if(plotPeekPressTimer){clearTimeout(plotPeekPressTimer);plotPeekPressTimer=0}
+    const shown=plotPeekPressShown;plotPeekPressPointerId=null;plotPeekPressShown=false;
+    if(hide&&shown)hidePlotPeek();return shown
+  }
+  function beginPlotPeekPress(e,p){
+    if(e.pointerType!=='touch'||!p)return;
+    cancelPlotPeekPress(false);const id=e.pointerId,x=e.clientX,y=e.clientY;
+    plotPeekPressPointerId=id;plotPeekPressTimer=setTimeout(()=>{
+      plotPeekPressTimer=0;
+      if(plotPeekPressPointerId!==id||!pointers.has(id))return;
+      const g=gesture;if(!g||g.type!=='single'||g.id!==id||g.moved)return;
+      plotPeekPressShown=true;showPlotPeek(p,x,y)
+    },PLOT_PEEK_LONG_PRESS_MS)
+  }
   function updateStatusCounts(){const c={available:0,booked:0,sold:0};plots.forEach(p=>c[plotStatus(p)]++);q('#countAvailable').textContent=c.available;q('#countBooked').textContent=c.booked;q('#countSold').textContent=c.sold;q('#countTotal').textContent=plots.length}
   function applyLiveState(data){
     if(!data||typeof data!=='object')return;
@@ -1632,6 +1689,7 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
       if(el)el.dataset.status=plotStatus(p);
     });
     updateStatusCounts();
+    if(plotPeekPlotId&&plotPeekPoint){const freshPeek=plots.find(p=>String(p.id)===plotPeekPlotId);if(freshPeek)showPlotPeek(freshPeek,plotPeekPoint.x,plotPeekPoint.y);else hidePlotPeek()}
     engine3D?.rebuildLabels?.();
     engine3D?.request?.();
     if(selected){
@@ -2026,6 +2084,7 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
 
   function openPlot(p,focus=false){
     if(!p) return;
+    hidePlotPeek();cancelPlotPeekPress(false);
     selected=p; setSelected(p.id); if(focus) focusPlot(p);
     const st=plotStatus(p),statusLabel=st.charAt(0).toUpperCase()+st.slice(1);
     drawer.dataset.status=st;
@@ -2061,7 +2120,7 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   }
   function setGestureActive(active){
     viewport.classList.toggle('gesture-active',Boolean(active));
-    if(active)viewport.classList.add('dragging');
+    if(active){viewport.classList.add('dragging');cancelPlotPeekPress(true);hidePlotPeek()}
     else viewport.classList.remove('dragging')
   }
 
@@ -2110,6 +2169,19 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   }
 
   function isUiTarget(target){return !!target.closest?.('.status,.controls,.bottom-links,.map-badge,.toast,.drawer,.scrim,.header')}
+  let plotPeekHoverRaf=0,plotPeekHoverPoint=null;
+  function schedulePlotPeekHover(e){
+    if(e.pointerType!=='mouse')return;
+    plotPeekHoverPoint={x:e.clientX,y:e.clientY};
+    if(plotPeekHoverRaf)return;
+    plotPeekHoverRaf=requestAnimationFrame(()=>{
+      plotPeekHoverRaf=0;const point=plotPeekHoverPoint;plotPeekHoverPoint=null;
+      if(!point||mode3D||pointers.size||drawer.classList.contains('open')){hidePlotPeek();return}
+      const hit=plotAtClient(point.x,point.y,0);if(hit)showPlotPeek(hit,point.x,point.y);else hidePlotPeek()
+    })
+  }
+  viewport.addEventListener('pointermove',e=>{if(mode3D||e.pointerType!=='mouse')return;if(isUiTarget(e.target)||e.buttons){hidePlotPeek();return}schedulePlotPeekHover(e)},{passive:true});
+  viewport.addEventListener('pointerleave',e=>{if(!mode3D&&e.pointerType==='mouse')hidePlotPeek()},{passive:true});
 
   viewport.addEventListener('pointerdown',e=>{
     if(mode3D || isUiTarget(e.target)) return;
@@ -2118,7 +2190,9 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
     if(pointers.size===1){
       const hit=plotAtClient(e.clientX,e.clientY,HIT_PAD(e));
       gesture={type:'single',id:e.pointerId,start:{x:e.clientX,y:e.clientY},last:{x:e.clientX,y:e.clientY},pan:{...pan},startPlot:hit?.id||null,moved:false,slop:TAP_SLOP(e),pointerType:e.pointerType};
+      beginPlotPeekPress(e,hit)
     }else if(pointers.size===2){
+      cancelPlotPeekPress(true);
       const [a,b]=[...pointers.values()];
       gesture={type:'pinch',dist:Math.max(8,distance(a,b)),scale,mid:midpoint(a,b),pan:{...pan},rect:viewportRectSnapshot(),moved:true};
       setGestureActive(true);
@@ -2144,6 +2218,7 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
     if(pointers.size===1&&gesture?.type==='single'&&gesture.id===e.pointerId){
       gesture.last.x=sample.clientX;gesture.last.y=sample.clientY;
       const dx=sample.clientX-gesture.start.x,dy=sample.clientY-gesture.start.y,d=Math.hypot(dx,dy);
+      if(d>PLOT_PEEK_MOVE_CANCEL_PX)cancelPlotPeekPress(true);
       if(!gesture.moved&&d<=gesture.slop) return;
       if(!gesture.moved){
         gesture.moved=true;
@@ -2157,7 +2232,8 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   function finishPointer(e,cancelled=false){
     const g=gesture;
     const single=pointers.size===1&&g?.type==='single'&&g.id===e.pointerId;
-    const wasTap=single&&!g.moved&&!cancelled;
+    const suppressTap=plotPeekPressShown&&plotPeekPressPointerId===e.pointerId;
+    const wasTap=single&&!g.moved&&!cancelled&&!suppressTap;
     let hit=null;
     if(wasTap){
       // A no-drag tap belongs to the plot where the finger went down. Prefer
@@ -2166,6 +2242,7 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
       const releaseHit=plotAtClient(e.clientX,e.clientY,HIT_PAD(e));
       hit=startHit||releaseHit;
     }
+    if(plotPeekPressPointerId===e.pointerId)cancelPlotPeekPress(true);
     pointers.delete(e.pointerId);
     try{if(viewport.hasPointerCapture?.(e.pointerId))viewport.releasePointerCapture(e.pointerId)}catch(_){ }
     if(pointers.size===0){gesture=null;setGestureActive(false)}
@@ -2174,10 +2251,10 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   }
   viewport.addEventListener('pointerup',e=>{if(!mode3D)finishPointer(e,false)},{passive:true});
   viewport.addEventListener('pointercancel',e=>{if(!mode3D)finishPointer(e,true)},{passive:true});
-  const cancelMapGesture=()=>{if(!pointers.size&&!gesture)return;pointers.clear();gesture=null;setGestureActive(false)};
+  const cancelMapGesture=()=>{cancelPlotPeekPress(true);hidePlotPeek();if(!pointers.size&&!gesture)return;pointers.clear();gesture=null;setGestureActive(false)};
   window.addEventListener('blur',cancelMapGesture,{passive:true});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelMapGesture()},{passive:true});
-  viewport.addEventListener('lostpointercapture',e=>{if(pointers.has(e.pointerId)&&pointers.size===1&&gesture?.moved){pointers.delete(e.pointerId);gesture=null;setGestureActive(false)}});
+  viewport.addEventListener('lostpointercapture',e=>{if(plotPeekPressPointerId===e.pointerId)cancelPlotPeekPress(true);if(pointers.has(e.pointerId)&&pointers.size===1&&gesture?.moved){pointers.delete(e.pointerId);gesture=null;setGestureActive(false)}});
 
   viewport.addEventListener('wheel',e=>{if(mode3D)return;e.preventDefault();zoomAt(scale*(e.deltaY<0?1.12:.89),e.clientX,e.clientY)},{passive:false});
   q('#zoomIn').onclick=()=>mode3D?engine3D?.zoom(.88):zoomCenter(1.16);
@@ -2232,10 +2309,10 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
     if(on&&!PUBLIC_READY){toast('Project data load ho raha hai');return}
     if(on&&!HAS_MASTERPLAN){toast('Masterplan upload hone ke baad 3D ready hoga');return}
     mode3D=!!on; viewport.classList.toggle('mode3d',mode3D); q('#view3d').textContent=mode3D?'2D':'3D';
-    pointers.clear();gesture=null;viewport.classList.remove('dragging');
+    cancelPlotPeekPress(true);hidePlotPeek();pointers.clear();gesture=null;viewport.classList.remove('dragging');
     if(mode3D){
       close();
-      if(!engine3D){try{engine3D=new RekixoPlot3D(q('#threeHost'),{plots,imageSrc:q('.master').src,mapWidth:W,mapHeight:H,onSelect:p=>{selected=p;setSelected(p.id);openPlot(p,false)},onCamera:hud3D})}catch(e){mode3D=false;viewport.classList.remove('mode3d');q('#view3d').textContent='3D';toast('3D is not supported on this device');return}}
+      if(!engine3D){try{engine3D=new RekixoPlot3D(q('#threeHost'),{plots,imageSrc:q('.master').src,mapWidth:W,mapHeight:H,onSelect:p=>{selected=p;setSelected(p.id);openPlot(p,false)},onPreview:(p,x,y)=>showPlotPeek(p,x,y),onPreviewEnd:()=>hidePlotPeek(),onCamera:hud3D})}catch(e){mode3D=false;viewport.classList.remove('mode3d');q('#view3d').textContent='3D';toast('3D is not supported on this device');return}}
       engine3D.setShowAll(showAll);engine3D.setStatusFilter?.(statusFilter);engine3D.activate();if(selected)engine3D.select(selected.id,false,false);hud3D({yaw:engine3D.cam.yaw,zoomPercent:Math.round(34*engine3D.baseDistance/engine3D.cam.distance)});
     }else{
       engine3D?.deactivate();const n=document.getElementById('compassNeedle');if(n)n.removeAttribute('transform');q('#percent').textContent=Math.round(scale/fit*100)+'%';render();
