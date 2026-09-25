@@ -27,9 +27,12 @@ test("Call always prefers primary phone then secondary phone, never WhatsApp", (
   assert.match(html, /q\('#callTop'\)\.onclick=call;q\('#callBtn'\)\.onclick=call/);
 });
 
-test("WhatsApp prefers explicit WhatsApp number and falls back to phone1 then phone2", () => {
+test("WhatsApp prefers explicit WhatsApp number and powers drawer plus desktop header actions", () => {
   assert.match(html, /const resolvedWhatsapp=explicitWhatsapp\|\|primary\|\|secondary;/);
+  assert.match(html, /function openWhatsApp\(\)/);
   assert.match(html, /window\.open\('https:\/\/wa\.me\/'\+WHATSAPP_PHONE\+'\?text='/);
+  assert.match(html, /q\('#waBtn'\)\.onclick=openWhatsApp/);
+  assert.match(html, /const waTop=q\('#waTop'\);if\(waTop\)waTop\.onclick=openWhatsApp/);
 });
 
 test("all projects use the same centralized contact resolver", () => {
