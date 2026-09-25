@@ -36,17 +36,16 @@ test("left-half sizing happens before ticker width is measured", () => {
   assert.ok(sizeCall >= 0 && widthRead > sizeCall);
 });
 
-test("mobile overflow keeps measured ping-pong motion while desktop uses a continuous one-direction loop", () => {
+test("desktop overflow pauses, pans to the last character, pauses, then returns while mobile keeps its existing motion", () => {
   assert.match(page, /const originalWidth=Math\.ceil\(subtitleTrack\.scrollWidth\)/);
   assert.match(page, /const laneWidth=Math\.ceil\(subtitleLane\.clientWidth\)/);
   assert.match(page, /const overflow=originalWidth-laneWidth/);
   assert.match(page, /if\(overflow<=3\)return/);
   assert.match(page, /if\(viewportWidth>900\)\{/);
-  assert.match(page, /subtitleLane\.classList\.add\('is-desktop-marquee'\)/);
-  assert.match(page, /const loopDistance=Math\.max\(1,Math\.round\(\(duplicatedWidth\+gap\)\/2\)\)/);
-  assert.match(page, /--rekixo-subtitle-loop-shift/);
-  assert.match(page, /\.brand-subtitle\.is-desktop-marquee \.brand-subtitle-track\{[\s\S]*?animation:rekixo-subtitle-loop/);
-  assert.match(page, /@keyframes rekixo-subtitle-loop/);
+  assert.match(page, /subtitleTrack\.style\.setProperty\('--rekixo-subtitle-desktop-shift',`-\$\{overflow\}px`\)/);
+  assert.match(page, /subtitleLane\.classList\.add\('is-desktop-pan'\)/);
+  assert.match(page, /\.brand-subtitle\.is-desktop-pan \.brand-subtitle-track\{[\s\S]*?animation:rekixo-subtitle-desktop-pan/);
+  assert.match(page, /@keyframes rekixo-subtitle-desktop-pan\{[\s\S]*?0%,16%\{transform:translate3d\(0,0,0\)\}[\s\S]*?48%,64%\{transform:translate3d\(var\(--rekixo-subtitle-desktop-shift,0px\),0,0\)\}[\s\S]*?96%,100%\{transform:translate3d\(0,0,0\)\}/);
   assert.match(page, /subtitleLane\.classList\.add\('is-overflowing'\)/);
   assert.match(page, /\.brand-subtitle\.is-overflowing \.brand-subtitle-track\{animation:rekixo-subtitle-pan/);
 });
@@ -62,8 +61,7 @@ test("ticker remeasures for project data viewport fonts and layout", () => {
 test("reduced motion keeps static ellipsis fallback", () => {
   assert.match(page, /const subtitleMotionMQ=window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
   assert.match(page, /if\(subtitleMotionMQ\.matches\)return/);
-  assert.match(page, /@media\(prefers-reduced-motion:reduce\)\{\.brand-subtitle-track\{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto\}/);
-  assert.match(page, /\.brand-subtitle-track::after\{display:none!important\}/);
+  assert.match(page, /@media\(prefers-reduced-motion:reduce\)\{\.brand-subtitle-track\{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto\}\}/);
 });
 
 test("map geometry remains untouched", () => {
