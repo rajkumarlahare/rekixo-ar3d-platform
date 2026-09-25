@@ -16,7 +16,7 @@ test("client admin login owns critical styling instead of depending on a CSS req
   assert.match(criticalCss, /\.login-card/);
   assert.match(criticalCss, /\.login-input/);
   assert.match(criticalCss, /\.login-submit/);
-  assert.match(criticalCss, /min-height:\s*100svh/);
+  assert.match(criticalCss, /min-height:\s*100dvh/);
   assert.match(criticalCss, /@media \(max-width:\s*600px\)/);
 });
 
@@ -32,7 +32,7 @@ test("shared project login carries tenant identity and returns to that exact pro
   assert.ok(form.includes("resolvedBackPath"));
   assert.ok(form.includes("href={resolvedBackPath}"));
   assert.ok(form.includes("Project: <b>{tenantLabel}</b>"));
-  assert.ok(form.includes('"Client Admin"'));
+  assert.ok(form.includes('"Builder Admin"'));
   assert.equal(form.includes('from "next/link"'), false);
 });
 
