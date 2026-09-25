@@ -30,10 +30,10 @@ test("mobile subtitle right edge is capped at the visual viewport midpoint", () 
   assert.match(page, /subtitleLane\.style\.setProperty\('--rekixo-subtitle-lane-width',laneWidth\+'px'\)/);
 });
 
-test("left-half sizing happens before ticker overflow is measured", () => {
+test("left-half sizing happens before ticker width is measured", () => {
   const sizeCall=page.indexOf("syncBrandSubtitleLaneWidth();");
-  const overflowRead=page.indexOf("const overflow=Math.ceil(subtitleTrack.scrollWidth-subtitleLane.clientWidth)");
-  assert.ok(sizeCall >= 0 && overflowRead > sizeCall);
+  const widthRead=page.indexOf("const originalWidth=Math.ceil(subtitleTrack.scrollWidth)");
+  assert.ok(sizeCall >= 0 && widthRead > sizeCall);
 });
 
 test("mobile overflow keeps measured ping-pong motion while desktop uses a continuous one-direction loop", () => {
@@ -62,7 +62,8 @@ test("ticker remeasures for project data viewport fonts and layout", () => {
 test("reduced motion keeps static ellipsis fallback", () => {
   assert.match(page, /const subtitleMotionMQ=window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)/);
   assert.match(page, /if\(subtitleMotionMQ\.matches\)return/);
-  assert.match(page, /@media\(prefers-reduced-motion:reduce\)\{\.brand-subtitle-track\{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto\}\}/);
+  assert.match(page, /@media\(prefers-reduced-motion:reduce\)\{\.brand-subtitle-track\{display:block;width:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;animation:none!important;transform:none!important;will-change:auto\}/);
+  assert.match(page, /\.brand-subtitle-track::after\{display:none!important\}/);
 });
 
 test("map geometry remains untouched", () => {
