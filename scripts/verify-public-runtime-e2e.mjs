@@ -244,6 +244,24 @@ try {
     assert.equal(await page.locator("#countSold").textContent(), "1", target.name + " sold refresh");
     assert.equal(await page.locator("#countBooked").textContent(), "0", target.name + " booked refresh");
 
+    await page.locator('.plot[data-plot-id="P-1"]').click();
+    await page.locator("#drawer.open").waitFor({ state: "visible" });
+    const drawerBox = await page.locator("#drawer").boundingBox();
+    assert.ok(drawerBox, target.name + " plot drawer should have a box");
+    if (target.name === "desktop") {
+      assert.ok(
+        drawerBox.width >= 379 && drawerBox.width <= 431,
+        "desktop plot drawer should stay compact instead of covering most of the viewport",
+      );
+    } else {
+      assert.ok(
+        Math.abs(drawerBox.width - target.viewport.width) <= 2,
+        "mobile plot drawer should remain full-screen width",
+      );
+    }
+    await page.locator("#closeBtn").click();
+    await page.waitForFunction(() => !document.querySelector("#drawer")?.classList.contains("open"));
+
     await page.locator("#galleryBtn").click();
     await page.waitForSelector(".client-gallery article");
     assert.equal(await page.locator(".client-gallery article").count(), 1);
