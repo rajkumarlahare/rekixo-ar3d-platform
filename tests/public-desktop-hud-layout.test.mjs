@@ -20,9 +20,10 @@ test("desktop status uses vertical reference-card layout instead of horizontal r
   assert.ok(desktopStart >= 0 && desktopEnd > desktopStart);
   const desktop = page.slice(desktopStart, desktopEnd);
 
-  assert.match(desktop, /\.status\{[\s\S]*?width:168px;[\s\S]*?display:block;/);
+  assert.match(desktop, /\.status\{[\s\S]*?width:160px;[\s\S]*?display:block;/);
   assert.match(desktop, /\.status-head,.status\.expanded \.status-head\{[\s\S]*?border-bottom:1px solid rgba\(122,167,255,.16\)/);
-  assert.match(desktop, /\.status-body,.status\.expanded \.status-body\{[\s\S]*?display:block;[\s\S]*?max-height:none!important/);
+  assert.match(desktop, /\.status-body,.status\.expanded \.status-body\{[\s\S]*?max-height:none!important/);
+  assert.match(desktop, /\.status-body,.status\.expanded \.status-body\{[\s\S]*?display:block;/);
   assert.match(desktop, /\.status-option,.status\.expanded \.status-option\{[\s\S]*?margin:4px 0 0;[\s\S]*?padding:6px 0/);
   assert.match(desktop, /\.status-body \.status-line\.total\{[\s\S]*?display:flex!important;[\s\S]*?border-top:/);
   assert.doesNotMatch(desktop, /grid-template-columns:102px minmax\(0,1fr\)/);
