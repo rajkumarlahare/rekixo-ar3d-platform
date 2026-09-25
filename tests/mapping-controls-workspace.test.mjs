@@ -44,8 +44,8 @@ test("controls mode renders only the existing manual mapping-control card", asyn
   assert.match(mapper, /Boundary बदलें/);
   assert.match(mapper, /manual size\/details ke liye focused hai/);
 
-  const controlsStart = mapper.indexOf("if (controlsWorkspace) {\\n    return (");
-  const fullStart = mapper.indexOf("\\n  return (\\n    <section", controlsStart + 1);
+  const controlsStart = mapper.indexOf("if (controlsWorkspace) {\n    return (");
+  const fullStart = mapper.indexOf("\n  return (\n    <section", controlsStart + 1);
   assert.ok(controlsStart >= 0 && fullStart > controlsStart, "focused controls return missing");
   const controlsBranch = mapper.slice(controlsStart, fullStart);
   assert.match(controlsBranch, /renderMappingControlsCard\(\)/);
