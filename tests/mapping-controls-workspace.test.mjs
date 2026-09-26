@@ -63,16 +63,25 @@ test("controls mode starts on mapped plots and stays on the edited plot after sa
   assert.match(mapper, /manual details SERVER VERIFIED/);
 });
 
-test("Mapping Controls keeps live publishing separate and shows compact inline disclaimer", async () => {
-  const [mapper, dashboard, css] = await Promise.all([
+test("Mapping Controls embeds the canonical publish panel and mapper saves refresh it", async () => {
+  const [mapper, dashboard, publishPanel, css] = await Promise.all([
     source("../app/plot-mapper.tsx"),
     source("../app/super-admin-dashboard.tsx"),
+    source("../app/project-publish-panel.tsx"),
     source("../app/super-mapper.css"),
   ]);
 
   assert.match(mapper, /Live customer site Publish Update ke bina change nahi hoti/);
   assert.match(mapper, /Boundary edit ke liye Plot Mapper page use karein/);
   assert.match(dashboard, /tab !== "assets" && tab !== "mapping-controls"/);
+  assert.match(dashboard, /key={`mapping-controls-publish:\$\{projectId\}`}/);
+  assert.match(
+    dashboard,
+    /workspaceMode="controls"[\s\S]*?<ProjectPublishPanel[\s\S]*?projectId={projectId}/,
+  );
+  assert.match(mapper, /verifyPlotPersistence\(saved\)[\s\S]*?announceMapperDataUpdated\(\)/);
+  assert.match(publishPanel, /"rekixo:mapper-data-updated"/);
+  assert.match(publishPanel, /"Publish Update"/);
   assert.match(css, /REKIXO_MAPPING_CONTROLS_WORKSPACE_V2/);
   assert.doesNotMatch(css, /mapping-controls-safety-note/);
 });
