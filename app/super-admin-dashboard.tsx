@@ -292,12 +292,19 @@ export default function SuperAdminDashboard({
                       <ProjectPublishPanel projectId={projectId} notify={notify} />
                     </>
                   ) : tab === "mapping-controls" ? (
-                    <PlotMapper
-                      key={`mapping-controls:${projectId}`}
-                      projectId={projectId}
-                      notify={notify}
-                      workspaceMode="controls"
-                    />
+                    <>
+                      <PlotMapper
+                        key={`mapping-controls:${projectId}`}
+                        projectId={projectId}
+                        notify={notify}
+                        workspaceMode="controls"
+                      />
+                      <ProjectPublishPanel
+                        key={`mapping-controls-publish:${projectId}`}
+                        projectId={projectId}
+                        notify={notify}
+                      />
+                    </>
                   ) : tab === "geo" ? (
                     <>
                       <GeoLabClone

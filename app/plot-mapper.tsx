@@ -4008,7 +4008,7 @@ export default function PlotMapper({
             <small className="mapper-help">Legacy Dimensions / area / facing optional metadata hain. Front/Depth semantic metadata alag save hota hai. Shape independent save hoti hai; plot-sheet re-import geometry aur live Booked/Sold status preserve karta hai.</small>
             {controlsWorkspace && (
               <small className="mapper-help mapping-controls-inline-disclaimer">
-                Update selected project ki editable mapping me save hota hai. Live customer site Publish Update ke bina change nahi hoti.
+                Update selected project ki editable mapping me save hota hai. Live customer site Publish Update ke bina change nahi hoti — neeche Review & Publish se latest change live karein.
               </small>
             )}
             {currentCenter && <small className="mapper-help">Boundary center {currentCenter[0].toFixed(4)}, {currentCenter[1].toFixed(4)} · normalized geometry यही SVG hit-area, 2D और 3D use करेंगे.</small>}
