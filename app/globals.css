@@ -3108,3 +3108,82 @@ body {
     order:-1;
   }
 }
+
+
+/* REKIXO_CLIENT_PLOT_DESKTOP_WIDE_V1
+   Client Admin has no Super Admin plot editor beside the inventory list.
+   On desktop, let Plot Management use the available content width instead of
+   reserving a 390px + editor split. Super Admin keeps the existing two-column
+   editor workflow. Mobile/tablet rules below 900px remain unchanged. */
+@media (min-width: 901px) {
+  .admin-shell.role-client-admin .plots-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-shell.role-client-admin .plot-list {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-shell.role-client-admin .plot-list-head {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.75fr) minmax(240px, 1.25fr);
+    align-items: end;
+    gap: 16px 24px;
+    padding: 20px 22px 16px;
+  }
+
+  .admin-shell.role-client-admin .plot-list-head .client-pricing-search {
+    width: 100%;
+    margin: 0;
+  }
+
+  .admin-shell.role-client-admin .plot-rows {
+    padding: 8px 14px 14px;
+    scrollbar-gutter: stable;
+  }
+
+  .admin-shell.role-client-admin .plot-row {
+    min-height: 64px;
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 170px);
+    gap: 16px;
+    padding: 5px 12px;
+  }
+
+  .admin-shell.role-client-admin .plot-row > button {
+    grid-template-columns: minmax(80px, 110px) minmax(140px, 1fr);
+    gap: 18px;
+  }
+
+  .admin-shell.role-client-admin .plot-row > button b {
+    font-size: 15px;
+  }
+
+  .admin-shell.role-client-admin .plot-row span {
+    font-size: 13px;
+  }
+
+  .admin-shell.role-client-admin .status-select {
+    height: 40px;
+    padding: 0 12px;
+  }
+
+  .admin-shell.role-client-admin .client-pricing-editor {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .admin-shell.role-client-admin .plot-list-head {
+    grid-template-columns: minmax(240px, 0.7fr) minmax(360px, 1.3fr);
+  }
+
+  .admin-shell.role-client-admin .plot-row {
+    grid-template-columns: minmax(0, 1fr) 180px;
+  }
+
+  .admin-shell.role-client-admin .plot-row > button {
+    grid-template-columns: 120px minmax(180px, 1fr);
+    gap: 24px;
+  }
+}

@@ -1,13 +1,30 @@
 import { env } from "cloudflare:workers";
 import { getDb } from "@/modules/db";
 import { gallery, plots, settings } from "@/modules/db/schema";
-import { and, desc, eq, like } from "drizzle-orm";
+import { and, desc, eq, like, sql } from "drizzle-orm";
 import { sameOrigin, validAdminSession } from "@/modules/auth";
 import { isClientEditableSettingKey, pickClientVisibleSettings, validClientPlotStatus } from "@/modules/auth";
 import { writeAudit } from "@/modules/audit";
 import { validateProjectContactPatch } from "@/modules/projects";
 
 const denied = () => Response.json({ error: "Admin login required" }, { status: 401 });
+
+/* REKIXO_PLOT_NATURAL_ORDER_V1
+   Plot IDs are stored as text because future projects may use alphanumeric IDs.
+   Pure numeric IDs sort by numeric value; mixed/alphanumeric IDs remain deterministic
+   and case-insensitive. This ordering is stable across pagination and search. */
+const plotNaturalOrder = sql`
+  CASE
+    WHEN ${plots.id} GLOB '[0-9]*' AND ${plots.id} NOT GLOB '*[^0-9]*' THEN 0
+    ELSE 1
+  END,
+  CASE
+    WHEN ${plots.id} GLOB '[0-9]*' AND ${plots.id} NOT GLOB '*[^0-9]*' THEN CAST(${plots.id} AS INTEGER)
+    ELSE NULL
+  END,
+  ${plots.id} COLLATE NOCASE,
+  ${plots.id}
+`;
 
 export async function GET(request: Request) {
   const session = await validAdminSession();
@@ -34,7 +51,7 @@ export async function GET(request: Request) {
         ? and(eq(plots.projectId, projectId), like(plots.id, pattern))
         : eq(plots.projectId, projectId);
       const [pageRows,totalRow,statusRows] = await Promise.all([
-        db.select().from(plots).where(where).limit(limit).offset(offset),
+        db.select().from(plots).where(where).orderBy(plotNaturalOrder).limit(limit).offset(offset),
         q
           ? env.DB.prepare("SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND id LIKE ?").bind(projectId, pattern).first<{ total: number }>()
           : env.DB.prepare("SELECT COUNT(*) AS total FROM plots WHERE project_id=?").bind(projectId).first<{ total: number }>(),
