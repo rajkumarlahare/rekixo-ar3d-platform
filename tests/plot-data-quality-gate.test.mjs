@@ -49,13 +49,18 @@ test("Super Admin warns before incomplete rich-detail CSV is imported", () => {
   assert.match(mapper, /RICH DETAILS READY/);
 });
 
-test("canonical plot CSV template carries complete plot-detail columns", () => {
+test("canonical plot CSV template carries plot details while facing stays mapper-owned", () => {
   const mapper = read("app/plot-mapper.tsx");
+  const start = mapper.indexOf("function downloadPlotSheetTemplate");
+  const end = mapper.indexOf("function downloadMeasurementTemplate", start);
+  const template = mapper.slice(start, end);
   assert.match(
-    mapper,
-    /Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Direction/,
+    template,
+    /Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Edge/,
   );
-  assert.match(mapper, /Side Dimensions,Notes/);
+  assert.match(template, /Side Dimensions,Notes/);
+  assert.doesNotMatch(template, /Dimension Unit,Front Direction/);
+  assert.match(template, /facing is selected in mapper, not AI CSV/);
 });
 
 
