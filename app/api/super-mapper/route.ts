@@ -13,6 +13,7 @@ import { parseSideMappingSheetText } from "@/modules/mapper";
 import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
+  type PlotSideRole,
 } from "@/modules/plots";
 import {
   freezeCurrentPublishedAssets,
@@ -400,6 +401,7 @@ type EdgeBinding = {
   back: number;
   depthA: number;
   depthB: number | null;
+  roadFacingRoles?: PlotSideRole[];
 };
 
 async function syncMeasurementBindings(
@@ -408,18 +410,29 @@ async function syncMeasurementBindings(
   now: string,
 ) {
   if (!bindings.length) return;
-  const statements = bindings.flatMap((binding) =>
-    ([
+  const statements = bindings.flatMap((binding) => {
+    const roadFacing = new Set<PlotSideRole>(
+      binding.roadFacingRoles?.length ? binding.roadFacingRoles : ["front"],
+    );
+    return ([
       ["front", binding.front],
       ["back", binding.back],
       ["depthA", binding.depthA],
       ["depthB", binding.depthB],
     ] as const).map(([role, edge]) =>
       env.DB.prepare(
-        "UPDATE plot_edge_measurements SET edge_index=?,point_count=?,updated_at=? WHERE project_id=? AND plot_id=? AND role=?",
-      ).bind(edge, binding.pointCount, now, projectId, binding.id, role),
-    ),
-  );
+        "UPDATE plot_edge_measurements SET edge_index=?,point_count=?,road_frontage=?,updated_at=? WHERE project_id=? AND plot_id=? AND role=?",
+      ).bind(
+        edge,
+        binding.pointCount,
+        roadFacing.has(role) ? 1 : 0,
+        now,
+        projectId,
+        binding.id,
+        role,
+      ),
+    );
+  });
   for (let index = 0; index < statements.length; index += 80) {
     await env.DB.batch(statements.slice(index, index + 80));
   }
@@ -571,6 +584,7 @@ async function savePlots(
         back: Number(back),
         depthA: Number(depthA),
         depthB: layout === "three" ? null : Number(depthB),
+        roadFacingRoles: semantics.roadFacingRoles || ["front"],
       });
     } catch {
       // Binding metadata must never block the canonical plot save.
