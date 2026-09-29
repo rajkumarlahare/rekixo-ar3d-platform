@@ -71,6 +71,21 @@ test("compass maps a cardinal click to the nearest non-Front logical side", () =
   assert.match(mapper, /\[candidate\.role\]: direction/);
 });
 
+
+test("Update plot persists compass road roles and direction overrides instead of stripping them", () => {
+  const mapper = read("app/plot-mapper.tsx");
+  const confirmStart = mapper.indexOf("async function confirmPlot()");
+  const confirmEnd = mapper.indexOf("async function clearAllSelections", confirmStart);
+  const confirm = mapper.slice(confirmStart, confirmEnd > confirmStart ? confirmEnd : undefined);
+  assert.match(confirm, /const facingMetadata = normalizedFacingMetadata\(\s*roleEdges,\s*resolvedSideLayout,\s*\)/);
+  assert.match(
+    confirm,
+    /serializePlotSideSemantics\(\s*points\.length,\s*roleEdges,\s*resolvedSideLayout,\s*facingMetadata\.roadFacingRoles,\s*facingMetadata\.facingDirectionOverrides,\s*\)/,
+  );
+  assert.match(mapper, /function normalizedFacingMetadata/);
+  assert.match(mapper, /cleanRoadFacing\.unshift\("front"\)/);
+});
+
 test("public facing honors operator compass override but preserves geometric fallback", () => {
   const facing = read("app/plot-facing.ts");
   assert.match(facing, /semantics\.facingDirectionOverrides\?\.\[role\]/);

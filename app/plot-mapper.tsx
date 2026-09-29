@@ -2014,6 +2014,37 @@ export default function PlotMapper({
     );
   }
 
+  function normalizedFacingMetadata(
+    roles: PlotSideRoleEdges,
+    layout: PlotSideLayout,
+    roadFacingRoles: PlotSideRole[] = currentRoadFacingRoles(),
+    facingDirectionOverrides = currentFacingDirectionOverrides(),
+  ) {
+    const cleanRoadFacing = [...new Set(roadFacingRoles)].filter(
+      (role) =>
+        (layout === "four" || role !== "depthB") &&
+        roles[role].length > 0,
+    );
+    if (
+      settings.plotFacingEnabled === "1" &&
+      roles.front.length > 0 &&
+      !cleanRoadFacing.includes("front")
+    ) {
+      cleanRoadFacing.unshift("front");
+    }
+    const cleanOverrides = { ...facingDirectionOverrides };
+    delete cleanOverrides.front;
+    (["front", "back", "depthA", "depthB"] as PlotSideRole[]).forEach((role) => {
+      if (!cleanRoadFacing.includes(role) || !roles[role].length) {
+        delete cleanOverrides[role];
+      }
+    });
+    return {
+      roadFacingRoles: cleanRoadFacing,
+      facingDirectionOverrides: cleanOverrides,
+    };
+  }
+
   function commitSemanticRoles(
     roles: PlotSideRoleEdges,
     layout: PlotSideLayout = sideLayout,
@@ -2027,32 +2058,19 @@ export default function PlotMapper({
       depthA: [...roles.depthA],
       depthB: resolvedLayout === "four" ? [...roles.depthB] : [],
     };
-    const cleanRoadFacing = [...new Set(roadFacingRoles)].filter(
-      (role) =>
-        (resolvedLayout === "four" || role !== "depthB") &&
-        nextRoles[role].length > 0,
+    const facingMetadata = normalizedFacingMetadata(
+      nextRoles,
+      resolvedLayout,
+      roadFacingRoles,
+      facingDirectionOverrides,
     );
-    if (
-      settings.plotFacingEnabled === "1" &&
-      nextRoles.front.length > 0 &&
-      !cleanRoadFacing.includes("front")
-    ) {
-      cleanRoadFacing.unshift("front");
-    }
-    const cleanOverrides = { ...facingDirectionOverrides };
-    delete cleanOverrides.front;
-    (["front", "back", "depthA", "depthB"] as PlotSideRole[]).forEach((role) => {
-      if (!cleanRoadFacing.includes(role) || !nextRoles[role].length) {
-        delete cleanOverrides[role];
-      }
-    });
     const serialized =
       serializePlotSideSemantics(
         points.length,
         nextRoles,
         resolvedLayout,
-        cleanRoadFacing,
-        cleanOverrides,
+        facingMetadata.roadFacingRoles,
+        facingMetadata.facingDirectionOverrides,
       ) || "";
     setEdgeSemanticsDraft(serialized);
     syncPrimarySemanticEdges(nextRoles);
@@ -3714,10 +3732,19 @@ export default function PlotMapper({
         "Plot corner count badla hai — logical Front / Back / Depth sides dobara select karein",
       );
 
+    // Preserve project-facing metadata together with logical side geometry.
+    // Previously this save path serialized only roles/layout, which silently
+    // dropped the compass-selected second facing during "Update plot".
+    const facingMetadata = normalizedFacingMetadata(
+      roleEdges,
+      resolvedSideLayout,
+    );
     const edgeSemantics = serializePlotSideSemantics(
       points.length,
       roleEdges,
       resolvedSideLayout,
+      facingMetadata.roadFacingRoles,
+      facingMetadata.facingDirectionOverrides,
     );
 
     const unchangedInventoryArea =
