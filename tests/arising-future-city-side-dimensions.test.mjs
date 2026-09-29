@@ -116,11 +116,28 @@ test("Arising repair is exact-tenant and fail-closed", () => {
   assert.match(sql,/name='Arising Future City'/);
   assert.match(sql,/slug='arising-future-city-74f508'/);
   assert.match(sql,/p\.publish_version=9/);
-  assert.match(sql,/total=128/);
-  assert.match(sql,/regular=110/);
-  assert.match(sql,/irregular=18/);
-  assert.match(sql,/draft_edges=440/);
-  assert.match(sql,/published_edges=440/);
+  assert.match(sql,/total=target_count\*128/);
+  assert.match(sql,/regular=target_count\*110/);
+  assert.match(sql,/irregular=target_count\*18/);
+  assert.match(sql,/draft_edges=target_count\*440/);
+  assert.match(sql,/published_edges=target_count\*440/);
+  assert.match(sql,/valid=present/);
+});
+
+test("migration is a safe no-op when the Arising tenant is absent", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    createSchema(db);
+    db.prepare("INSERT INTO projects VALUES(?,?,?,?,?,?)").run(
+      "other","Other Project","other","active","published",1,
+    );
+    db.prepare("INSERT INTO project_public_snapshots VALUES(?,?)").run("other",1);
+    db.exec(sql);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM plot_edge_measurements").get().n,0);
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM published_plot_edge_measurements").get().n,0);
+  } finally {
+    db.close();
+  }
 });
 
 test("migration fixes regular customer plot labels without touching another project or irregular plots", () => {
