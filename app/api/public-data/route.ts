@@ -444,13 +444,32 @@ export async function GET(request: Request) {
                     Number.isFinite(Number(point[1])),
                 )
               ) {
+                const points = polygon.map(
+                  (point) => [Number(point[0]), Number(point[1])] as [number, number],
+                );
                 facing = plotFacingText(
-                  polygon.map(
-                    (point) => [Number(point[0]), Number(point[1])] as [number, number],
-                  ),
+                  points,
                   publicPlot.edgeSemantics,
                   plotNorthDirection,
                 );
+                // Legacy projects may have only front_edge_index and no v1
+                // edge_semantics. Opt-in must still work without a migration.
+                if (
+                  !facing &&
+                  Number.isInteger(Number(publicPlot.frontEdgeIndex)) &&
+                  Number(publicPlot.frontEdgeIndex) >= 0 &&
+                  Number(publicPlot.frontEdgeIndex) < points.length
+                ) {
+                  facing = plotFacingText(
+                    points,
+                    JSON.stringify({
+                      version: 1,
+                      pointCount: points.length,
+                      roles: { front: [Number(publicPlot.frontEdgeIndex)] },
+                    }),
+                    plotNorthDirection,
+                  );
+                }
               }
             } catch {
               facing = "";
