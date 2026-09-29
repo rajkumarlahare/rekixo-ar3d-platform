@@ -58,9 +58,15 @@ import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
   setPlotSideEdge,
+  type PlotFacingCardinalDirection,
   type PlotSideLayout,
   type PlotSideRole,
 } from "./plot-side-semantics";
+import {
+  cardinalDirectionDistance,
+  plotFacingResults,
+  plotSideDirectionResults,
+} from "./plot-facing";
 
 function FourCornerIcon() {
   return (
@@ -1968,19 +1974,51 @@ export default function PlotMapper({
       points.length >= 3 ? points.length : undefined,
     );
     const explicit = parsed?.roadFacingRoles || [];
-    if (explicit.length) return [...explicit];
-    // Feature-on projects get the zero-work default requested for normal plots:
-    // Front is the road-facing side unless the operator explicitly marks roles.
-    if (settings.plotFacingEnabled === "1" && currentSemanticRoles().front.length) {
-      return ["front"];
+    const frontAssigned = currentSemanticRoles().front.length > 0;
+    // Facing-enabled projects always keep Front as the canonical primary
+    // facing. Older explicit selections are preserved only as additional sides.
+    if (settings.plotFacingEnabled === "1" && frontAssigned) {
+      return [...new Set<PlotSideRole>(["front", ...explicit])];
     }
-    return [];
+    return [...explicit];
+  }
+
+  function currentFacingDirectionOverrides() {
+    const parsed = parsePlotSideSemantics(
+      edgeSemanticsDraft,
+      points.length >= 3 ? points.length : undefined,
+    );
+    return { ...(parsed?.facingDirectionOverrides || {}) };
+  }
+
+  function serializedCurrentFacingSemantics(
+    roadFacingRoles = currentRoadFacingRoles(),
+    overrides = currentFacingDirectionOverrides(),
+  ) {
+    return serializePlotSideSemantics(
+      points.length,
+      currentSemanticRoles(),
+      effectiveSideLayout(),
+      roadFacingRoles,
+      overrides,
+    ) || "";
+  }
+
+  function currentCompassFacingResults() {
+    if (settings.plotFacingEnabled !== "1" || points.length < 3) return [];
+    const semantics = serializedCurrentFacingSemantics();
+    return plotFacingResults(
+      points,
+      semantics,
+      settings.plotNorthDirection || "top",
+    );
   }
 
   function commitSemanticRoles(
     roles: PlotSideRoleEdges,
     layout: PlotSideLayout = sideLayout,
     roadFacingRoles: PlotSideRole[] = currentRoadFacingRoles(),
+    facingDirectionOverrides = currentFacingDirectionOverrides(),
   ) {
     const resolvedLayout = effectiveSideLayout(layout);
     const nextRoles: PlotSideRoleEdges = {
@@ -1994,48 +2032,136 @@ export default function PlotMapper({
         (resolvedLayout === "four" || role !== "depthB") &&
         nextRoles[role].length > 0,
     );
+    if (
+      settings.plotFacingEnabled === "1" &&
+      nextRoles.front.length > 0 &&
+      !cleanRoadFacing.includes("front")
+    ) {
+      cleanRoadFacing.unshift("front");
+    }
+    const cleanOverrides = { ...facingDirectionOverrides };
+    delete cleanOverrides.front;
+    (["front", "back", "depthA", "depthB"] as PlotSideRole[]).forEach((role) => {
+      if (!cleanRoadFacing.includes(role) || !nextRoles[role].length) {
+        delete cleanOverrides[role];
+      }
+    });
     const serialized =
       serializePlotSideSemantics(
         points.length,
         nextRoles,
         resolvedLayout,
         cleanRoadFacing,
+        cleanOverrides,
       ) || "";
     setEdgeSemanticsDraft(serialized);
     syncPrimarySemanticEdges(nextRoles);
   }
 
-  function toggleRoadFacingRole(role: PlotSideRole) {
-    if (settings.plotFacingEnabled !== "1") {
-      notify("Project Profile me pehle Plot Facing ON karein");
+  function toggleCompassFacing(direction: PlotFacingCardinalDirection) {
+    if (settings.plotFacingEnabled !== "1") return;
+    if (points.length < 3) {
+      notify("Pehle plot boundary select karein");
       return;
     }
     const roles = currentSemanticRoles();
-    if (!roles[role].length) {
-      const label =
-        role === "front" ? "Front" :
-        role === "back" ? "Back" :
-        role === "depthA" ? (effectiveSideLayout() === "three" ? "Depth" : "Depth A") :
-        "Depth B";
-      notify(`${label} side pehle assign karein, phir Road / Facing mark karein`);
+    if (!roles.front.length) {
+      notify("Pehle Front side assign karein — primary facing Front se auto aati hai");
       return;
     }
-    const current = currentRoadFacingRoles();
-    const active = current.includes(role);
-    const next = active
-      ? current.filter((item) => item !== role)
-      : [...current, role];
-    if (!next.length) {
-      notify("Kam se kam ek Road / Facing side rakhein; normal plot ke liye Front default hai");
+
+    const roadFacingRoles = currentRoadFacingRoles();
+    const overrides = currentFacingDirectionOverrides();
+    const semantics = serializePlotSideSemantics(
+      points.length,
+      roles,
+      effectiveSideLayout(),
+      roadFacingRoles,
+      overrides,
+    );
+    if (!semantics) return;
+
+    const facingResults = plotFacingResults(
+      points,
+      semantics,
+      settings.plotNorthDirection || "top",
+    );
+    const frontFacing = facingResults.find((item) => item.role === "front");
+    if (frontFacing?.direction === direction) {
+      notify(`${frontFacing.arrow} ${frontFacing.label} Front se automatic facing hai`);
       return;
     }
-    commitSemanticRoles(roles, sideLayout, next);
+
+    const activeExtra = facingResults.find(
+      (item) => item.role !== "front" && item.direction === direction,
+    );
+    if (activeExtra) {
+      const nextRoadFacing = roadFacingRoles.filter(
+        (role) => role !== activeExtra.role,
+      );
+      const nextOverrides = { ...overrides };
+      delete nextOverrides[activeExtra.role];
+      commitSemanticRoles(
+        roles,
+        sideLayout,
+        nextRoadFacing,
+        nextOverrides,
+      );
+      notify(
+        `Plot ${plotId}: ${activeExtra.arrow} ${activeExtra.label} extra facing removed · Update ${plotId} to save`,
+      );
+      return;
+    }
+
+    const sideDirections = plotSideDirectionResults(
+      points,
+      semantics,
+      settings.plotNorthDirection || "top",
+    ).filter((item) => item.role !== "front");
+    const inactiveCandidates = sideDirections.filter(
+      (item) => !roadFacingRoles.includes(item.role),
+    );
+    const candidates = inactiveCandidates.length
+      ? inactiveCandidates
+      : sideDirections;
+    const candidate = [...candidates].sort(
+      (a, b) =>
+        cardinalDirectionDistance(a.direction, direction) -
+        cardinalDirectionDistance(b.direction, direction),
+    )[0];
+
+    if (
+      !candidate ||
+      cardinalDirectionDistance(candidate.direction, direction) > 1
+    ) {
+      notify(
+        `Plot ${plotId}: ${direction.toUpperCase()} ke paas mapped logical side nahi mili`,
+      );
+      return;
+    }
+
+    const nextRoadFacing = [
+      ...new Set<PlotSideRole>(["front", ...roadFacingRoles, candidate.role]),
+    ];
+    const nextOverrides = {
+      ...overrides,
+      [candidate.role]: direction,
+    };
+    commitSemanticRoles(
+      roles,
+      sideLayout,
+      nextRoadFacing,
+      nextOverrides,
+    );
     const label =
-      role === "front" ? "Front" :
-      role === "back" ? "Back" :
-      role === "depthA" ? (effectiveSideLayout() === "three" ? "Depth" : "Depth A") :
-      "Depth B";
-    notify(`Plot ${plotId}: ${label} Road / Facing ${active ? "removed" : "added"}`);
+      direction === "north"
+        ? "↑ North"
+        : direction === "east"
+          ? "→ East"
+          : direction === "south"
+            ? "↓ South"
+            : "← West";
+    notify(`Plot ${plotId}: ${label} second facing added · Update ${plotId} to save`);
   }
 
   function changeSideLayout(next: PlotSideLayout) {
@@ -4589,6 +4715,66 @@ export default function PlotMapper({
             ><Trash2 />Clear all selections</button>
           </div>
 
+          {settings.plotFacingEnabled === "1" &&
+            !completedProject &&
+            manualPhase === "details" &&
+            points.length >= 3 && (() => {
+              const facingResults = currentCompassFacingResults();
+              const primaryDirection = facingResults.find(
+                (item) => item.role === "front",
+              )?.direction;
+              const activeDirections = new Set(
+                facingResults.map((item) => item.direction),
+              );
+              const compassButtons: Array<{
+                direction: PlotFacingCardinalDirection;
+                label: string;
+                arrow: string;
+                className: string;
+              }> = [
+                { direction: "north", label: "North", arrow: "↑", className: "north" },
+                { direction: "west", label: "West", arrow: "←", className: "west" },
+                { direction: "east", label: "East", arrow: "→", className: "east" },
+                { direction: "south", label: "South", arrow: "↓", className: "south" },
+              ];
+              return (
+                <div
+                  className="mapper-facing-compass-layer"
+                  aria-label={`Plot ${plotId} facing compass`}
+                >
+                  <div className="mapper-facing-compass">
+                    {compassButtons.map((item) => {
+                      const active = activeDirections.has(item.direction);
+                      const primary = primaryDirection === item.direction;
+                      return (
+                        <button
+                          key={item.direction}
+                          type="button"
+                          className={`${item.className}${active ? " active" : ""}${primary ? " primary-facing" : ""}`}
+                          onClick={() => toggleCompassFacing(item.direction)}
+                          aria-pressed={active}
+                          title={
+                            primary
+                              ? `${item.label} · Front auto facing`
+                              : active
+                                ? `${item.label} · click to remove extra facing`
+                                : `Add ${item.label} as second facing`
+                          }
+                        >
+                          <strong>{item.arrow}</strong>
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                    <div className="mapper-facing-compass-center" aria-hidden="true">
+                      <b>{plotId}</b>
+                      <small>{facingResults.length > 1 ? `${facingResults.length} faces` : "Front auto"}</small>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
           {clearAllConfirmOpen && (
             <div
               className="mapper-clear-confirm-backdrop"
@@ -5165,43 +5351,9 @@ export default function PlotMapper({
                         );
                       })}
                     </div>
-                    {settings.plotFacingEnabled === "1" && (
-                      <div className="mapper-actions compact plot-facing-role-toggle">
-                        <span>
-                          <b>Road / Facing</b>
-                          {" · "}Front auto default
-                          {" · "}North {String(settings.plotNorthDirection || "top").toUpperCase()}
-                        </span>
-                        {([
-                          ["front", "Front"],
-                          ["back", "Back"],
-                          ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A"],
-                          ...(effectiveSideLayout() === "four"
-                            ? [["depthB", "Depth B"] as const]
-                            : []),
-                        ] as const).map(([role, label]) => {
-                          const assigned = currentSemanticRoles()[role].length > 0;
-                          const active = currentRoadFacingRoles().includes(role);
-                          return (
-                            <button
-                              key={`road-facing-${role}`}
-                              type="button"
-                              className={active ? "primary" : ""}
-                              disabled={!assigned}
-                              onClick={() => toggleRoadFacingRole(role)}
-                            >
-                              {active ? "✓ " : ""}{label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                     <small className="plot-side-assigner-help">
                       Role button → numbered start corner → end corner. Curved segments beech me
                       automatically same side group banenge.
-                      {settings.plotFacingEnabled === "1"
-                        ? " Road-touching corner plot me doosri logical side ko Road / Facing mark karein."
-                        : ""}
                     </small>
                   </div>
                 )}

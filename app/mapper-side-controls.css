@@ -161,3 +161,154 @@
     grid-template-columns:repeat(4,minmax(72px,1fr))!important;
   }
 }
+
+
+/* REKIXO_PLOT_FACING_COMPASS_V1
+   Project-facing is intentionally separate from the semantic side dock.
+   Front remains automatic; this compact overlay is only for an additional
+   corner-facing direction and stays inside the map below the sticky toolbar. */
+.mapper-v4-canvas .mapper-facing-compass-layer{
+  position:sticky;
+  top:112px;
+  z-index:7;
+  height:0;
+  display:flex;
+  justify-content:flex-end;
+  align-items:flex-start;
+  padding:8px 10px 0 0;
+  pointer-events:none;
+}
+.mapper-v4-canvas .mapper-facing-compass{
+  position:relative;
+  width:126px;
+  height:126px;
+  flex:0 0 126px;
+  pointer-events:auto;
+  border:1px solid #3a516f;
+  border-radius:22px;
+  background:linear-gradient(145deg,#071525f2,#0b1c30ec);
+  box-shadow:0 14px 34px #0009,0 0 0 1px #ffffff08 inset;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+.mapper-v4-canvas .mapper-facing-compass button{
+  position:absolute;
+  width:42px;
+  min-width:42px;
+  height:42px;
+  min-height:42px;
+  margin:0;
+  padding:2px 3px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:0;
+  border:1px solid #304866;
+  border-radius:11px;
+  background:#0d2035;
+  color:#9db0ca;
+  box-shadow:none;
+  font-size:9px;
+  font-weight:900;
+  line-height:1;
+  touch-action:manipulation;
+}
+.mapper-v4-canvas .mapper-facing-compass button strong{
+  font-size:17px;
+  line-height:1;
+  color:#d8e4f5;
+}
+.mapper-v4-canvas .mapper-facing-compass button span{
+  min-width:0;
+  color:inherit;
+  font-size:8px;
+  line-height:1.1;
+}
+.mapper-v4-canvas .mapper-facing-compass button.north{top:5px;left:42px}
+.mapper-v4-canvas .mapper-facing-compass button.west{top:42px;left:5px}
+.mapper-v4-canvas .mapper-facing-compass button.east{top:42px;right:5px}
+.mapper-v4-canvas .mapper-facing-compass button.south{bottom:5px;left:42px}
+.mapper-v4-canvas .mapper-facing-compass button.active{
+  border-color:#2f9d70!important;
+  background:#103d30!important;
+  color:#70e6b1!important;
+}
+.mapper-v4-canvas .mapper-facing-compass button.active strong{
+  color:#7cf0ba;
+}
+.mapper-v4-canvas .mapper-facing-compass button.primary-facing{
+  border-color:#c59a34!important;
+  background:#3a2b0f!important;
+  color:#ffd768!important;
+  cursor:default;
+}
+.mapper-v4-canvas .mapper-facing-compass button.primary-facing strong{
+  color:#ffe083;
+}
+.mapper-v4-canvas .mapper-facing-compass-center{
+  position:absolute;
+  left:43px;
+  top:43px;
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  border:1px solid #314762;
+  border-radius:50%;
+  background:#071321;
+  color:#dce7f6;
+  pointer-events:none;
+}
+.mapper-v4-canvas .mapper-facing-compass-center b{
+  max-width:34px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10px;
+  line-height:1.05;
+}
+.mapper-v4-canvas .mapper-facing-compass-center small{
+  margin-top:2px;
+  color:#7f93af;
+  font-size:6.5px;
+  font-weight:850;
+  line-height:1;
+  white-space:nowrap;
+}
+.mapper-v4-canvas:fullscreen .mapper-facing-compass-layer{
+  top:112px;
+}
+@media(max-width:620px){
+  .mapper-v4-canvas .mapper-facing-compass-layer{
+    top:116px;
+    padding:7px 7px 0 0;
+  }
+  .mapper-v4-canvas .mapper-facing-compass{
+    width:106px;
+    height:106px;
+    flex-basis:106px;
+    border-radius:18px;
+  }
+  .mapper-v4-canvas .mapper-facing-compass button{
+    width:36px;
+    min-width:36px;
+    height:36px;
+    min-height:36px;
+    border-radius:9px;
+  }
+  .mapper-v4-canvas .mapper-facing-compass button strong{font-size:15px}
+  .mapper-v4-canvas .mapper-facing-compass button span{font-size:7px}
+  .mapper-v4-canvas .mapper-facing-compass button.north{top:4px;left:35px}
+  .mapper-v4-canvas .mapper-facing-compass button.west{top:35px;left:4px}
+  .mapper-v4-canvas .mapper-facing-compass button.east{top:35px;right:4px}
+  .mapper-v4-canvas .mapper-facing-compass button.south{bottom:4px;left:35px}
+  .mapper-v4-canvas .mapper-facing-compass-center{
+    left:36px;
+    top:36px;
+    width:34px;
+    height:34px;
+  }
+  .mapper-v4-canvas .mapper-facing-compass-center b{font-size:9px}
+  .mapper-v4-canvas .mapper-facing-compass-center small{font-size:6px}
+}

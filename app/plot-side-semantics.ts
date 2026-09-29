@@ -1,5 +1,6 @@
 export type PlotSideRole = "front" | "back" | "depthA" | "depthB";
 export type PlotSideLayout = "three" | "four";
+export type PlotFacingCardinalDirection = "north" | "east" | "south" | "west";
 
 export type PlotSideSemanticsV1 = {
   version: 1;
@@ -11,9 +12,22 @@ export type PlotSideSemanticsV1 = {
   // Logical sides that touch a road. Stored by role (not raw edge) so facing
   // survives irregular multi-segment sides and future geometry refinements.
   roadFacingRoles?: PlotSideRole[];
+  // Optional compass choice for a road-facing role. This is intentionally an
+  // override, not the primary source: Front remains automatic from geometry,
+  // while corner plots can pin an additional side to N/E/S/W exactly as the
+  // operator selected it. Existing projects remain valid without this field.
+  facingDirectionOverrides?: Partial<
+    Record<PlotSideRole, PlotFacingCardinalDirection>
+  >;
 };
 
 const ROLES: PlotSideRole[] = ["front", "back", "depthA", "depthB"];
+const CARDINAL_DIRECTIONS: PlotFacingCardinalDirection[] = [
+  "north",
+  "east",
+  "south",
+  "west",
+];
 
 function cleanEdges(value: unknown, pointCount: number) {
   if (!Array.isArray(value)) return [];
@@ -45,6 +59,7 @@ export function parsePlotSideSemantics(
       layout?: unknown;
       roles?: Record<string, unknown>;
       roadFacingRoles?: unknown;
+      facingDirectionOverrides?: Record<string, unknown>;
     };
     if (Number(source.version) !== 1) return null;
     const storedCount = Number(source.pointCount);
@@ -66,6 +81,19 @@ export function parsePlotSideSemantics(
           .filter((role): role is PlotSideRole => ROLES.includes(role))
           .filter((role) => !(layout === "three" && role === "depthB")))]
       : [];
+    const facingDirectionOverrides: Partial<
+      Record<PlotSideRole, PlotFacingCardinalDirection>
+    > = {};
+    for (const role of ROLES) {
+      if (layout === "three" && role === "depthB") continue;
+      if (!roles[role]?.length) continue;
+      const direction = String(
+        source.facingDirectionOverrides?.[role] || "",
+      ).trim().toLowerCase() as PlotFacingCardinalDirection;
+      if (CARDINAL_DIRECTIONS.includes(direction)) {
+        facingDirectionOverrides[role] = direction;
+      }
+    }
     return Object.keys(roles).length
       ? {
           version: 1,
@@ -73,6 +101,9 @@ export function parsePlotSideSemantics(
           ...(layout ? { layout } : {}),
           roles,
           ...(roadFacingRoles.length ? { roadFacingRoles } : {}),
+          ...(Object.keys(facingDirectionOverrides).length
+            ? { facingDirectionOverrides }
+            : {}),
         }
       : null;
   } catch {
@@ -85,6 +116,9 @@ export function serializePlotSideSemantics(
   roles: Partial<Record<PlotSideRole, number[]>>,
   layout?: PlotSideLayout,
   roadFacingRoles: PlotSideRole[] = [],
+  facingDirectionOverrides: Partial<
+    Record<PlotSideRole, PlotFacingCardinalDirection>
+  > = {},
 ) {
   if (!Number.isInteger(pointCount) || pointCount < 3 || pointCount > 80)
     return null;
@@ -96,9 +130,20 @@ export function serializePlotSideSemantics(
   const cleanRoadFacingRoles = [...new Set(
     roadFacingRoles.filter(
       (role): role is PlotSideRole =>
-        ROLES.includes(role) && !(layout === "three" && role === "depthB"),
+        ROLES.includes(role) &&
+        !(layout === "three" && role === "depthB") &&
+        Boolean(cleaned[role]?.length),
     ),
   )];
+  const cleanFacingDirectionOverrides: Partial<
+    Record<PlotSideRole, PlotFacingCardinalDirection>
+  > = {};
+  for (const role of cleanRoadFacingRoles) {
+    const direction = facingDirectionOverrides[role];
+    if (direction && CARDINAL_DIRECTIONS.includes(direction)) {
+      cleanFacingDirectionOverrides[role] = direction;
+    }
+  }
   return Object.keys(cleaned).length
     ? JSON.stringify({
         version: 1,
@@ -107,6 +152,9 @@ export function serializePlotSideSemantics(
         roles: cleaned,
         ...(cleanRoadFacingRoles.length
           ? { roadFacingRoles: cleanRoadFacingRoles }
+          : {}),
+        ...(Object.keys(cleanFacingDirectionOverrides).length
+          ? { facingDirectionOverrides: cleanFacingDirectionOverrides }
           : {}),
       })
     : null;
@@ -166,5 +214,6 @@ export function setPlotSideEdge(
     roles,
     current?.layout,
     current?.roadFacingRoles || [],
+    current?.facingDirectionOverrides || {},
   );
 }
