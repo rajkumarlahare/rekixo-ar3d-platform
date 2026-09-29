@@ -147,8 +147,8 @@ export default function ProjectCustomerActionsManager({
 
       <div className="rekixo-profile-required-note" style={{ marginTop: 16 }}>
         <b>Plot Facing:</b> Default OFF hai, isliye existing projects unchanged rahenge.
-        ON project me mapper ke Front ko single-road default maana jayega; corner plots
-        me Front/Back/Depth side ko “Road / Facing” mark karke second facing add kar sakte hain.
+        ON project me Front primary facing automatic rahegi. Corner/double-facing plot me
+        mapper ke map-top-right Compass se N/E/S/W arrow tap karke second facing add karein.
       </div>
 
       <label
