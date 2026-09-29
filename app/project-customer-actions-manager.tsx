@@ -13,6 +13,8 @@ type ApiState = {
 
 const DEFAULT_ACTIONS: ProjectCustomerActions = {
   customerCallEnabled: true,
+  plotFacingEnabled: false,
+  plotNorthDirection: "top",
 };
 
 export default function ProjectCustomerActionsManager({
@@ -57,7 +59,10 @@ export default function ProjectCustomerActionsManager({
     };
   }, [projectId, notify]);
 
-  const dirty = actions.customerCallEnabled !== saved.customerCallEnabled;
+  const dirty =
+    actions.customerCallEnabled !== saved.customerCallEnabled ||
+    actions.plotFacingEnabled !== saved.plotFacingEnabled ||
+    actions.plotNorthDirection !== saved.plotNorthDirection;
 
   async function save() {
     if (!dirty || busy) return;
@@ -68,7 +73,11 @@ export default function ProjectCustomerActionsManager({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           projectId,
-          changes: { customerCallEnabled: actions.customerCallEnabled },
+          changes: {
+            customerCallEnabled: actions.customerCallEnabled,
+            plotFacingEnabled: actions.plotFacingEnabled,
+            plotNorthDirection: actions.plotNorthDirection,
+          },
         }),
       });
       const data = (await response.json()) as ApiState;
@@ -78,9 +87,7 @@ export default function ProjectCustomerActionsManager({
       setActions(next);
       setSaved(next);
       notify(
-        next.customerCallEnabled
-          ? "Customer calling ON — public site par Call buttons available hain"
-          : "Customer calling OFF — public site se Call buttons hata diye gaye",
+        `Customer actions saved · Calling ${next.customerCallEnabled ? "ON" : "OFF"} · Plot Facing ${next.plotFacingEnabled ? "ON" : "OFF"}`,
       );
     } catch (error) {
       notify(error instanceof Error ? error.message : "Customer actions save nahi hue");
@@ -138,15 +145,72 @@ export default function ProjectCustomerActionsManager({
         <b>Customer Calling {actions.customerCallEnabled ? "Enabled" : "Disabled"}</b>
       </label>
 
+      <div className="rekixo-profile-required-note" style={{ marginTop: 16 }}>
+        <b>Plot Facing:</b> Default OFF hai, isliye existing projects unchanged rahenge.
+        ON project me mapper ke Front ko single-road default maana jayega; corner plots
+        me Front/Back/Depth side ko “Road / Facing” mark karke second facing add kar sakte hain.
+      </div>
+
+      <label
+        className="rekixo-profile-toggle-row"
+        style={{ marginTop: 16, padding: 16, border: "1px solid #263750", borderRadius: 14 }}
+      >
+        <input
+          type="checkbox"
+          checked={actions.plotFacingEnabled}
+          onChange={(event) =>
+            setActions((current) => ({
+              ...current,
+              plotFacingEnabled: event.target.checked,
+            }))
+          }
+        />
+        <b>Plot Facing {actions.plotFacingEnabled ? "Enabled" : "Disabled"}</b>
+      </label>
+
+      <label
+        style={{
+          display: "grid",
+          gap: 8,
+          marginTop: 12,
+          padding: 16,
+          border: "1px solid #263750",
+          borderRadius: 14,
+          opacity: actions.plotFacingEnabled ? 1 : 0.58,
+        }}
+      >
+        <b>Masterplan North direction</b>
+        <span style={{ fontSize: 12, color: "#8fa0bb" }}>
+          Masterplan image me North kis taraf hai. Public website rotation se ye value change nahi hogi.
+        </span>
+        <select
+          value={actions.plotNorthDirection}
+          disabled={!actions.plotFacingEnabled}
+          onChange={(event) =>
+            setActions((current) => ({
+              ...current,
+              plotNorthDirection: event.target.value as ProjectCustomerActions["plotNorthDirection"],
+            }))
+          }
+        >
+          <option value="top">↑ North is Up</option>
+          <option value="right">→ North is Right</option>
+          <option value="bottom">↓ North is Down</option>
+          <option value="left">← North is Left</option>
+        </select>
+      </label>
+
       <div className="rekixo-profile-actions">
         <button className="primary" disabled={busy || !dirty} onClick={save}>
           <Save />
           {busy ? "Saving…" : dirty ? "Save Customer Actions" : "Actions Saved"}
         </button>
         <span>
-          {actions.customerCallEnabled
-            ? "Header + plot drawer calling visible"
-            : "WhatsApp-only customer contact layout"}
+          {actions.plotFacingEnabled
+            ? `Facing enabled · North ${actions.plotNorthDirection.toUpperCase()} · Publish Update ke baad customer site par visible`
+            : actions.customerCallEnabled
+              ? "Calling visible · Plot Facing opt-in OFF"
+              : "WhatsApp-only contact · Plot Facing opt-in OFF"}
         </span>
       </div>
     </section>
