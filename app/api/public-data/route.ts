@@ -9,6 +9,7 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getAdminSession } from "@/modules/auth";
+import { plotFacingText } from "@/modules/plots";
 import {
   PROJECT_CONTACT_KEYS,
   publicProjectId,
@@ -36,6 +37,8 @@ const PUBLIC_SETTING_KEYS = new Set([
   "plotStatusSoldColor",
   "pricingEnabled",
   "customerCallEnabled",
+  "plotFacingEnabled",
+  "plotNorthDirection",
   "publicInitialViewMode",
   "publicInitialFocusX",
   "publicInitialFocusY",
@@ -346,6 +349,8 @@ export async function GET(request: Request) {
         });
 
     const pricingEnabled = publicSettings.pricingEnabled === "1";
+    const plotFacingEnabled = publicSettings.plotFacingEnabled === "1";
+    const plotNorthDirection = publicSettings.plotNorthDirection || "top";
     const pricingRows = pricingEnabled && !structuralOnly
       ? await db
           .select()
@@ -424,10 +429,38 @@ export async function GET(request: Request) {
             }),
           );
           const price = pricingEnabled ? pricingByPlot.get(plot.id) : null;
+          let facing = "";
+          if (plotFacingEnabled) {
+            try {
+              const polygon = JSON.parse(String(publicPlot.polygon || "[]")) as unknown;
+              if (
+                Array.isArray(polygon) &&
+                polygon.length >= 3 &&
+                polygon.every(
+                  (point) =>
+                    Array.isArray(point) &&
+                    point.length === 2 &&
+                    Number.isFinite(Number(point[0])) &&
+                    Number.isFinite(Number(point[1])),
+                )
+              ) {
+                facing = plotFacingText(
+                  polygon.map(
+                    (point) => [Number(point[0]), Number(point[1])] as [number, number],
+                  ),
+                  publicPlot.edgeSemantics,
+                  plotNorthDirection,
+                );
+              }
+            } catch {
+              facing = "";
+            }
+          }
           return {
             ...publicPlot,
             featured: Boolean(publicPlot.featured),
             status: liveStatusByPlot.get(plot.id) || publicPlot.status,
+            ...(facing ? { facing } : {}),
             ...(edgeMeasurements.length ? { edgeMeasurements } : {}),
             ...(price
               ? {
