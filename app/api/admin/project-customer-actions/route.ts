@@ -19,21 +19,24 @@ async function loadProjectCustomerActions(projectId: string) {
     .first<{ id: string; name: string }>();
   if (!project) return null;
 
-  const row = await env.DB.prepare(
-    "SELECT value FROM settings WHERE project_id=? AND key=? LIMIT 1",
+  const keys = [
+    PROJECT_CUSTOMER_ACTION_SETTING_KEYS.customerCallEnabled,
+    PROJECT_CUSTOMER_ACTION_SETTING_KEYS.plotFacingEnabled,
+    PROJECT_CUSTOMER_ACTION_SETTING_KEYS.plotNorthDirection,
+  ];
+  const rows = await env.DB.prepare(
+    "SELECT key,value FROM settings WHERE project_id=? AND key IN (?,?,?)",
   )
-    .bind(
-      projectId,
-      PROJECT_CUSTOMER_ACTION_SETTING_KEYS.customerCallEnabled,
-    )
-    .first<{ value: string }>();
+    .bind(projectId, ...keys)
+    .all<{ key: string; value: string }>();
+  const values = Object.fromEntries(
+    rows.results.map((row) => [row.key, row.value]),
+  );
 
   return {
     projectId,
     projectName: project.name,
-    actions: projectCustomerActionsFromSettings({
-      customerCallEnabled: row?.value,
-    }),
+    actions: projectCustomerActionsFromSettings(values),
   };
 }
 
