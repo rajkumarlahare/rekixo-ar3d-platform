@@ -1007,6 +1007,7 @@ export async function POST(request: Request) {
                 resolvedSemantics.roles,
                 resolvedSemantics.layout,
                 oldSemantics?.roadFacingRoles || [],
+                oldSemantics?.facingDirectionOverrides || {},
               ) || resolved.edgeSemantics
             : resolved.edgeSemantics;
         return {
@@ -1516,6 +1517,7 @@ export async function POST(request: Request) {
                   resolvedSemantics.roles,
                   resolvedSemantics.layout,
                   oldSemantics?.roadFacingRoles || [],
+                  oldSemantics?.facingDirectionOverrides || {},
                 ) || resolved.edgeSemantics
               : resolved.edgeSemantics;
           semanticUpdates.push({
