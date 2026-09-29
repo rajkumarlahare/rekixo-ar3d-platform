@@ -229,17 +229,17 @@
 .mapper-v4-canvas .mapper-facing-compass button.east{top:42px;right:5px}
 .mapper-v4-canvas .mapper-facing-compass button.south{bottom:5px;left:42px}
 .mapper-v4-canvas .mapper-facing-compass button.active{
-  border-color:#2f9d70!important;
-  background:#103d30!important;
-  color:#70e6b1!important;
+  border-color:#2f9d70;
+  background:#103d30;
+  color:#70e6b1;
 }
 .mapper-v4-canvas .mapper-facing-compass button.active strong{
   color:#7cf0ba;
 }
 .mapper-v4-canvas .mapper-facing-compass button.primary-facing{
-  border-color:#c59a34!important;
-  background:#3a2b0f!important;
-  color:#ffd768!important;
+  border-color:#c59a34;
+  background:#3a2b0f;
+  color:#ffd768;
   cursor:default;
 }
 .mapper-v4-canvas .mapper-facing-compass button.primary-facing strong{
