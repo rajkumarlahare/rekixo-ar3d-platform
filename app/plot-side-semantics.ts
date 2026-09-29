@@ -8,6 +8,9 @@ export type PlotSideSemanticsV1 = {
   // "three" means Front + Back + Depth A; Depth B is intentionally N/A.
   layout?: PlotSideLayout;
   roles: Partial<Record<PlotSideRole, number[]>>;
+  // Logical sides that touch a road. Stored by role (not raw edge) so facing
+  // survives irregular multi-segment sides and future geometry refinements.
+  roadFacingRoles?: PlotSideRole[];
 };
 
 const ROLES: PlotSideRole[] = ["front", "back", "depthA", "depthB"];
@@ -41,6 +44,7 @@ export function parsePlotSideSemantics(
       pointCount?: unknown;
       layout?: unknown;
       roles?: Record<string, unknown>;
+      roadFacingRoles?: unknown;
     };
     if (Number(source.version) !== 1) return null;
     const storedCount = Number(source.pointCount);
@@ -56,8 +60,20 @@ export function parsePlotSideSemantics(
       source.layout === "three" || source.layout === "four"
         ? source.layout
         : undefined;
+    const roadFacingRoles = Array.isArray(source.roadFacingRoles)
+      ? [...new Set(source.roadFacingRoles
+          .map((role) => String(role) as PlotSideRole)
+          .filter((role): role is PlotSideRole => ROLES.includes(role))
+          .filter((role) => !(layout === "three" && role === "depthB")))]
+      : [];
     return Object.keys(roles).length
-      ? { version: 1, pointCount: storedCount, ...(layout ? { layout } : {}), roles }
+      ? {
+          version: 1,
+          pointCount: storedCount,
+          ...(layout ? { layout } : {}),
+          roles,
+          ...(roadFacingRoles.length ? { roadFacingRoles } : {}),
+        }
       : null;
   } catch {
     return null;
@@ -68,6 +84,7 @@ export function serializePlotSideSemantics(
   pointCount: number,
   roles: Partial<Record<PlotSideRole, number[]>>,
   layout?: PlotSideLayout,
+  roadFacingRoles: PlotSideRole[] = [],
 ) {
   if (!Number.isInteger(pointCount) || pointCount < 3 || pointCount > 80)
     return null;
@@ -76,12 +93,21 @@ export function serializePlotSideSemantics(
     const edges = cleanEdges(roles[role], pointCount);
     if (edges.length) cleaned[role] = edges;
   }
+  const cleanRoadFacingRoles = [...new Set(
+    roadFacingRoles.filter(
+      (role): role is PlotSideRole =>
+        ROLES.includes(role) && !(layout === "three" && role === "depthB"),
+    ),
+  )];
   return Object.keys(cleaned).length
     ? JSON.stringify({
         version: 1,
         pointCount,
         ...(layout === "three" || layout === "four" ? { layout } : {}),
         roles: cleaned,
+        ...(cleanRoadFacingRoles.length
+          ? { roadFacingRoles: cleanRoadFacingRoles }
+          : {}),
       })
     : null;
 }
@@ -135,5 +161,10 @@ export function setPlotSideEdge(
   };
   if (edge == null) delete roles[role];
   else roles[role] = [edge];
-  return serializePlotSideSemantics(pointCount, roles, current?.layout);
+  return serializePlotSideSemantics(
+    pointCount,
+    roles,
+    current?.layout,
+    current?.roadFacingRoles || [],
+  );
 }
