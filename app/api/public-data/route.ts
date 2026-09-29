@@ -456,6 +456,8 @@ export async function GET(request: Request) {
                 // edge_semantics. Opt-in must still work without a migration.
                 if (
                   !facing &&
+                  publicPlot.frontEdgeIndex != null &&
+                  String(publicPlot.frontEdgeIndex).trim() !== "" &&
                   Number.isInteger(Number(publicPlot.frontEdgeIndex)) &&
                   Number(publicPlot.frontEdgeIndex) >= 0 &&
                   Number(publicPlot.frontEdgeIndex) < points.length
