@@ -152,6 +152,8 @@ type MapperSettings = {
   logoVersion?: string;
   address?: string;
   plotFrontDirections?: string;
+  plotFacingEnabled?: string;
+  plotNorthDirection?: "top" | "right" | "bottom" | "left" | string;
 };
 
 type AutoMatch = {
@@ -1960,9 +1962,25 @@ export default function PlotMapper({
     setDepth2EdgeIndex(roles.depthB.length ? String(roles.depthB[0]) : "");
   }
 
+  function currentRoadFacingRoles(): PlotSideRole[] {
+    const parsed = parsePlotSideSemantics(
+      edgeSemanticsDraft,
+      points.length >= 3 ? points.length : undefined,
+    );
+    const explicit = parsed?.roadFacingRoles || [];
+    if (explicit.length) return [...explicit];
+    // Feature-on projects get the zero-work default requested for normal plots:
+    // Front is the road-facing side unless the operator explicitly marks roles.
+    if (settings.plotFacingEnabled === "1" && currentSemanticRoles().front.length) {
+      return ["front"];
+    }
+    return [];
+  }
+
   function commitSemanticRoles(
     roles: PlotSideRoleEdges,
     layout: PlotSideLayout = sideLayout,
+    roadFacingRoles: PlotSideRole[] = currentRoadFacingRoles(),
   ) {
     const resolvedLayout = effectiveSideLayout(layout);
     const nextRoles: PlotSideRoleEdges = {
@@ -1971,10 +1989,53 @@ export default function PlotMapper({
       depthA: [...roles.depthA],
       depthB: resolvedLayout === "four" ? [...roles.depthB] : [],
     };
+    const cleanRoadFacing = [...new Set(roadFacingRoles)].filter(
+      (role) =>
+        (resolvedLayout === "four" || role !== "depthB") &&
+        nextRoles[role].length > 0,
+    );
     const serialized =
-      serializePlotSideSemantics(points.length, nextRoles, resolvedLayout) || "";
+      serializePlotSideSemantics(
+        points.length,
+        nextRoles,
+        resolvedLayout,
+        cleanRoadFacing,
+      ) || "";
     setEdgeSemanticsDraft(serialized);
     syncPrimarySemanticEdges(nextRoles);
+  }
+
+  function toggleRoadFacingRole(role: PlotSideRole) {
+    if (settings.plotFacingEnabled !== "1") {
+      notify("Project Profile me pehle Plot Facing ON karein");
+      return;
+    }
+    const roles = currentSemanticRoles();
+    if (!roles[role].length) {
+      const label =
+        role === "front" ? "Front" :
+        role === "back" ? "Back" :
+        role === "depthA" ? (effectiveSideLayout() === "three" ? "Depth" : "Depth A") :
+        "Depth B";
+      notify(`${label} side pehle assign karein, phir Road / Facing mark karein`);
+      return;
+    }
+    const current = currentRoadFacingRoles();
+    const active = current.includes(role);
+    const next = active
+      ? current.filter((item) => item !== role)
+      : [...current, role];
+    if (!next.length) {
+      notify("Kam se kam ek Road / Facing side rakhein; normal plot ke liye Front default hai");
+      return;
+    }
+    commitSemanticRoles(roles, sideLayout, next);
+    const label =
+      role === "front" ? "Front" :
+      role === "back" ? "Back" :
+      role === "depthA" ? (effectiveSideLayout() === "three" ? "Depth" : "Depth A") :
+      "Depth B";
+    notify(`Plot ${plotId}: ${label} Road / Facing ${active ? "removed" : "added"}`);
   }
 
   function changeSideLayout(next: PlotSideLayout) {
@@ -2362,8 +2423,8 @@ export default function PlotMapper({
 
   function downloadPlotSheetTemplate() {
     const text = [
-      "Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Direction,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
-      "1,,108,,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,,,,,,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan; Front Direction optional because front-first mapper binds edges",
+      "Plot No,Sqft,Sqm,Sqyd,Dimensions,Road Access,Front,Back,Depth,Depth 2,Dimension Unit,Front Edge,Back Edge,Depth Edge,Depth 2 Edge,Front Label,Back Label,Depth Label,Depth 2 Label,Side Dimensions,Notes",
+      "1,,108,,Irregular,12.000 M WIDE ROAD,12,10,9,9.5,m,,,,,12 m,10 m,9 m,9.5 m,Front 12 m · Back 10 m · Depth A 9 m · Depth B 9.5 m,Verified from sanctioned plan; facing is selected in mapper, not AI CSV",
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -5104,9 +5165,43 @@ export default function PlotMapper({
                         );
                       })}
                     </div>
+                    {settings.plotFacingEnabled === "1" && (
+                      <div className="mapper-actions compact plot-facing-role-toggle">
+                        <span>
+                          <b>Road / Facing</b>
+                          {" · "}Front auto default
+                          {" · "}North {String(settings.plotNorthDirection || "top").toUpperCase()}
+                        </span>
+                        {([
+                          ["front", "Front"],
+                          ["back", "Back"],
+                          ["depthA", effectiveSideLayout() === "three" ? "Depth" : "Depth A"],
+                          ...(effectiveSideLayout() === "four"
+                            ? [["depthB", "Depth B"] as const]
+                            : []),
+                        ] as const).map(([role, label]) => {
+                          const assigned = currentSemanticRoles()[role].length > 0;
+                          const active = currentRoadFacingRoles().includes(role);
+                          return (
+                            <button
+                              key={`road-facing-${role}`}
+                              type="button"
+                              className={active ? "primary" : ""}
+                              disabled={!assigned}
+                              onClick={() => toggleRoadFacingRole(role)}
+                            >
+                              {active ? "✓ " : ""}{label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <small className="plot-side-assigner-help">
                       Role button → numbered start corner → end corner. Curved segments beech me
                       automatically same side group banenge.
+                      {settings.plotFacingEnabled === "1"
+                        ? " Road-touching corner plot me doosri logical side ko Road / Facing mark karein."
+                        : ""}
                     </small>
                   </div>
                 )}
