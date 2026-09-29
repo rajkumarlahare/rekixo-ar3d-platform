@@ -13,6 +13,7 @@ import { parseSideMappingSheetText } from "@/modules/mapper";
 import {
   parsePlotSideSemantics,
   serializePlotSideSemantics,
+  type PlotSideRole,
 } from "@/modules/plots";
 import {
   freezeCurrentPublishedAssets,
@@ -400,6 +401,7 @@ type EdgeBinding = {
   back: number;
   depthA: number;
   depthB: number | null;
+  roadFacingRoles?: PlotSideRole[];
 };
 
 async function syncMeasurementBindings(
@@ -408,18 +410,29 @@ async function syncMeasurementBindings(
   now: string,
 ) {
   if (!bindings.length) return;
-  const statements = bindings.flatMap((binding) =>
-    ([
+  const statements = bindings.flatMap((binding) => {
+    const roadFacing = new Set<PlotSideRole>(
+      binding.roadFacingRoles?.length ? binding.roadFacingRoles : ["front"],
+    );
+    return ([
       ["front", binding.front],
       ["back", binding.back],
       ["depthA", binding.depthA],
       ["depthB", binding.depthB],
     ] as const).map(([role, edge]) =>
       env.DB.prepare(
-        "UPDATE plot_edge_measurements SET edge_index=?,point_count=?,updated_at=? WHERE project_id=? AND plot_id=? AND role=?",
-      ).bind(edge, binding.pointCount, now, projectId, binding.id, role),
-    ),
-  );
+        "UPDATE plot_edge_measurements SET edge_index=?,point_count=?,road_frontage=?,updated_at=? WHERE project_id=? AND plot_id=? AND role=?",
+      ).bind(
+        edge,
+        binding.pointCount,
+        roadFacing.has(role) ? 1 : 0,
+        now,
+        projectId,
+        binding.id,
+        role,
+      ),
+    );
+  });
   for (let index = 0; index < statements.length; index += 80) {
     await env.DB.batch(statements.slice(index, index + 80));
   }
@@ -571,6 +584,7 @@ async function savePlots(
         back: Number(back),
         depthA: Number(depthA),
         depthB: layout === "three" ? null : Number(depthB),
+        roadFacingRoles: semantics.roadFacingRoles || ["front"],
       });
     } catch {
       // Binding metadata must never block the canonical plot save.
@@ -942,10 +956,10 @@ export async function POST(request: Request) {
         return Response.json({ error: "Side Mapping CSV me valid rows nahi mili" }, { status: 400 });
 
       const plotRows = await env.DB.prepare(
-        "SELECT id,polygon FROM plots WHERE project_id=? AND inventory_active=1",
+        "SELECT id,polygon,edge_semantics AS edgeSemantics FROM plots WHERE project_id=? AND inventory_active=1",
       )
         .bind(projectId)
-        .all<{ id: string; polygon: string | null }>();
+        .all<{ id: string; polygon: string | null; edgeSemantics: string | null }>();
       const byId = new Map(plotRows.results.map((item) => [item.id, item]));
       const unknown = rows.filter((row) => !byId.has(row.id)).map((row) => row.id);
       if (unknown.length) {
@@ -978,7 +992,30 @@ export async function POST(request: Request) {
         const resolved = resolveFourSideEdges(polygon, row.front, rotation);
         if (!resolved)
           throw new Error(`Plot ${row.id}: 4 distinct side edges resolve nahi hui`);
-        return { id: row.id, pointCount: polygon.length, ...resolved };
+        const oldSemantics = parsePlotSideSemantics(
+          stored.edgeSemantics,
+          polygon.length,
+        );
+        const resolvedSemantics = parsePlotSideSemantics(
+          resolved.edgeSemantics,
+          polygon.length,
+        );
+        const edgeSemantics =
+          resolvedSemantics
+            ? serializePlotSideSemantics(
+                polygon.length,
+                resolvedSemantics.roles,
+                resolvedSemantics.layout,
+                oldSemantics?.roadFacingRoles || [],
+              ) || resolved.edgeSemantics
+            : resolved.edgeSemantics;
+        return {
+          id: row.id,
+          pointCount: polygon.length,
+          ...resolved,
+          edgeSemantics,
+          roadFacingRoles: oldSemantics?.roadFacingRoles || ["front"],
+        };
       });
 
       await env.DB.batch(
@@ -1097,6 +1134,11 @@ export async function POST(request: Request) {
           stored.edgeSemantics,
           pointCount >= 3 ? pointCount : undefined,
         );
+        const roadFacingRoles = new Set<PlotSideRole>(
+          parsedSemantics?.roadFacingRoles?.length
+            ? parsedSemantics.roadFacingRoles
+            : ["front"],
+        );
         const edgeFor = (role: "front" | "back" | "depthA" | "depthB") => {
           const semantic = parsedSemantics?.roles[role]?.[0];
           if (Number.isInteger(semantic)) return semantic as number;
@@ -1133,7 +1175,7 @@ export async function POST(request: Request) {
               length,
               row.dimensionUnit,
               rawLabel,
-              role === "front" ? 1 : 0,
+              roadFacingRoles.has(role) ? 1 : 0,
               row.road || stored.road || "",
               row.sourceRef || file.name,
               row.sourceRawText,
@@ -1430,10 +1472,10 @@ export async function POST(request: Request) {
             .bind(projectId)
             .first<{ value: string }>(),
           env.DB.prepare(
-            "SELECT id,polygon FROM plots WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
+            "SELECT id,polygon,edge_semantics AS edgeSemantics FROM plots WHERE project_id=? AND inventory_active=1 AND TRIM(COALESCE(polygon,''))<>''",
           )
             .bind(projectId)
-            .all<{ id: string; polygon: string }>(),
+            .all<{ id: string; polygon: string; edgeSemantics: string | null }>(),
         ]);
         const rawRotation = Number(rotationRow?.value || 0);
         const rotation =
@@ -1459,10 +1501,29 @@ export async function POST(request: Request) {
             rotation,
           );
           if (!resolved) continue;
+          const oldSemantics = parsePlotSideSemantics(
+            stored.edgeSemantics,
+            polygon.length,
+          );
+          const resolvedSemantics = parsePlotSideSemantics(
+            resolved.edgeSemantics,
+            polygon.length,
+          );
+          const edgeSemantics =
+            resolvedSemantics
+              ? serializePlotSideSemantics(
+                  polygon.length,
+                  resolvedSemantics.roles,
+                  resolvedSemantics.layout,
+                  oldSemantics?.roadFacingRoles || [],
+                ) || resolved.edgeSemantics
+              : resolved.edgeSemantics;
           semanticUpdates.push({
             id: row.id,
             pointCount: polygon.length,
             ...resolved,
+            edgeSemantics,
+            roadFacingRoles: oldSemantics?.roadFacingRoles || ["front"],
           });
         }
 

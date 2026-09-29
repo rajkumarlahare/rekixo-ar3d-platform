@@ -80,7 +80,7 @@ export default async function Home() {
     <main style={{ position: "fixed", inset: 0, background: "#050914" }}>
       <iframe
         title="Client project website"
-        src={`/project/index.html?projectId=${encodeURIComponent(target.projectId || "")}&pv=${encodeURIComponent(String(published?.publishVersion || 0))}&v=66`}
+        src={`/project/index.html?projectId=${encodeURIComponent(target.projectId || "")}&pv=${encodeURIComponent(String(published?.publishVersion || 0))}&v=67`}
         loading="eager"
         style={{ width: "100%", height: "100%", border: 0, display: "block" }}
       />
