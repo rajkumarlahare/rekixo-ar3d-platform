@@ -102,7 +102,7 @@ async function verifyGallery(origin, data, query) {
 async function verifySharedProjectRuntime(origin, data) {
   const publishVersion = Number(data?.publishVersion || 0);
   const url =
-    `${origin}/__rekixo/project/?projectSlug=${encodeURIComponent(projectSlug)}&pv=${encodeURIComponent(String(publishVersion))}&v=66`;
+    `${origin}/__rekixo/project/?projectSlug=${encodeURIComponent(projectSlug)}&pv=${encodeURIComponent(String(publishVersion))}&v=67`;
   const response = await read(url, {
     headers: { accept: "text/html" },
     redirect: "manual",
@@ -173,7 +173,7 @@ if (phase === "generic" || phase === "post-legacy") {
   assert.equal(projectPage.status, 200, "generic Tiyansh project page failed");
   const html = await projectPage.text();
   assert.match(html, /projectSlug=tiyansh-prime-square/);
-  assert.match(html, /v=66/);
+  assert.match(html, /v=67/);
   await verifySharedProjectRuntime(genericOrigin, generic.data);
 }
 
