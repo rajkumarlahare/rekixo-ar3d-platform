@@ -2,6 +2,7 @@ import type { MapperPoint } from "./mapper-geometry";
 import type { EdgeDirection } from "./plot-edge-semantics";
 import {
   parsePlotSideSemantics,
+  type PlotFacingCardinalDirection,
   type PlotSideRole,
 } from "./plot-side-semantics";
 
@@ -22,7 +23,7 @@ export type PlotFacingResult = {
   role: PlotSideRole;
 };
 
-const ORDER: Array<{
+export const PLOT_FACING_ORDER: Array<{
   direction: PlotFacingDirection;
   label: string;
   arrow: string;
@@ -122,7 +123,35 @@ function directionForVector(
     ((screenAngle - northAngle) % (Math.PI * 2) + Math.PI * 2) %
     (Math.PI * 2);
   const octant = Math.round(clockwiseFromNorth / (Math.PI / 4)) % 8;
-  return ORDER[octant];
+  return PLOT_FACING_ORDER[octant];
+}
+
+export function plotSideDirectionResults(
+  points: MapperPoint[],
+  edgeSemantics: unknown,
+  northDirection: unknown,
+): PlotFacingResult[] {
+  if (points.length < 3) return [];
+  const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
+  if (!semantics) return [];
+  const north = normalizePlotNorthDirection(northDirection);
+  const output: PlotFacingResult[] = [];
+  const roles: PlotSideRole[] = ["front", "depthA", "back", "depthB"];
+
+  for (const role of roles) {
+    const vector = logicalSideOutwardVector(points, semantics.roles[role] || []);
+    if (!vector) continue;
+    const resolved = directionForVector(vector, north);
+    output.push({ ...resolved, role });
+  }
+  return output;
+}
+
+function facingMetadata(direction: PlotFacingDirection) {
+  return (
+    PLOT_FACING_ORDER.find((item) => item.direction === direction) ||
+    PLOT_FACING_ORDER[0]
+  );
 }
 
 export function plotFacingResults(
@@ -134,25 +163,44 @@ export function plotFacingResults(
   const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
   if (!semantics) return [];
   const roles = roadFacingRolesForPlot(edgeSemantics, points.length);
-  const north = normalizePlotNorthDirection(northDirection);
+  const geometric = new Map(
+    plotSideDirectionResults(points, edgeSemantics, northDirection).map((item) => [
+      item.role,
+      item,
+    ]),
+  );
   const output: PlotFacingResult[] = [];
   const seen = new Set<PlotFacingDirection>();
 
   for (const role of roles) {
-    const vector = logicalSideOutwardVector(points, semantics.roles[role] || []);
-    if (!vector) continue;
-    const resolved = directionForVector(vector, north);
-    if (seen.has(resolved.direction)) continue;
+    const override = semantics.facingDirectionOverrides?.[role] as
+      | PlotFacingCardinalDirection
+      | undefined;
+    const resolved = override
+      ? { ...facingMetadata(override), role }
+      : geometric.get(role);
+    if (!resolved || seen.has(resolved.direction)) continue;
     seen.add(resolved.direction);
-    output.push({ ...resolved, role });
+    output.push(resolved);
   }
 
   output.sort(
     (a, b) =>
-      ORDER.findIndex((item) => item.direction === a.direction) -
-      ORDER.findIndex((item) => item.direction === b.direction),
+      PLOT_FACING_ORDER.findIndex((item) => item.direction === a.direction) -
+      PLOT_FACING_ORDER.findIndex((item) => item.direction === b.direction),
   );
   return output;
+}
+
+export function cardinalDirectionDistance(
+  from: PlotFacingDirection,
+  to: PlotFacingCardinalDirection,
+) {
+  const fromIndex = PLOT_FACING_ORDER.findIndex((item) => item.direction === from);
+  const toIndex = PLOT_FACING_ORDER.findIndex((item) => item.direction === to);
+  if (fromIndex < 0 || toIndex < 0) return Number.POSITIVE_INFINITY;
+  const raw = Math.abs(fromIndex - toIndex);
+  return Math.min(raw, PLOT_FACING_ORDER.length - raw);
 }
 
 export function plotFacingText(
