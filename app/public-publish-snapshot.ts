@@ -11,6 +11,8 @@ export const PUBLISHED_SETTING_KEYS = [
   "plotStatusSoldColor",
   "pricingEnabled",
   "customerCallEnabled",
+  "plotFacingEnabled",
+  "plotNorthDirection",
   "publicInitialViewMode",
   "publicInitialFocusX",
   "publicInitialFocusY",
