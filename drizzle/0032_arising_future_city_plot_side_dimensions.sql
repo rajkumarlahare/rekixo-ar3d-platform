@@ -21,13 +21,24 @@ WHERE id='74f50880-8adf-4158-bd8c-f65f2b1c718b'
   AND status='active';
 
 DROP TABLE IF EXISTS _arising_target_guard;
-CREATE TABLE _arising_target_guard (n INTEGER NOT NULL CHECK (n=1));
-INSERT INTO _arising_target_guard(n) SELECT COUNT(*) FROM _arising_target;
+CREATE TABLE _arising_target_guard (
+  present INTEGER NOT NULL CHECK (present IN (0,1)),
+  valid INTEGER NOT NULL CHECK (valid=present)
+);
+INSERT INTO _arising_target_guard(present,valid)
+SELECT
+  (SELECT COUNT(*) FROM projects WHERE id='74f50880-8adf-4158-bd8c-f65f2b1c718b'),
+  (SELECT COUNT(*) FROM _arising_target);
 
 DROP TABLE IF EXISTS _arising_snapshot_guard;
-CREATE TABLE _arising_snapshot_guard (n INTEGER NOT NULL CHECK (n=1));
-INSERT INTO _arising_snapshot_guard(n)
-SELECT COUNT(*)
+CREATE TABLE _arising_snapshot_guard (
+  target_count INTEGER NOT NULL CHECK (target_count IN (0,1)),
+  n INTEGER NOT NULL CHECK (n=target_count)
+);
+INSERT INTO _arising_snapshot_guard(target_count,n)
+SELECT
+  (SELECT COUNT(*) FROM _arising_target),
+  COUNT(*)
 FROM projects p
 JOIN project_public_snapshots s ON s.project_id=p.id
 JOIN _arising_target t ON t.project_id=p.id
@@ -37,25 +48,27 @@ WHERE p.public_status='published'
 
 DROP TABLE IF EXISTS _arising_inventory_guard;
 CREATE TABLE _arising_inventory_guard (
-  total INTEGER NOT NULL CHECK (total=128),
-  regular INTEGER NOT NULL CHECK (regular=110),
-  irregular INTEGER NOT NULL CHECK (irregular=18),
-  blank_measurements INTEGER NOT NULL CHECK (blank_measurements=110),
-  plot68_expected INTEGER NOT NULL CHECK (plot68_expected=1),
-  other_regular_edges_safe INTEGER NOT NULL CHECK (other_regular_edges_safe=109)
+  target_count INTEGER NOT NULL CHECK (target_count IN (0,1)),
+  total INTEGER NOT NULL CHECK (total=target_count*128),
+  regular INTEGER NOT NULL CHECK (regular=target_count*110),
+  irregular INTEGER NOT NULL CHECK (irregular=target_count*18),
+  blank_measurements INTEGER NOT NULL CHECK (blank_measurements=target_count*110),
+  plot68_expected INTEGER NOT NULL CHECK (plot68_expected=target_count),
+  other_regular_edges_safe INTEGER NOT NULL CHECK (other_regular_edges_safe=target_count*109)
 );
 INSERT INTO _arising_inventory_guard(
-  total,regular,irregular,blank_measurements,plot68_expected,other_regular_edges_safe
+  target_count,total,regular,irregular,blank_measurements,plot68_expected,other_regular_edges_safe
 )
 SELECT
+  (SELECT COUNT(*) FROM _arising_target),
   COUNT(*),
-  SUM(CASE WHEN dimensions IN (
+  COALESCE(SUM(CASE WHEN dimensions IN (
     '33'' x 40''','33'' x 45''','33'' x 43''6"',
     '47''8" x 40''','47''8" x 45''','47''8" x 43''6"',
     '60'' x 40''','60'' x 45''','60'' x 43''6"'
-  ) THEN 1 ELSE 0 END),
-  SUM(CASE WHEN dimensions='Irregular' THEN 1 ELSE 0 END),
-  SUM(CASE WHEN dimensions IN (
+  ) THEN 1 ELSE 0 END),0),
+  COALESCE(SUM(CASE WHEN dimensions='Irregular' THEN 1 ELSE 0 END),0),
+  COALESCE(SUM(CASE WHEN dimensions IN (
     '33'' x 40''','33'' x 45''','33'' x 43''6"',
     '47''8" x 40''','47''8" x 45''','47''8" x 43''6"',
     '60'' x 40''','60'' x 45''','60'' x 43''6"'
@@ -65,13 +78,13 @@ SELECT
   AND COALESCE(front_label,'')='' AND COALESCE(depth_label,'')=''
   AND COALESCE(back_label,'')='' AND COALESCE(depth2_label,'')=''
   AND COALESCE(side_dimensions,'')=''
-  THEN 1 ELSE 0 END),
-  SUM(CASE WHEN id='68'
+  THEN 1 ELSE 0 END),0),
+  COALESCE(SUM(CASE WHEN id='68'
     AND dimensions='33'' x 40'''
     AND front_edge_index=2 AND back_edge_index=1
     AND depth_edge_index IS NULL AND depth2_edge_index IS NULL
-    THEN 1 ELSE 0 END),
-  SUM(CASE WHEN id<>'68' AND dimensions IN (
+    THEN 1 ELSE 0 END),0),
+  COALESCE(SUM(CASE WHEN id<>'68' AND dimensions IN (
     '33'' x 40''','33'' x 45''','33'' x 43''6"',
     '47''8" x 40''','47''8" x 45''','47''8" x 43''6"',
     '60'' x 40''','60'' x 45''','60'' x 43''6"'
@@ -80,7 +93,7 @@ SELECT
   AND back_edge_index IS NOT NULL
   AND (CASE WHEN depth_edge_index IS NULL THEN 1 ELSE 0 END
        + CASE WHEN depth2_edge_index IS NULL THEN 1 ELSE 0 END) <= 1
-  THEN 1 ELSE 0 END)
+  THEN 1 ELSE 0 END),0)
 FROM plots
 WHERE project_id IN (SELECT project_id FROM _arising_target)
   AND inventory_active=1;
@@ -142,14 +155,16 @@ SET
 
 DROP TABLE IF EXISTS _arising_source_guard;
 CREATE TABLE _arising_source_guard (
-  total INTEGER NOT NULL CHECK (total=110),
-  valid_edges INTEGER NOT NULL CHECK (valid_edges=110),
-  plot18 INTEGER NOT NULL CHECK (plot18=1)
+  target_count INTEGER NOT NULL CHECK (target_count IN (0,1)),
+  total INTEGER NOT NULL CHECK (total=target_count*110),
+  valid_edges INTEGER NOT NULL CHECK (valid_edges=target_count*110),
+  plot18 INTEGER NOT NULL CHECK (plot18=target_count)
 );
-INSERT INTO _arising_source_guard(total,valid_edges,plot18)
+INSERT INTO _arising_source_guard(target_count,total,valid_edges,plot18)
 SELECT
+  (SELECT COUNT(*) FROM _arising_target),
   COUNT(*),
-  SUM(CASE
+  COALESCE(SUM(CASE
     WHEN front IS NOT NULL AND depth IS NOT NULL
      AND front_edge BETWEEN 0 AND 3 AND back_edge BETWEEN 0 AND 3
      AND depth_edge BETWEEN 0 AND 3 AND depth2_edge BETWEEN 0 AND 3
@@ -157,22 +172,24 @@ SELECT
      AND back_edge<>depth_edge AND back_edge<>depth2_edge AND depth_edge<>depth2_edge
      AND ((front_edge-back_edge+4)%4)=2
      AND ((depth_edge-depth2_edge+4)%4)=2
-    THEN 1 ELSE 0 END),
-  SUM(CASE WHEN plot_id='18' AND dimensions='47''8" x 45'''
+    THEN 1 ELSE 0 END),0),
+  COALESCE(SUM(CASE WHEN plot_id='18' AND dimensions='47''8" x 45'''
     AND front=47.666667 AND depth=45.0
     AND front_edge=1 AND depth_edge=2 AND back_edge=3 AND depth2_edge=0
-    THEN 1 ELSE 0 END)
+    THEN 1 ELSE 0 END),0)
 FROM _arising_regular_source;
 
 -- Fail closed if customer-visible snapshot diverged from the supplied export.
 DROP TABLE IF EXISTS _arising_published_guard;
 CREATE TABLE _arising_published_guard (
-  n INTEGER NOT NULL CHECK (n=110),
+  target_count INTEGER NOT NULL CHECK (target_count IN (0,1)),
+  n INTEGER NOT NULL CHECK (n=target_count*110),
   edge_rows INTEGER NOT NULL CHECK (edge_rows=0),
   published_edge_rows INTEGER NOT NULL CHECK (published_edge_rows=0)
 );
-INSERT INTO _arising_published_guard(n,edge_rows,published_edge_rows)
+INSERT INTO _arising_published_guard(target_count,n,edge_rows,published_edge_rows)
 SELECT
+  (SELECT COUNT(*) FROM _arising_target),
   (
     SELECT COUNT(*)
     FROM published_plots p
@@ -308,13 +325,15 @@ CROSS JOIN (
 
 DROP TABLE IF EXISTS _arising_post_guard;
 CREATE TABLE _arising_post_guard (
-  draft_plots INTEGER NOT NULL CHECK (draft_plots=110),
-  published_plots INTEGER NOT NULL CHECK (published_plots=110),
-  draft_edges INTEGER NOT NULL CHECK (draft_edges=440),
-  published_edges INTEGER NOT NULL CHECK (published_edges=440)
+  target_count INTEGER NOT NULL CHECK (target_count IN (0,1)),
+  draft_plots INTEGER NOT NULL CHECK (draft_plots=target_count*110),
+  published_plots INTEGER NOT NULL CHECK (published_plots=target_count*110),
+  draft_edges INTEGER NOT NULL CHECK (draft_edges=target_count*440),
+  published_edges INTEGER NOT NULL CHECK (published_edges=target_count*440)
 );
-INSERT INTO _arising_post_guard(draft_plots,published_plots,draft_edges,published_edges)
+INSERT INTO _arising_post_guard(target_count,draft_plots,published_plots,draft_edges,published_edges)
 SELECT
+  (SELECT COUNT(*) FROM _arising_target),
   (
     SELECT COUNT(*) FROM plots p
     JOIN _arising_target t ON t.project_id=p.project_id
