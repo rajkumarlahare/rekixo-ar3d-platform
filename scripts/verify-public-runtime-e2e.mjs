@@ -164,7 +164,7 @@ try {
     });
 
     await page.goto(
-      `${base}/project/index.html?projectId=e2e-project&pv=1&v=66`,
+      `${base}/project/index.html?projectId=e2e-project&pv=1&v=67`,
       { waitUntil: "networkidle" },
     );
 
