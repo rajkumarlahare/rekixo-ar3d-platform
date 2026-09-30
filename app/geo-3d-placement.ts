@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import {
+  engineGeoRenderableModel,
   enginePublishedModelUrl,
   project3DLink,
   publishedEngineProject,
@@ -195,12 +196,14 @@ export async function resolvePublicGeo3DPlacement(platformProjectId: string) {
   )
     return null;
 
-  const sourceModelUrl = enginePublishedModelUrl(engine.model.url);
+  const renderModel = engineGeoRenderableModel(engine);
+  const sourceModelUrl = enginePublishedModelUrl(renderModel?.url);
   if (!sourceModelUrl) return null;
 
   return {
     placement,
     engine,
+    renderModel,
     sourceModelUrl,
     experienceUrl: link.publicUrl,
   };
