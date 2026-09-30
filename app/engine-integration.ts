@@ -73,35 +73,71 @@ export function engineAdminUrl(slug: string, platformProjectId?: string) {
   return url.toString();
 }
 
-async function fetchEngineJson(url: string, timeoutMs = 2500) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as EngineStatusPayload;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
+async function fetchEngineJson(
+  url: string,
+  timeoutMs = 5000,
+  attempts = 2,
+) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (response.ok) return (await response.json()) as EngineStatusPayload;
+      // A definite client-side miss will not improve on an immediate retry.
+      if (response.status >= 400 && response.status < 500 && response.status !== 408)
+        return null;
+    } catch {
+      // A cold Worker, transient network error, or timeout gets one bounded retry.
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  return null;
+}
+
+function validEngineProjectPayload(payload: EngineStatusPayload | null) {
+  return Boolean(
+    payload?.project?.id &&
+      payload.project.slug &&
+      ["draft", "published", "archived"].includes(payload.project.status),
+  );
 }
 
 export async function engineProjectStatus(slug: string) {
   const clean = String(slug || "").trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(clean)) return null;
-  const url = new URL(
+
+  // Prefer the Engine Admin integration contract because it can resolve draft
+  // projects too. Published projects also have an immutable public release
+  // endpoint; use that as a read-only fallback so a transient Admin route/cold
+  // start cannot prevent an already-published project from being linked.
+  const adminUrl = new URL(
     `/3Dprojects/api/integration/projects/${encodeURIComponent(clean)}`,
     engineAdminOrigin(),
   );
-  const payload = await fetchEngineJson(url.toString());
-  if (!payload || payload.contractVersion !== AR3D_INTEGRATION_CONTRACT_VERSION) return null;
-  return payload;
+  const adminPayload = await fetchEngineJson(adminUrl.toString());
+  if (
+    validEngineProjectPayload(adminPayload) &&
+    adminPayload?.contractVersion === AR3D_INTEGRATION_CONTRACT_VERSION &&
+    adminPayload.project.slug === clean
+  )
+    return adminPayload;
+
+  const publicPayload = await publishedEngineProject(clean);
+  if (
+    validEngineProjectPayload(publicPayload) &&
+    publicPayload?.project.slug === clean &&
+    publicPayload.project.status === "published"
+  )
+    return publicPayload;
+
+  return null;
 }
 
 export function enginePublishedModelUrl(modelUrl: string | undefined) {
@@ -129,7 +165,7 @@ export async function publishedEngineProject(slug: string) {
     `/3Dprojects/api/projects/${encodeURIComponent(clean)}`,
     enginePublicOrigin(),
   );
-  return fetchEngineJson(url.toString(), 1800);
+  return fetchEngineJson(url.toString(), 5000, 2);
 }
 
 export async function project3DLink(platformProjectId: string): Promise<Project3DLink | null> {
