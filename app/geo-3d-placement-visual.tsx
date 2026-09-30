@@ -401,15 +401,24 @@ export default function Geo3DPlacementVisual({
         )) as Maps3DLibrary;
         if (cancelled || !threeDRef.current) return;
 
-        // Verify the authenticated model proxy before handing it to the Maps 3D
-        // renderer. This separates an unavailable GLB from a camera/rendering issue.
+        // Verify the exact byte path used by the renderer. A 4-byte Range
+        // request proves both the authenticated Platform proxy and the Engine
+        // immutable GLB transport without downloading the full model.
         const modelCheck = await fetch(modelUrl, {
-          method: "HEAD",
+          method: "GET",
+          headers: { Range: "bytes=0-3" },
           cache: "no-store",
           credentials: "same-origin",
         });
-        if (!modelCheck.ok)
-          throw new Error(`3D model preview unavailable (${modelCheck.status})`);
+        if (modelCheck.status !== 206) {
+          await modelCheck.body?.cancel().catch(() => {});
+          throw new Error(
+            `3D model byte-range unavailable (${modelCheck.status})`,
+          );
+        }
+        const magic = new TextDecoder().decode(await modelCheck.arrayBuffer());
+        if (magic !== "glTF")
+          throw new Error("3D model preview returned invalid GLB bytes");
 
         const map = new library.Map3DElement({
           // Start broad. Once terrain is steady, focus with a terrain-relative
