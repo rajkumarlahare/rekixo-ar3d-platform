@@ -346,6 +346,7 @@ export default function Geo3DPlacementVisual({
       return;
 
     let cancelled = false;
+    let cleanup3D: (() => void) | undefined;
     setReady(false);
     setError("");
 
@@ -360,11 +361,23 @@ export default function Geo3DPlacementVisual({
         )) as Maps3DLibrary;
         if (cancelled || !threeDRef.current) return;
 
+        // Verify the authenticated model proxy before handing it to the Maps 3D
+        // renderer. This separates an unavailable GLB from a camera/rendering issue.
+        const modelCheck = await fetch(modelUrl, {
+          method: "HEAD",
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (!modelCheck.ok)
+          throw new Error(`3D model preview unavailable (${modelCheck.status})`);
+
         const map = new library.Map3DElement({
+          // Map3DElement center altitude is absolute mean-sea-level altitude.
+          // Do not derive it from the model's relative ground offset; at inland
+          // sites that can put the camera target hundreds of metres underground.
           center: {
             lat: latitude,
             lng: longitude,
-            altitude: Math.max(0, altitudeM + 35),
           },
           range: 190,
           tilt: 68,
@@ -388,11 +401,37 @@ export default function Geo3DPlacementVisual({
           altitudeMode: "RELATIVE_TO_GROUND",
         }) as Mutable3DModel;
 
+        let modelAttached = false;
+        const attachModel = () => {
+          if (cancelled || modelAttached) return;
+          modelAttached = true;
+          map.append(model);
+          model3DRef.current = model;
+          setReady(true);
+        };
+        const steadyListener = (event: Event) => {
+          const steady = event as Event & { isSteady?: boolean };
+          if (steady.isSteady) attachModel();
+        };
+        const mapErrorListener = () => {
+          if (cancelled) return;
+          setError("Google 3D map initialize nahi hui");
+        };
+        map.addEventListener("gmp-steadychange", steadyListener);
+        map.addEventListener("gmp-error", mapErrorListener);
+
         threeDRef.current.replaceChildren(map);
-        map.append(model);
         map3DRef.current = map;
-        model3DRef.current = model;
-        setReady(true);
+
+        // Some Maps JS versions can become steady before the first event reaches
+        // app code. Keep a bounded fallback so the model never waits forever.
+        const attachFallback = window.setTimeout(attachModel, 1500);
+
+        cleanup3D = () => {
+          window.clearTimeout(attachFallback);
+          map.removeEventListener("gmp-steadychange", steadyListener);
+          map.removeEventListener("gmp-error", mapErrorListener);
+        };
       })
       .catch((reason) => {
         if (cancelled) return;
@@ -406,6 +445,7 @@ export default function Geo3DPlacementVisual({
 
     return () => {
       cancelled = true;
+      cleanup3D?.();
       map3DRef.current = null;
       model3DRef.current = null;
       threeDRef.current?.replaceChildren();
@@ -418,7 +458,6 @@ export default function Geo3DPlacementVisual({
       map3DRef.current.center = {
         lat: latitude,
         lng: longitude,
-        altitude: Math.max(0, altitudeM + 35),
       };
       map3DRef.current.heading = headingDeg;
     }
