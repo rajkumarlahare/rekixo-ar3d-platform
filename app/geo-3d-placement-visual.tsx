@@ -51,6 +51,16 @@ type Maps3DLibrary = {
 type Mutable3DMap = HTMLElement & {
   center?: unknown;
   heading?: number;
+  flyCameraTo?: (options: {
+    endCamera: {
+      center: { lat: number; lng: number; altitude: number };
+      altitudeMode: "RELATIVE_TO_GROUND";
+      range: number;
+      tilt: number;
+      heading: number;
+    };
+    durationMillis: number;
+  }) => void | Promise<void>;
 };
 type Mutable3DModel = HTMLElement & {
   position?: unknown;
@@ -131,6 +141,36 @@ function loadGoogleMaps(apiKey: string) {
 
 function finite(value: number) {
   return Number.isFinite(value);
+}
+
+function focus3DMap(
+  map: Mutable3DMap,
+  latitude: number,
+  longitude: number,
+  altitudeM: number,
+  headingDeg: number,
+) {
+  // CameraOptions supports RELATIVE_TO_GROUND even though Map3DElement.center
+  // itself uses absolute mean-sea-level altitude. Aim near the middle of a
+  // typical building so inland/high-elevation sites remain in frame.
+  const camera = {
+    center: {
+      lat: latitude,
+      lng: longitude,
+      altitude: Math.max(0, altitudeM + 10),
+    },
+    altitudeMode: "RELATIVE_TO_GROUND" as const,
+    range: 190,
+    tilt: 68,
+    heading: headingDeg,
+  };
+  if (typeof map.flyCameraTo === "function") {
+    void map.flyCameraTo({ endCamera: camera, durationMillis: 0 });
+    return;
+  }
+  // Compatibility fallback for older Maps JS builds.
+  map.center = { lat: latitude, lng: longitude };
+  map.heading = headingDeg;
 }
 
 function headingEnd(
@@ -372,15 +412,14 @@ export default function Geo3DPlacementVisual({
           throw new Error(`3D model preview unavailable (${modelCheck.status})`);
 
         const map = new library.Map3DElement({
-          // Map3DElement center altitude is absolute mean-sea-level altitude.
-          // Do not derive it from the model's relative ground offset; at inland
-          // sites that can put the camera target hundreds of metres underground.
+          // Start broad. Once terrain is steady, focus with a terrain-relative
+          // CameraOptions target so no absolute elevation is guessed.
           center: {
             lat: latitude,
             lng: longitude,
           },
-          range: 190,
-          tilt: 68,
+          range: 700,
+          tilt: 52,
           heading: headingDeg,
           mode: "HYBRID",
           gestureHandling: "GREEDY",
@@ -405,6 +444,7 @@ export default function Geo3DPlacementVisual({
         const attachModel = () => {
           if (cancelled || modelAttached) return;
           modelAttached = true;
+          focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
           map.append(model);
           model3DRef.current = model;
           setReady(true);
@@ -455,11 +495,13 @@ export default function Geo3DPlacementVisual({
   useEffect(() => {
     if (mode !== "three-d" || !validPosition) return;
     if (map3DRef.current) {
-      map3DRef.current.center = {
-        lat: latitude,
-        lng: longitude,
-      };
-      map3DRef.current.heading = headingDeg;
+      focus3DMap(
+        map3DRef.current,
+        latitude,
+        longitude,
+        altitudeM,
+        headingDeg,
+      );
     }
     if (model3DRef.current) {
       model3DRef.current.position = {
