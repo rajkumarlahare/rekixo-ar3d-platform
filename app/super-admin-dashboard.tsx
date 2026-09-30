@@ -17,6 +17,7 @@ import {
 import ClientAdminManager from "./client-admin-manager";
 import GeoLabClone from "./geo-lab-clone";
 import GeoMapper from "./geo-mapper";
+import Geo3DPlacementManager from "./geo-3d-placement-manager";
 import PlotMapper from "./plot-mapper";
 import ProjectCustomerActionsManager from "./project-customer-actions-manager";
 import Project3DLinkManager from "./project-3d-link-manager";
@@ -314,6 +315,11 @@ export default function SuperAdminDashboard({
                         notify={notify}
                       />
                       <GeoMapper key={projectId} projectId={projectId} notify={notify} />
+                      <Geo3DPlacementManager
+                        key={`geo-3d:${projectId}`}
+                        projectId={projectId}
+                        notify={notify}
+                      />
                     </>
                   ) : tab === "three-d" ? (
                     <Project3DLinkManager
