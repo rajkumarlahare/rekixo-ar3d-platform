@@ -3,14 +3,14 @@ import { publicSiteEnabled } from "@/modules/public-site-access";
 import { resolvePublicGeo3DPlacement } from "@/modules/geo";
 import { fetchEnginePublishedModel } from "@/modules/engine-integration";
 
-function responseHeaders(source: Response) {
+function responseHeaders(source: Response, includeLength = true) {
   const headers = new Headers();
   headers.set("content-type", source.headers.get("content-type") || "model/gltf-binary");
   headers.set("cache-control", "public,max-age=60,must-revalidate");
   headers.set("x-content-type-options", "nosniff");
   headers.set("access-control-allow-origin", "*");
   const length = source.headers.get("content-length");
-  if (length) headers.set("content-length", length);
+  if (includeLength && length) headers.set("content-length", length);
   const range = source.headers.get("content-range");
   if (range) headers.set("content-range", range);
   const acceptRanges = source.headers.get("accept-ranges");
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   return new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
-    headers: responseHeaders(upstream),
+    headers: responseHeaders(upstream, false),
   });
 }
 
