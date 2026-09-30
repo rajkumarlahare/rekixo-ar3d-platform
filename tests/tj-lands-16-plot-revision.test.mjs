@@ -108,7 +108,8 @@ function seed(db) {
 
   const dirs='{"1":"left","2":"right","3":"right","4":"left","5":"left","6":"left","7":"right","8":"right","9":"right","10":"right","11":"left","12":"left","13":"left","14":"left","15":"left"}';
   for (const [key,value] of [
-    ["mapWidth","2048"],["mapHeight","1152"],["plotSheetCount","15"],["plotFrontDirections",dirs]
+    ["mapWidth","4096"],["mapHeight","2304"],["masterplanVersion","1790750000000"],
+    ["plotSheetCount","15"],["plotFrontDirections",dirs]
   ]) db.prepare("INSERT INTO settings VALUES(?,?,?,?)").run(TARGET,key,value,"before");
 
   insertPlot(db,"1",oldPolygons["1"],{
@@ -167,6 +168,9 @@ test("TJ Lands revision is exact tenant, exact v10 snapshot, and fail-closed", (
   assert.match(sql,/total_rows=target_count\*15/);
   assert.match(sql,/published_rows=target_count\*15/);
   assert.match(sql,/plot1_ambiguous_refs=0/);
+  assert.match(sql,/masterplan_updated=target_count/);
+  assert.match(sql,/map_geometry=target_count/);
+  assert.doesNotMatch(sql,/s\.value='2048'/);
 });
 
 test("migration no-ops when TJ Lands tenant is absent", () => {
