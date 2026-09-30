@@ -39,6 +39,7 @@ test("customer model proxy is project-scoped instead of an open URL proxy", () =
   assert.match(route, /resolvePublicGeo3DPlacement\(project\.id\)/);
   assert.match(route, /resolved\.sourceModelUrl/);
   assert.match(route, /fetchEnginePublishedModel\(resolved\.sourceModelUrl/);
+  assert.match(route, /responseHeaders\(upstream, false\)/);
   assert.doesNotMatch(route, /url\.searchParams\.get\("url"\)/);
 });
 
