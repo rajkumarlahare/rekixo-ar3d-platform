@@ -23,7 +23,8 @@ test("authenticated preview model redirect is project-scoped and not an arbitrar
   assert.match(route, /resolveGeo3DPlacementScope\(projectId\)/);
   assert.match(route, /project3DLink\(scope\.platformProject\.id\)/);
   assert.match(route, /publishedEngineProject\(link\.engineSlug\)/);
-  assert.match(route, /enginePublishedModelUrl\(engine\.model\.url\)/);
+  assert.match(route, /engineGeoRenderableModel\(engine\)/);
+  assert.match(route, /enginePublishedModelUrl\(renderModel\?\.url\)/);
   assert.match(route, /status: 307/);
   assert.match(route, /location: sourceModelUrl/);
   assert.doesNotMatch(route, /fetchEnginePublishedModel/);
@@ -75,6 +76,8 @@ test("placement state exposes only browser-safe maps key plus internal preview r
   const route = read("app/api/admin/3d-geo-placement/route.ts");
 
   assert.match(route, /publicGoogleMapsBrowserKey\(\)/);
+  assert.match(route, /renderModel:/);
+  assert.match(route, /optimized: renderModel === engine\.geoModel/);
   assert.match(route, /previewModelUrl:/);
   assert.match(route, /\/api\/admin\/3d-geo-model\?projectId=/);
   assert.doesNotMatch(route, /engine\.model\.url\s*[,}]/);
