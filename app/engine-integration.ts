@@ -34,6 +34,12 @@ export type EngineStatusPayload = {
   enabledSceneCount?: number;
   activeModelAvailable?: boolean;
   model?: EnginePublishedModel;
+  geoModel?: EnginePublishedModel & {
+    variant?: "geo-optimized";
+    sourceModelId?: string;
+    sourceSha256?: string;
+    sha256?: string;
+  };
   release?: EnginePublishedRelease;
 };
 
@@ -228,6 +234,32 @@ export function enginePublishedModelUrl(modelUrl: string | undefined) {
   )
     return null;
   return url.toString();
+}
+
+export function engineGeoRenderableModel(
+  engine: EngineStatusPayload | null | undefined,
+) {
+  const source = engine?.model;
+  if (
+    !source ||
+    source.available === false ||
+    source.mimeType !== "model/gltf-binary" ||
+    !enginePublishedModelUrl(source.url)
+  )
+    return null;
+
+  const geo = engine?.geoModel;
+  if (
+    geo &&
+    geo.available !== false &&
+    geo.mimeType === "model/gltf-binary" &&
+    geo.id === source.id &&
+    (!geo.sourceModelId || geo.sourceModelId === source.id) &&
+    enginePublishedModelUrl(geo.url)
+  )
+    return geo;
+
+  return source;
 }
 
 export async function publishedEngineProject(slug: string) {
