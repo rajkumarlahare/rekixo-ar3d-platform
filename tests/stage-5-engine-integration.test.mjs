@@ -28,7 +28,7 @@ test("Platform consumes a versioned Engine HTTP contract instead of Engine D1", 
   const integration = read("app/engine-integration.ts");
   assert.match(integration, /AR3D_INTEGRATION_CONTRACT_VERSION = 1/);
   assert.match(integration, /\/3Dprojects\/api\/integration\/projects\//);
-  assert.match(integration, /payload\.contractVersion !== AR3D_INTEGRATION_CONTRACT_VERSION/);
+  assert.match(integration, /payload\?\.contractVersion === AR3D_INTEGRATION_CONTRACT_VERSION/);
   assert.doesNotMatch(integration, /rekixo-3d-production|MODEL_ASSETS|projects_3d|models_3d|scenes_3d/);
 });
 
@@ -59,7 +59,7 @@ test("published Engine projects survive transient Admin integration lookup failu
   assert.match(integration, /Prefer the Engine Admin integration contract/);
   assert.match(integration, /const publicPayload = await publishedEngineProject\(clean\)/);
   assert.match(integration, /publicPayload\.project\.status === "published"/);
-  assert.match(integration, /adminPayload\.project\.slug === clean/);
+  assert.match(integration, /payload\.project\.slug === clean/);
   assert.match(integration, /publicPayload\.project\.slug === clean/);
   assert.match(integration, /timeoutMs = 5000/);
   assert.match(integration, /attempts = 2/);
