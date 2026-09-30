@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Box, LocateFixed, RefreshCw, Save, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Box, LocateFixed, RefreshCw, RotateCw, Save, Trash2 } from "lucide-react";
+import Geo3DPlacementVisual from "./geo-3d-placement-visual";
 
 type PlacementState = {
   schemaReady?: boolean;
@@ -23,6 +24,7 @@ type PlacementState = {
     engineReleaseVersion: number;
   } | null;
   suggestedCenter?: { longitude: number; latitude: number; source: string } | null;
+  maps?: { enabled: boolean; apiKey: string | null };
   link?: {
     engineProjectId: string;
     engineSlug: string;
@@ -33,6 +35,7 @@ type PlacementState = {
     project: { id: string; name: string; slug: string; status: string };
     model?: { id: string; name: string; mimeType: string; available: boolean } | null;
     release?: { id: string; version: number } | null;
+    previewModelUrl?: string | null;
   } | null;
   error?: string;
 };
@@ -123,6 +126,67 @@ export default function Geo3DPlacementManager({
 
   function patch(key: keyof FormState, value: string | boolean) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  const numericPlacement = useMemo(() => {
+    const longitude = Number(form.longitude);
+    const latitude = Number(form.latitude);
+    const altitudeM = Number(form.altitudeM);
+    const headingDeg = Number(form.headingDeg);
+    const pitchDeg = Number(form.pitchDeg);
+    const rollDeg = Number(form.rollDeg);
+    const scale = Number(form.scale);
+    return {
+      longitude,
+      latitude,
+      altitudeM,
+      headingDeg,
+      pitchDeg,
+      rollDeg,
+      scale,
+      valid:
+        Number.isFinite(longitude) &&
+        longitude >= -180 &&
+        longitude <= 180 &&
+        Number.isFinite(latitude) &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        Number.isFinite(altitudeM) &&
+        Number.isFinite(headingDeg) &&
+        Number.isFinite(pitchDeg) &&
+        Number.isFinite(rollDeg) &&
+        Number.isFinite(scale) &&
+        scale > 0,
+    };
+  }, [form]);
+
+  const moveAnchor = useCallback((longitude: number, latitude: number) => {
+    setForm((current) => ({
+      ...current,
+      longitude: longitude.toFixed(7),
+      latitude: latitude.toFixed(7),
+    }));
+  }, []);
+
+  function nudge(
+    key: "altitudeM" | "headingDeg" | "scale",
+    delta: number,
+    min: number,
+    max: number,
+  ) {
+    setForm((current) => {
+      const value = Number(current[key]);
+      const next = Math.min(max, Math.max(min, (Number.isFinite(value) ? value : 0) + delta));
+      return {
+        ...current,
+        [key]:
+          key === "scale"
+            ? next.toFixed(3)
+            : key === "altitudeM"
+              ? next.toFixed(2)
+              : next.toFixed(1),
+      };
+    });
   }
 
   function useGeoCenter() {
@@ -231,6 +295,23 @@ export default function Geo3DPlacementManager({
         </article>
       </div>
 
+      {numericPlacement.valid ? (
+        <Geo3DPlacementVisual
+          apiKey={state?.maps?.apiKey || null}
+          modelUrl={state?.engine?.previewModelUrl || null}
+          longitude={numericPlacement.longitude}
+          latitude={numericPlacement.latitude}
+          altitudeM={numericPlacement.altitudeM}
+          headingDeg={numericPlacement.headingDeg}
+          pitchDeg={numericPlacement.pitchDeg}
+          rollDeg={numericPlacement.rollDeg}
+          scale={numericPlacement.scale}
+          disabled={busy}
+          onPositionChange={moveAnchor}
+          notify={notify}
+        />
+      ) : null}
+
       <div className="form-grid">
         <label>
           <span>Longitude</span>
@@ -243,14 +324,53 @@ export default function Geo3DPlacementManager({
         <label>
           <span>Ground offset (m)</span>
           <input value={form.altitudeM} onChange={(e) => patch("altitudeM", e.target.value)} />
+          <input
+            aria-label="Ground offset visual slider"
+            type="range"
+            min="-5"
+            max="15"
+            step="0.05"
+            value={Number.isFinite(Number(form.altitudeM)) ? Number(form.altitudeM) : 0}
+            onChange={(e) => patch("altitudeM", e.target.value)}
+          />
+          <span className="client-contact-fallback">
+            <button type="button" onClick={() => nudge("altitudeM", -0.1, -1000, 10000)} disabled={busy}>-10 cm</button>
+            <button type="button" onClick={() => nudge("altitudeM", 0.1, -1000, 10000)} disabled={busy}>+10 cm</button>
+          </span>
         </label>
         <label>
           <span>Heading (°)</span>
           <input value={form.headingDeg} onChange={(e) => patch("headingDeg", e.target.value)} />
+          <input
+            aria-label="Heading visual slider"
+            type="range"
+            min="-180"
+            max="180"
+            step="0.5"
+            value={Number.isFinite(Number(form.headingDeg)) ? Number(form.headingDeg) : 0}
+            onChange={(e) => patch("headingDeg", e.target.value)}
+          />
+          <span className="client-contact-fallback">
+            <button type="button" onClick={() => nudge("headingDeg", -1, -3600, 3600)} disabled={busy}>-1°</button>
+            <button type="button" onClick={() => nudge("headingDeg", 1, -3600, 3600)} disabled={busy}>+1°</button>
+          </span>
         </label>
         <label>
           <span>Scale</span>
           <input value={form.scale} onChange={(e) => patch("scale", e.target.value)} />
+          <input
+            aria-label="Scale visual slider"
+            type="range"
+            min="0.1"
+            max="3"
+            step="0.01"
+            value={Number.isFinite(Number(form.scale)) ? Number(form.scale) : 1}
+            onChange={(e) => patch("scale", e.target.value)}
+          />
+          <span className="client-contact-fallback">
+            <button type="button" onClick={() => nudge("scale", -0.01, 0.001, 1000)} disabled={busy}>-1%</button>
+            <button type="button" onClick={() => nudge("scale", 0.01, 0.001, 1000)} disabled={busy}>+1%</button>
+          </span>
         </label>
         <label>
           <span>Pitch / Roll</span>
@@ -280,6 +400,19 @@ export default function Geo3DPlacementManager({
       <div className="topbar-actions">
         <button type="button" onClick={useGeoCenter} disabled={busy || !state?.suggestedCenter}>
           <LocateFixed size={18} /> Use Geo center
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            patch("headingDeg", "0");
+            patch("pitchDeg", "0");
+            patch("rollDeg", "0");
+            patch("scale", "1");
+            patch("altitudeM", "0");
+          }}
+        >
+          <RotateCw size={18} /> Reset alignment
         </button>
         <button className="primary" type="button" onClick={save} disabled={busy || !state?.schemaReady || !state?.link}>
           <Save size={18} /> {busy ? "Saving…" : "Save placement"}
