@@ -78,13 +78,15 @@ test("Cloudflare deploy config keeps Engine service bindings additive and isolat
   assert.doesNotMatch(deploy, /database_name: "rekixo-3d-production"/);
 });
 
-test("immutable release model proxy prefers Engine Admin binding and preserves legacy routing", () => {
+test("immutable release model proxy exhausts isolated transports before public HTTPS", () => {
   const integration = read("app/engine-integration.ts");
   assert.match(integration, /const immutableReleaseAsset = pathname\.startsWith/);
   assert.match(integration, /"\/3Dprojects\/api\/releases\/"/);
   assert.match(integration, /if \(immutableReleaseAsset\) \{[\s\S]{0,220}engineAdminService\(\)/);
-  assert.match(integration, /const publicService = enginePublicService\(\)/);
-  assert.match(integration, /for \(const service of services\)/);
-  assert.match(integration, /if \(response\.status < 500\) return response/);
-  assert.match(integration, /return await fetch\(safeUrl, requestInit\)/);
+  assert.match(integration, /enginePublicService\(\)/);
+  assert.match(integration, /for \(const \{ label, service \} of transports\)/);
+  assert.match(integration, /response\.ok \|\| response\.status === 206/);
+  assert.match(integration, /public-https/);
+  assert.match(integration, /x-rekixo-engine-model-transport/);
+  assert.doesNotMatch(integration, /if \(response\.status < 500\) return response/);
 });
