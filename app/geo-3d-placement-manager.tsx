@@ -24,6 +24,13 @@ type PlacementState = {
     engineReleaseVersion: number;
   } | null;
   suggestedCenter?: { longitude: number; latitude: number; source: string } | null;
+  visualFeatures?: Array<{
+    id: string;
+    name: string;
+    linkedPlotId: string | null;
+    source: string;
+    path: [number, number][];
+  }>;
   maps?: { enabled: boolean; apiKey: string | null };
   link?: {
     engineProjectId: string;
@@ -299,6 +306,7 @@ export default function Geo3DPlacementManager({
         <Geo3DPlacementVisual
           apiKey={state?.maps?.apiKey || null}
           modelUrl={state?.engine?.previewModelUrl || null}
+          features={state?.visualFeatures || []}
           longitude={numericPlacement.longitude}
           latitude={numericPlacement.latitude}
           altitudeM={numericPlacement.altitudeM}
