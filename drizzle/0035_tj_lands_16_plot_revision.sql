@@ -64,21 +64,32 @@ SELECT
 DROP TABLE IF EXISTS _tj16_settings_guard;
 CREATE TABLE _tj16_settings_guard (
   target_count INTEGER NOT NULL CHECK (target_count IN (0,1)),
-  map_width INTEGER NOT NULL CHECK (map_width=target_count),
-  map_height INTEGER NOT NULL CHECK (map_height=target_count),
+  masterplan_updated INTEGER NOT NULL CHECK (masterplan_updated=target_count),
+  map_geometry INTEGER NOT NULL CHECK (map_geometry=target_count),
   sheet_count INTEGER NOT NULL CHECK (sheet_count=target_count),
   directions INTEGER NOT NULL CHECK (directions=target_count)
 );
-INSERT INTO _tj16_settings_guard(target_count,map_width,map_height,sheet_count,directions)
+INSERT INTO _tj16_settings_guard(
+  target_count,masterplan_updated,map_geometry,sheet_count,directions
+)
 SELECT
   (SELECT COUNT(*) FROM _tj16_target),
   (
     SELECT COUNT(*) FROM settings s JOIN _tj16_target t ON t.project_id=s.project_id
-    WHERE s.key='mapWidth' AND s.value='2048'
+    WHERE s.key='masterplanVersion'
+      AND trim(s.value)<>''
+      AND s.value<>'1790248696779'
   ),
   (
-    SELECT COUNT(*) FROM settings s JOIN _tj16_target t ON t.project_id=s.project_id
-    WHERE s.key='mapHeight' AND s.value='1152'
+    SELECT COUNT(*)
+    FROM _tj16_target t
+    JOIN settings w ON w.project_id=t.project_id AND w.key='mapWidth'
+    JOIN settings h ON h.project_id=t.project_id AND h.key='mapHeight'
+    WHERE CAST(w.value AS REAL)>0
+      AND CAST(h.value AS REAL)>0
+      AND abs(
+        CAST(w.value AS REAL)/CAST(h.value AS REAL) - (16.0/9.0)
+      ) < 0.02
   ),
   (
     SELECT COUNT(*) FROM settings s JOIN _tj16_target t ON t.project_id=s.project_id
