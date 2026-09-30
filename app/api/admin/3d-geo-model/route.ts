@@ -9,7 +9,7 @@ import {
   publishedEngineProject,
 } from "@/modules/engine-integration";
 
-function proxyHeaders(source: Response) {
+function proxyHeaders(source: Response, includeLength = true) {
   const headers = new Headers();
   headers.set(
     "content-type",
@@ -18,7 +18,7 @@ function proxyHeaders(source: Response) {
   headers.set("cache-control", "private,no-store");
   headers.set("x-content-type-options", "nosniff");
   const length = source.headers.get("content-length");
-  if (length) headers.set("content-length", length);
+  if (includeLength && length) headers.set("content-length", length);
   const range = source.headers.get("content-range");
   if (range) headers.set("content-range", range);
   const acceptRanges = source.headers.get("accept-ranges");
@@ -109,6 +109,6 @@ export async function HEAD(request: Request) {
   if (!upstream) return new Response(null, { status: 502 });
   return new Response(null, {
     status: upstream.status,
-    headers: proxyHeaders(upstream),
+    headers: proxyHeaders(upstream, false),
   });
 }
