@@ -56,11 +56,24 @@ test("admin handoff transfers context only and exposes no Platform session", () 
 
 test("published Engine projects survive transient Admin integration lookup failures", () => {
   const integration = read("app/engine-integration.ts");
-  assert.match(integration, /Prefer the Engine Admin integration contract/);
-  assert.match(integration, /const publicPayload = await publishedEngineProject\(clean\)/);
-  assert.match(integration, /publicPayload\.project\.status === "published"/);
-  assert.match(integration, /payload\.project\.slug === clean/);
-  assert.match(integration, /publicPayload\.project\.slug === clean/);
+  assert.match(integration, /Prefer the versioned Engine integration contract/);
+  assert.match(integration, /fetchAdminIntegrationProject\(clean\)/);
+  assert.match(integration, /fetchPublishedRuntimeProject\(clean\)/);
+  assert.match(integration, /AR3D_ENGINE_ADMIN_SERVICE/);
+  assert.match(integration, /AR3D_ENGINE_PUBLIC_SERVICE/);
+  assert.match(integration, /service\.fetch\(url, init\)/);
+  assert.match(integration, /payload\?\.project\?\.slug === clean/);
+  assert.match(integration, /payload\.project\.status === "published"/);
   assert.match(integration, /timeoutMs = 5000/);
   assert.match(integration, /attempts = 2/);
+});
+
+test("Cloudflare deploy config keeps Engine service bindings additive and isolated", () => {
+  const deploy = read("scripts/prepare-cloudflare-deploy.mjs");
+  assert.match(deploy, /binding: "AR3D_ENGINE_ADMIN_SERVICE"/);
+  assert.match(deploy, /service: "rekixo-3d-admin"/);
+  assert.match(deploy, /binding: "AR3D_ENGINE_PUBLIC_SERVICE"/);
+  assert.match(deploy, /service: "rekixo-3d-public"/);
+  assert.match(deploy, /database_name: "tiyansh-production"/);
+  assert.doesNotMatch(deploy, /database_name: "rekixo-3d-production"/);
 });
