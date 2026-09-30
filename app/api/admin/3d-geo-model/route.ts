@@ -81,9 +81,23 @@ export async function GET(request: Request) {
     headers,
   });
   if (!upstream)
-    return Response.json({ error: "3D preview model unavailable" }, { status: 502 });
+    return Response.json(
+      {
+        error: "3D preview model unavailable",
+        diagnostic: "No Engine model transport returned a response",
+      },
+      { status: 502 },
+    );
   if (!upstream.ok && upstream.status !== 206)
-    return Response.json({ error: "3D preview model unavailable" }, { status: 502 });
+    return Response.json(
+      {
+        error: "3D preview model unavailable",
+        upstreamStatus: upstream.status,
+        transport:
+          upstream.headers.get("x-rekixo-engine-model-transport") || "unknown",
+      },
+      { status: 502 },
+    );
 
   return new Response(upstream.body, {
     status: upstream.status,

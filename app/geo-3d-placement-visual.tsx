@@ -411,9 +411,25 @@ export default function Geo3DPlacementVisual({
           credentials: "same-origin",
         });
         if (modelCheck.status !== 206) {
-          await modelCheck.body?.cancel().catch(() => {});
+          let detail = "";
+          const contentType = modelCheck.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const payload = (await modelCheck.json().catch(() => null)) as
+              | {
+                  upstreamStatus?: number;
+                  transport?: string;
+                  diagnostic?: string;
+                }
+              | null;
+            if (payload?.upstreamStatus)
+              detail += ` · upstream ${payload.upstreamStatus}`;
+            if (payload?.transport) detail += ` · ${payload.transport}`;
+            if (payload?.diagnostic) detail += ` · ${payload.diagnostic}`;
+          } else {
+            await modelCheck.body?.cancel().catch(() => {});
+          }
           throw new Error(
-            `3D model byte-range unavailable (${modelCheck.status})`,
+            `3D model byte-range unavailable (${modelCheck.status}${detail})`,
           );
         }
         const magic = new TextDecoder().decode(await modelCheck.arrayBuffer());

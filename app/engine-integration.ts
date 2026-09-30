@@ -248,6 +248,20 @@ export async function publishedEngineProject(slug: string) {
   return fetchPublishedRuntimeProject(clean);
 }
 
+function withEngineModelTransport(
+  response: Response,
+  transport: "admin-binding" | "public-binding" | "public-https",
+) {
+  const headers = new Headers(response.headers);
+  headers.set("x-rekixo-engine-model-transport", transport);
+  headers.set("x-rekixo-engine-model-status", String(response.status));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export async function fetchEnginePublishedModel(
   modelUrl: string | undefined,
   init: RequestInit = {},
@@ -265,34 +279,46 @@ export async function fetchEnginePublishedModel(
     "/3Dprojects/api/releases/",
   );
 
-  // Immutable release assets are served by both Engine workers from the same
-  // isolated D1/R2 contract. Prefer the Admin service binding here because the
-  // Platform already proves project/release identity against that worker and
-  // same-zone public HTTPS can be unavailable from another Worker. Legacy
-  // /api/models assets still prefer the Public worker only.
-  const services: EngineServiceFetcher[] = [];
+  const transports: Array<{
+    label: "admin-binding" | "public-binding";
+    service: EngineServiceFetcher;
+  }> = [];
   if (immutableReleaseAsset) {
     const admin = engineAdminService();
-    if (admin) services.push(admin);
+    if (admin) transports.push({ label: "admin-binding", service: admin });
   }
   const publicService = enginePublicService();
-  if (publicService) services.push(publicService);
+  if (publicService)
+    transports.push({ label: "public-binding", service: publicService });
 
-  for (const service of services) {
+  // A transport-specific 4xx/5xx must not short-circuit the fallback chain.
+  // The Engine asset URL has already been allow-listed above, so success from
+  // any isolated transport is equivalent. This matters when one bound Worker
+  // does not recognize a route/version that another bound Worker or the public
+  // runtime does.
+  let lastFailure: Response | null = null;
+  for (const { label, service } of transports) {
     try {
       const response = await service.fetch(safeUrl, requestInit);
-      // 4xx is definitive and should stay fail-closed. A 5xx may be a
-      // transient/service-specific failure, so try the next isolated transport.
-      if (response.status < 500) return response;
+      if (response.ok || response.status === 206)
+        return withEngineModelTransport(response, label);
+      await lastFailure?.body?.cancel().catch(() => {});
+      lastFailure = withEngineModelTransport(response, label);
     } catch {
-      // Try the next service binding or the final HTTPS compatibility fallback.
+      // Continue to the next isolated transport.
     }
   }
 
   try {
-    return await fetch(safeUrl, requestInit);
+    const response = await fetch(safeUrl, requestInit);
+    if (response.ok || response.status === 206) {
+      await lastFailure?.body?.cancel().catch(() => {});
+      return withEngineModelTransport(response, "public-https");
+    }
+    await lastFailure?.body?.cancel().catch(() => {});
+    return withEngineModelTransport(response, "public-https");
   } catch {
-    return null;
+    return lastFailure;
   }
 }
 
