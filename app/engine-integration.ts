@@ -260,16 +260,32 @@ export async function fetchEnginePublishedModel(
     cache: "no-store",
     redirect: "error",
   };
+  const pathname = new URL(safeUrl).pathname;
+  const immutableReleaseAsset = pathname.startsWith(
+    "/3Dprojects/api/releases/",
+  );
 
-  const service = enginePublicService();
-  if (service) {
+  // Immutable release assets are served by both Engine workers from the same
+  // isolated D1/R2 contract. Prefer the Admin service binding here because the
+  // Platform already proves project/release identity against that worker and
+  // same-zone public HTTPS can be unavailable from another Worker. Legacy
+  // /api/models assets still prefer the Public worker only.
+  const services: EngineServiceFetcher[] = [];
+  if (immutableReleaseAsset) {
+    const admin = engineAdminService();
+    if (admin) services.push(admin);
+  }
+  const publicService = enginePublicService();
+  if (publicService) services.push(publicService);
+
+  for (const service of services) {
     try {
       const response = await service.fetch(safeUrl, requestInit);
-      // 4xx is definitive and should stay fail-closed. Retry externally only
-      // for transient upstream/server failures.
+      // 4xx is definitive and should stay fail-closed. A 5xx may be a
+      // transient/service-specific failure, so try the next isolated transport.
       if (response.status < 500) return response;
     } catch {
-      // Fall through to the public HTTPS endpoint.
+      // Try the next service binding or the final HTTPS compatibility fallback.
     }
   }
 

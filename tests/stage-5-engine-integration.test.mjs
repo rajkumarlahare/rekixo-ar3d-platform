@@ -77,3 +77,14 @@ test("Cloudflare deploy config keeps Engine service bindings additive and isolat
   assert.match(deploy, /database_name: "tiyansh-production"/);
   assert.doesNotMatch(deploy, /database_name: "rekixo-3d-production"/);
 });
+
+test("immutable release model proxy prefers Engine Admin binding and preserves legacy routing", () => {
+  const integration = read("app/engine-integration.ts");
+  assert.match(integration, /const immutableReleaseAsset = pathname\.startsWith/);
+  assert.match(integration, /"\/3Dprojects\/api\/releases\/"/);
+  assert.match(integration, /if \(immutableReleaseAsset\) \{[\s\S]{0,220}engineAdminService\(\)/);
+  assert.match(integration, /const publicService = enginePublicService\(\)/);
+  assert.match(integration, /for \(const service of services\)/);
+  assert.match(integration, /if \(response\.status < 500\) return response/);
+  assert.match(integration, /return await fetch\(safeUrl, requestInit\)/);
+});
