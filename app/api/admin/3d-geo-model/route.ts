@@ -4,26 +4,19 @@ import {
 } from "@/modules/geo";
 import {
   enginePublishedModelUrl,
-  fetchEnginePublishedModel,
   project3DLink,
   publishedEngineProject,
 } from "@/modules/engine-integration";
 
-function proxyHeaders(source: Response, includeLength = true) {
-  const headers = new Headers();
-  headers.set(
-    "content-type",
-    source.headers.get("content-type") || "model/gltf-binary",
-  );
-  headers.set("cache-control", "private,no-store");
-  headers.set("x-content-type-options", "nosniff");
-  const length = source.headers.get("content-length");
-  if (includeLength && length) headers.set("content-length", length);
-  const range = source.headers.get("content-range");
-  if (range) headers.set("content-range", range);
-  const acceptRanges = source.headers.get("accept-ranges");
-  if (acceptRanges) headers.set("accept-ranges", acceptRanges);
-  return headers;
+function redirectModel(sourceModelUrl: string) {
+  return new Response(null, {
+    status: 307,
+    headers: {
+      location: sourceModelUrl,
+      "cache-control": "private,no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 async function resolvePreview(projectId: string) {
@@ -70,40 +63,10 @@ export async function GET(request: Request) {
       { status: 404 },
     );
 
-  const headers = new Headers({
-    Accept: "model/gltf-binary,application/octet-stream;q=0.9",
-  });
-  const range = request.headers.get("range");
-  if (range) headers.set("range", range);
-
-  const upstream = await fetchEnginePublishedModel(preview.sourceModelUrl, {
-    method: "GET",
-    headers,
-  });
-  if (!upstream)
-    return Response.json(
-      {
-        error: "3D preview model unavailable",
-        diagnostic: "No Engine model transport returned a response",
-      },
-      { status: 502 },
-    );
-  if (!upstream.ok && upstream.status !== 206)
-    return Response.json(
-      {
-        error: "3D preview model unavailable",
-        upstreamStatus: upstream.status,
-        transport:
-          upstream.headers.get("x-rekixo-engine-model-transport") || "unknown",
-      },
-      { status: 502 },
-    );
-
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: proxyHeaders(upstream),
-  });
+  // The immutable Engine release asset is already public and checksum-pinned.
+  // Redirect the browser instead of streaming 25+ MB through another Worker.
+  // Engine CORS + Range support keeps Google Maps 3D and browser probes working.
+  return redirectModel(preview.sourceModelUrl);
 }
 
 export async function HEAD(request: Request) {
@@ -117,12 +80,5 @@ export async function HEAD(request: Request) {
   const preview = await resolvePreview(projectId);
   if (!preview) return new Response(null, { status: 404 });
 
-  const upstream = await fetchEnginePublishedModel(preview.sourceModelUrl, {
-    method: "HEAD",
-  });
-  if (!upstream) return new Response(null, { status: 502 });
-  return new Response(null, {
-    status: upstream.status,
-    headers: proxyHeaders(upstream, false),
-  });
+  return redirectModel(preview.sourceModelUrl);
 }
