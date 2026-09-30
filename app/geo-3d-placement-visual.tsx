@@ -9,6 +9,7 @@ type MapClickEvent = { latLng?: LatLng | null };
 type Listener = { remove?: () => void };
 type MapInstance = {
   addListener(eventName: string, listener: (event: MapClickEvent) => void): Listener;
+  fitBounds(bounds: unknown, padding?: number): void;
   setCenter(center: { lat: number; lng: number }): void;
   setZoom(zoom: number): void;
 };
@@ -20,11 +21,18 @@ type Polyline = {
   setMap(map: MapInstance | null): void;
   setPath(path: Array<{ lat: number; lng: number }>): void;
 };
+type Polygon = {
+  setMap(map: MapInstance | null): void;
+};
 type GoogleRoot = {
   maps: {
     Map: new (node: HTMLElement, options: Record<string, unknown>) => MapInstance;
     Circle: new (options: Record<string, unknown>) => Circle;
     Polyline: new (options: Record<string, unknown>) => Polyline;
+    Polygon: new (options: Record<string, unknown>) => Polygon;
+    LatLngBounds: new () => {
+      extend(position: { lat: number; lng: number }): void;
+    };
     importLibrary?: (name: string) => Promise<unknown>;
   };
 };
@@ -146,6 +154,7 @@ function headingEnd(
 export default function Geo3DPlacementVisual({
   apiKey,
   modelUrl,
+  features,
   longitude,
   latitude,
   altitudeM,
@@ -159,6 +168,13 @@ export default function Geo3DPlacementVisual({
 }: {
   apiKey: string | null;
   modelUrl: string | null;
+  features: Array<{
+    id: string;
+    name: string;
+    linkedPlotId: string | null;
+    source: string;
+    path: [number, number][];
+  }>;
   longitude: number;
   latitude: number;
   altitudeM: number;
@@ -179,8 +195,12 @@ export default function Geo3DPlacementVisual({
   const markerRef = useRef<Circle | null>(null);
   const headingRef = useRef<Polyline | null>(null);
   const mapClickRef = useRef<Listener | null>(null);
+  const polygonsRef = useRef<Polygon[]>([]);
+  const disabledRef = useRef(disabled);
   const map3DRef = useRef<Mutable3DMap | null>(null);
   const model3DRef = useRef<Mutable3DModel | null>(null);
+
+  disabledRef.current = disabled;
 
   const validPosition =
     finite(longitude) &&
@@ -235,8 +255,41 @@ export default function Geo3DPlacementVisual({
           strokeWeight: 4,
           zIndex: 51,
         });
+        const polygons: Polygon[] = [];
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend(center);
+        for (const feature of features) {
+          const path = feature.path
+            .filter(
+              ([lng, lat]) =>
+                Number.isFinite(lng) &&
+                Number.isFinite(lat) &&
+                lng >= -180 &&
+                lng <= 180 &&
+                lat >= -90 &&
+                lat <= 90,
+            )
+            .map(([lng, lat]) => ({ lat, lng }));
+          if (path.length < 3) continue;
+          path.forEach((point) => bounds.extend(point));
+          polygons.push(
+            new google.maps.Polygon({
+              map,
+              paths: path,
+              clickable: false,
+              fillColor: feature.linkedPlotId ? "#31d49b" : "#6ba6d9",
+              fillOpacity: feature.linkedPlotId ? 0.07 : 0.035,
+              strokeColor: feature.linkedPlotId ? "#83f1c9" : "#8db9df",
+              strokeOpacity: feature.linkedPlotId ? 0.9 : 0.58,
+              strokeWeight: feature.linkedPlotId ? 1.5 : 1,
+              zIndex: feature.linkedPlotId ? 24 : 20,
+            }),
+          );
+        }
+        if (features.length) map.fitBounds(bounds, 54);
+
         const listener = map.addListener("click", (event) => {
-          if (disabled || !event.latLng) return;
+          if (disabledRef.current || !event.latLng) return;
           onPositionChange(event.latLng.lng(), event.latLng.lat());
         });
 
@@ -244,6 +297,7 @@ export default function Geo3DPlacementVisual({
         markerRef.current = marker;
         headingRef.current = heading;
         mapClickRef.current = listener;
+        polygonsRef.current = polygons;
         setReady(true);
       })
       .catch((reason) => {
@@ -262,11 +316,13 @@ export default function Geo3DPlacementVisual({
       mapClickRef.current = null;
       markerRef.current?.setMap(null);
       headingRef.current?.setMap(null);
+      polygonsRef.current.forEach((polygon) => polygon.setMap(null));
+      polygonsRef.current = [];
       markerRef.current = null;
       headingRef.current = null;
       mapRef.current = null;
     };
-  }, [apiKey, mode, validPosition, disabled, onPositionChange]);
+  }, [apiKey, mode, validPosition, onPositionChange, features]);
 
   useEffect(() => {
     if (mode !== "satellite" || !validPosition) return;
