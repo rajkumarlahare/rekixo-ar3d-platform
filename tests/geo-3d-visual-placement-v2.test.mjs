@@ -42,7 +42,9 @@ test("visual placement supports satellite click positioning and live 3D model al
   assert.match(visual, /credentials: "same-origin"/);
   assert.match(visual, /headers: \{ Range: "bytes=0-3" \}/);
   assert.match(visual, /modelCheck\.status !== 200 && modelCheck\.status !== 206/);
+  assert.match(visual, /const finalModelUrl = modelCheck\.url \|\| modelUrl/);
   assert.match(visual, /readResponsePrefix\(modelCheck, 4\)/);
+  assert.match(visual, /src: finalModelUrl/);
   assert.match(visual, /magic !== "glTF"/);
   assert.doesNotMatch(visual, /method: "HEAD"/);
   assert.match(visual, /gmp-steadychange/);
