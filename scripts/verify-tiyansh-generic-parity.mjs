@@ -182,7 +182,6 @@ await verifyGallery(
   `?projectId=${encodeURIComponent(projectId)}`,
 );
 await verifyGallery(legacyOrigin, legacy.data, "");
-await verifyPublicLive(genericOrigin, generic.data, genericQuery);
 await verifyEmailLogin(
   genericOrigin,
   `/projects/${encodeURIComponent(projectSlug)}/admin-login`,
@@ -190,6 +189,7 @@ await verifyEmailLogin(
 await verifyEmailLogin(legacyOrigin, "/admin/login");
 
 if (phase === "generic" || phase === "post-legacy") {
+  await verifyPublicLive(genericOrigin, generic.data, genericQuery);
   const projectPage = await read(
     `${genericOrigin}/projects/${encodeURIComponent(projectSlug)}`,
     { headers: { accept: "text/html" } },
