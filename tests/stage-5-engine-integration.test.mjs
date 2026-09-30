@@ -52,3 +52,15 @@ test("admin handoff transfers context only and exposes no Platform session", () 
   assert.match(handoff, /transfers project context only/);
   assert.doesNotMatch(handoff, /SESSION_SECRET|password|cookie|Authorization/);
 });
+
+
+test("published Engine projects survive transient Admin integration lookup failures", () => {
+  const integration = read("app/engine-integration.ts");
+  assert.match(integration, /Prefer the Engine Admin integration contract/);
+  assert.match(integration, /const publicPayload = await publishedEngineProject\(clean\)/);
+  assert.match(integration, /publicPayload\.project\.status === "published"/);
+  assert.match(integration, /adminPayload\.project\.slug === clean/);
+  assert.match(integration, /publicPayload\.project\.slug === clean/);
+  assert.match(integration, /timeoutMs = 5000/);
+  assert.match(integration, /attempts = 2/);
+});
