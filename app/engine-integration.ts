@@ -122,17 +122,18 @@ export async function engineProjectStatus(slug: string) {
     engineAdminOrigin(),
   );
   const adminPayload = await fetchEngineJson(adminUrl.toString());
+  const payload = adminPayload;
   if (
-    validEngineProjectPayload(adminPayload) &&
-    adminPayload?.contractVersion === AR3D_INTEGRATION_CONTRACT_VERSION &&
-    adminPayload.project.slug === clean
+    validEngineProjectPayload(payload) &&
+    payload?.contractVersion === AR3D_INTEGRATION_CONTRACT_VERSION &&
+    payload.project.slug === clean
   )
-    return adminPayload;
+    return payload;
 
   const publicPayload = await publishedEngineProject(clean);
   if (
     validEngineProjectPayload(publicPayload) &&
-    publicPayload?.project.slug === clean &&
+    publicPayload?.project?.slug === clean &&
     publicPayload.project.status === "published"
   )
     return publicPayload;
