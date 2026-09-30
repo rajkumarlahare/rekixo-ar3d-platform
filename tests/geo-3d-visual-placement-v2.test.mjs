@@ -25,6 +25,7 @@ test("authenticated preview model proxy is project-scoped and not an arbitrary f
   assert.match(route, /publishedEngineProject\(link\.engineSlug\)/);
   assert.match(route, /enginePublishedModelUrl\(engine\.model\.url\)/);
   assert.match(route, /fetchEnginePublishedModel\(preview\.sourceModelUrl/);
+  assert.match(route, /proxyHeaders\(upstream, false\)/);
   assert.doesNotMatch(route, /searchParams\.get\("url"\)/);
 });
 
