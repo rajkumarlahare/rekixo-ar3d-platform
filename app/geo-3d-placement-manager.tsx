@@ -143,6 +143,8 @@ export default function Geo3DPlacementManager({
     const pitchDeg = Number(form.pitchDeg);
     const rollDeg = Number(form.rollDeg);
     const scale = Number(form.scale);
+    const coordinatesPresent =
+      form.longitude.trim().length > 0 && form.latitude.trim().length > 0;
     return {
       longitude,
       latitude,
@@ -152,6 +154,7 @@ export default function Geo3DPlacementManager({
       rollDeg,
       scale,
       valid:
+        coordinatesPresent &&
         Number.isFinite(longitude) &&
         longitude >= -180 &&
         longitude <= 180 &&
@@ -207,6 +210,12 @@ export default function Geo3DPlacementManager({
   }
 
   async function save() {
+    if (!numericPlacement.valid) {
+      notify(
+        "Pehle valid project longitude/latitude set karein. Blank coordinates ko 0,0 ke roop me save nahi kiya jayega.",
+      );
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch("/api/admin/3d-geo-placement", {
@@ -422,7 +431,17 @@ export default function Geo3DPlacementManager({
         >
           <RotateCw size={18} /> Reset alignment
         </button>
-        <button className="primary" type="button" onClick={save} disabled={busy || !state?.schemaReady || !state?.link}>
+        <button
+          className="primary"
+          type="button"
+          onClick={save}
+          disabled={
+            busy ||
+            !state?.schemaReady ||
+            !state?.link ||
+            !numericPlacement.valid
+          }
+        >
           <Save size={18} /> {busy ? "Saving…" : "Save placement"}
         </button>
         <button type="button" onClick={() => void load()} disabled={busy}>
