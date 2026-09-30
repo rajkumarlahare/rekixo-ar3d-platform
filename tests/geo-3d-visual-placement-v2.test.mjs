@@ -16,7 +16,7 @@ test("visual placement reuses existing Geo data without touching published proje
   assert.doesNotMatch(route, /UPDATE plots/);
 });
 
-test("authenticated preview model proxy is project-scoped and not an arbitrary fetch proxy", () => {
+test("authenticated preview model redirect is project-scoped and not an arbitrary redirect", () => {
   const route = read("app/api/admin/3d-geo-model/route.ts");
 
   assert.match(route, /requireSuperAdmin/);
@@ -24,10 +24,9 @@ test("authenticated preview model proxy is project-scoped and not an arbitrary f
   assert.match(route, /project3DLink\(scope\.platformProject\.id\)/);
   assert.match(route, /publishedEngineProject\(link\.engineSlug\)/);
   assert.match(route, /enginePublishedModelUrl\(engine\.model\.url\)/);
-  assert.match(route, /fetchEnginePublishedModel\(preview\.sourceModelUrl/);
-  assert.match(route, /proxyHeaders\(upstream, false\)/);
-  assert.match(route, /upstreamStatus: upstream\.status/);
-  assert.match(route, /x-rekixo-engine-model-transport/);
+  assert.match(route, /status: 307/);
+  assert.match(route, /location: sourceModelUrl/);
+  assert.doesNotMatch(route, /fetchEnginePublishedModel/);
   assert.doesNotMatch(route, /searchParams\.get\("url"\)/);
 });
 
@@ -42,9 +41,8 @@ test("visual placement supports satellite click positioning and live 3D model al
   assert.match(visual, /altitudeMode: "RELATIVE_TO_GROUND"/);
   assert.match(visual, /credentials: "same-origin"/);
   assert.match(visual, /headers: \{ Range: "bytes=0-3" \}/);
-  assert.match(visual, /modelCheck\.status !== 206/);
-  assert.match(visual, /payload\?\.upstreamStatus/);
-  assert.match(visual, /payload\?\.transport/);
+  assert.match(visual, /modelCheck\.status !== 200 && modelCheck\.status !== 206/);
+  assert.match(visual, /readResponsePrefix\(modelCheck, 4\)/);
   assert.match(visual, /magic !== "glTF"/);
   assert.doesNotMatch(visual, /method: "HEAD"/);
   assert.match(visual, /gmp-steadychange/);

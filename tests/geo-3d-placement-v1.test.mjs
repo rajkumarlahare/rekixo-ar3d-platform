@@ -32,14 +32,15 @@ test("Super Admin placement API cannot silently enable incompatible models", () 
   assert.match(route, /geo\.3d_placement_saved/);
 });
 
-test("customer model proxy is project-scoped instead of an open URL proxy", () => {
+test("customer model redirect stays project-scoped instead of becoming an open redirect", () => {
   const route = read("app/api/public-geo-3d-model/route.ts");
   assert.match(route, /projectBySlug\(slug\)/);
   assert.match(route, /publicSiteEnabled\(project\.id\)/);
   assert.match(route, /resolvePublicGeo3DPlacement\(project\.id\)/);
   assert.match(route, /resolved\.sourceModelUrl/);
-  assert.match(route, /fetchEnginePublishedModel\(resolved\.sourceModelUrl/);
-  assert.match(route, /responseHeaders\(upstream, false\)/);
+  assert.match(route, /status: 307/);
+  assert.match(route, /location: sourceModelUrl/);
+  assert.doesNotMatch(route, /fetchEnginePublishedModel/);
   assert.doesNotMatch(route, /url\.searchParams\.get\("url"\)/);
 });
 
