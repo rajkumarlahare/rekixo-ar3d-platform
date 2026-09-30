@@ -48,16 +48,41 @@ export type Project3DLink = {
   updatedAt: string;
 };
 
-const cfg = () => env as unknown as Record<string, string>;
+type EngineServiceFetcher = {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+};
+
+type EngineRuntimeConfig = {
+  AR3D_ENGINE_ADMIN_ORIGIN?: string;
+  AR3D_ENGINE_PUBLIC_ORIGIN?: string;
+  AR3D_ENGINE_ADMIN_SERVICE?: EngineServiceFetcher;
+  AR3D_ENGINE_PUBLIC_SERVICE?: EngineServiceFetcher;
+};
+
+const runtimeConfig = () => env as unknown as EngineRuntimeConfig;
+
+function engineAdminService() {
+  const service = runtimeConfig().AR3D_ENGINE_ADMIN_SERVICE;
+  return service && typeof service.fetch === "function" ? service : undefined;
+}
+
+function enginePublicService() {
+  const service = runtimeConfig().AR3D_ENGINE_PUBLIC_SERVICE;
+  return service && typeof service.fetch === "function" ? service : undefined;
+}
 
 export function engineAdminOrigin() {
-  return String(cfg().AR3D_ENGINE_ADMIN_ORIGIN || "https://admin.rekixo.com")
+  return String(
+    runtimeConfig().AR3D_ENGINE_ADMIN_ORIGIN || "https://admin.rekixo.com",
+  )
     .trim()
     .replace(/\/$/, "");
 }
 
 export function enginePublicOrigin() {
-  return String(cfg().AR3D_ENGINE_PUBLIC_ORIGIN || "https://ar3dstudio.in")
+  return String(
+    runtimeConfig().AR3D_ENGINE_PUBLIC_ORIGIN || "https://ar3dstudio.in",
+  )
     .trim()
     .replace(/\/$/, "");
 }
@@ -77,20 +102,28 @@ async function fetchEngineJson(
   url: string,
   timeoutMs = 5000,
   attempts = 2,
+  service?: EngineServiceFetcher,
 ) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(url, {
+      const init: RequestInit = {
         method: "GET",
         headers: { Accept: "application/json" },
         cache: "no-store",
         signal: controller.signal,
-      });
+      };
+      const response = service
+        ? await service.fetch(url, init)
+        : await fetch(url, init);
       if (response.ok) return (await response.json()) as EngineStatusPayload;
       // A definite client-side miss will not improve on an immediate retry.
-      if (response.status >= 400 && response.status < 500 && response.status !== 408)
+      if (
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 408
+      )
         return null;
     } catch {
       // A cold Worker, transient network error, or timeout gets one bounded retry.
@@ -109,36 +142,74 @@ function validEngineProjectPayload(payload: EngineStatusPayload | null) {
   );
 }
 
+function validIntegrationPayload(
+  payload: EngineStatusPayload | null,
+  clean: string,
+) {
+  return Boolean(
+    validEngineProjectPayload(payload) &&
+      payload?.contractVersion === AR3D_INTEGRATION_CONTRACT_VERSION &&
+      payload.project.slug === clean,
+  );
+}
+
+async function fetchAdminIntegrationProject(clean: string) {
+  const url = new URL(
+    `/3Dprojects/api/integration/projects/${encodeURIComponent(clean)}`,
+    engineAdminOrigin(),
+  ).toString();
+
+  // Service binding is the primary server-to-server transport. It avoids
+  // same-zone Worker routing/DNS coupling while keeping the HTTP contract as
+  // the isolation boundary. External HTTPS remains a compatibility fallback.
+  const service = engineAdminService();
+  if (service) {
+    const payload = await fetchEngineJson(url, 5000, 2, service);
+    if (validIntegrationPayload(payload, clean)) return payload;
+  }
+
+  const payload = await fetchEngineJson(url, 5000, 2);
+  return validIntegrationPayload(payload, clean) ? payload : null;
+}
+
+async function fetchPublishedRuntimeProject(clean: string) {
+  const url = new URL(
+    `/3Dprojects/api/projects/${encodeURIComponent(clean)}`,
+    enginePublicOrigin(),
+  ).toString();
+
+  const service = enginePublicService();
+  if (service) {
+    const payload = await fetchEngineJson(url, 5000, 2, service);
+    if (
+      validEngineProjectPayload(payload) &&
+      payload?.project?.slug === clean &&
+      payload.project.status === "published"
+    )
+      return payload;
+  }
+
+  const payload = await fetchEngineJson(url, 5000, 2);
+  if (
+    validEngineProjectPayload(payload) &&
+    payload?.project?.slug === clean &&
+    payload.project.status === "published"
+  )
+    return payload;
+  return null;
+}
+
 export async function engineProjectStatus(slug: string) {
   const clean = String(slug || "").trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(clean)) return null;
 
-  // Prefer the Engine Admin integration contract because it can resolve draft
-  // projects too. Published projects also have an immutable public release
-  // endpoint; use that as a read-only fallback so a transient Admin route/cold
-  // start cannot prevent an already-published project from being linked.
-  const adminUrl = new URL(
-    `/3Dprojects/api/integration/projects/${encodeURIComponent(clean)}`,
-    engineAdminOrigin(),
-  );
-  const adminPayload = await fetchEngineJson(adminUrl.toString());
-  const payload = adminPayload;
-  if (
-    validEngineProjectPayload(payload) &&
-    payload?.contractVersion === AR3D_INTEGRATION_CONTRACT_VERSION &&
-    payload.project.slug === clean
-  )
-    return payload;
+  // Prefer the versioned Engine integration contract. Published projects also
+  // have the public runtime as a separate fallback, so existing projects keep
+  // working even during a transient Admin Worker or routing failure.
+  const adminPayload = await fetchAdminIntegrationProject(clean);
+  if (adminPayload) return adminPayload;
 
-  const publicPayload = await publishedEngineProject(clean);
-  if (
-    validEngineProjectPayload(publicPayload) &&
-    publicPayload?.project?.slug === clean &&
-    publicPayload.project.status === "published"
-  )
-    return publicPayload;
-
-  return null;
+  return fetchPublishedRuntimeProject(clean);
 }
 
 export function enginePublishedModelUrl(modelUrl: string | undefined) {
@@ -162,11 +233,51 @@ export function enginePublishedModelUrl(modelUrl: string | undefined) {
 export async function publishedEngineProject(slug: string) {
   const clean = String(slug || "").trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(clean)) return null;
-  const url = new URL(
-    `/3Dprojects/api/projects/${encodeURIComponent(clean)}`,
-    enginePublicOrigin(),
-  );
-  return fetchEngineJson(url.toString(), 5000, 2);
+
+  // Immutable Studio releases are now part of the additive V1 Admin contract.
+  // Prefer that server-to-server result when it proves an active release, then
+  // fall back to the public runtime for legacy published Engine projects.
+  const integration = await fetchAdminIntegrationProject(clean);
+  if (
+    integration?.project?.status === "published" &&
+    integration.project.slug === clean &&
+    integration.release?.id
+  )
+    return integration;
+
+  return fetchPublishedRuntimeProject(clean);
+}
+
+export async function fetchEnginePublishedModel(
+  modelUrl: string | undefined,
+  init: RequestInit = {},
+) {
+  const safeUrl = enginePublishedModelUrl(modelUrl);
+  if (!safeUrl) return null;
+
+  const requestInit: RequestInit = {
+    ...init,
+    cache: "no-store",
+    redirect: "error",
+  };
+
+  const service = enginePublicService();
+  if (service) {
+    try {
+      const response = await service.fetch(safeUrl, requestInit);
+      // 4xx is definitive and should stay fail-closed. Retry externally only
+      // for transient upstream/server failures.
+      if (response.status < 500) return response;
+    } catch {
+      // Fall through to the public HTTPS endpoint.
+    }
+  }
+
+  try {
+    return await fetch(safeUrl, requestInit);
+  } catch {
+    return null;
+  }
 }
 
 export async function project3DLink(platformProjectId: string): Promise<Project3DLink | null> {

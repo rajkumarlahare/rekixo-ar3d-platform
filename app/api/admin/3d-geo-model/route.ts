@@ -4,6 +4,7 @@ import {
 } from "@/modules/geo";
 import {
   enginePublishedModelUrl,
+  fetchEnginePublishedModel,
   project3DLink,
   publishedEngineProject,
 } from "@/modules/engine-integration";
@@ -75,12 +76,12 @@ export async function GET(request: Request) {
   const range = request.headers.get("range");
   if (range) headers.set("range", range);
 
-  const upstream = await fetch(preview.sourceModelUrl, {
+  const upstream = await fetchEnginePublishedModel(preview.sourceModelUrl, {
     method: "GET",
     headers,
-    cache: "no-store",
-    redirect: "error",
   });
+  if (!upstream)
+    return Response.json({ error: "3D preview model unavailable" }, { status: 502 });
   if (!upstream.ok && upstream.status !== 206)
     return Response.json({ error: "3D preview model unavailable" }, { status: 502 });
 
@@ -102,11 +103,10 @@ export async function HEAD(request: Request) {
   const preview = await resolvePreview(projectId);
   if (!preview) return new Response(null, { status: 404 });
 
-  const upstream = await fetch(preview.sourceModelUrl, {
+  const upstream = await fetchEnginePublishedModel(preview.sourceModelUrl, {
     method: "HEAD",
-    cache: "no-store",
-    redirect: "error",
   });
+  if (!upstream) return new Response(null, { status: 502 });
   return new Response(null, {
     status: upstream.status,
     headers: proxyHeaders(upstream),

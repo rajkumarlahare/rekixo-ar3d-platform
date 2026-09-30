@@ -24,6 +24,7 @@ test("authenticated preview model proxy is project-scoped and not an arbitrary f
   assert.match(route, /project3DLink\(scope\.platformProject\.id\)/);
   assert.match(route, /publishedEngineProject\(link\.engineSlug\)/);
   assert.match(route, /enginePublishedModelUrl\(engine\.model\.url\)/);
+  assert.match(route, /fetchEnginePublishedModel\(preview\.sourceModelUrl/);
   assert.doesNotMatch(route, /searchParams\.get\("url"\)/);
 });
 

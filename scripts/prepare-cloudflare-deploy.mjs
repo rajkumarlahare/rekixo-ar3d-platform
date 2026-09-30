@@ -44,6 +44,21 @@ config.vars = {
     : `https://${genericHost}`,
 };
 
+// Keep Platform and Engine data stores isolated, but use Cloudflare-native
+// service bindings for reliable Worker-to-Worker HTTP calls. These are additive:
+// external HTTPS fallbacks remain in engine-integration.ts for local/dev and
+// rollback compatibility.
+config.services = [
+  {
+    binding: "AR3D_ENGINE_ADMIN_SERVICE",
+    service: "rekixo-3d-admin",
+  },
+  {
+    binding: "AR3D_ENGINE_PUBLIC_SERVICE",
+    service: "rekixo-3d-public",
+  },
+];
+
 // IMPORTANT: shared boss domain gets only the exact Rekixo surface.
 // Never attach a host-wide wildcard here: unmatched boss-site traffic must
 // continue to the existing Vercel origin.
