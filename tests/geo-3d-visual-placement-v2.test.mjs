@@ -38,6 +38,10 @@ test("visual placement supports satellite click positioning and live 3D model al
   assert.match(visual, /Model3DElement/);
   assert.match(visual, /altitudeMode: "RELATIVE_TO_GROUND"/);
   assert.match(visual, /credentials: "same-origin"/);
+  assert.match(visual, /headers: \{ Range: "bytes=0-3" \}/);
+  assert.match(visual, /modelCheck\.status !== 206/);
+  assert.match(visual, /magic !== "glTF"/);
+  assert.doesNotMatch(visual, /method: "HEAD"/);
   assert.match(visual, /gmp-steadychange/);
   assert.match(visual, /function focus3DMap/);
   assert.match(visual, /flyCameraTo/);
