@@ -10,6 +10,7 @@ import {
   publicGoogleMapsBrowserKey,
 } from "@/modules/geo";
 import {
+  engineGeoRenderableModel,
   project3DLink,
   publishedEngineProject,
 } from "@/modules/engine-integration";
@@ -36,6 +37,7 @@ async function state(projectId: string) {
       geo3DVisualFeatures(scope.geoProjectId),
     ]);
   const engine = link ? await publishedEngineProject(link.engineSlug) : null;
+  const renderModel = engineGeoRenderableModel(engine);
   return {
     schemaReady: await geo3DPlacementSchemaReady(),
     scope: {
@@ -69,12 +71,19 @@ async function state(projectId: string) {
                 available: engine.model.available !== false,
               }
             : null,
+          renderModel: renderModel
+            ? {
+                id: renderModel.id,
+                name: renderModel.name,
+                mimeType: renderModel.mimeType,
+                byteSize: renderModel.byteSize,
+                optimized: renderModel === engine.geoModel,
+              }
+            : null,
           release: engine.release ?? null,
-          previewModelUrl:
-            engine.model?.mimeType === "model/gltf-binary" &&
-            engine.model.available !== false
-              ? `/api/admin/3d-geo-model?projectId=${encodeURIComponent(projectId)}&release=${encodeURIComponent(String(engine.release?.id || ""))}`
-              : null,
+          previewModelUrl: renderModel
+            ? `/api/admin/3d-geo-model?projectId=${encodeURIComponent(projectId)}&release=${encodeURIComponent(String(engine.release?.id || ""))}`
+            : null,
         }
       : null,
   };
