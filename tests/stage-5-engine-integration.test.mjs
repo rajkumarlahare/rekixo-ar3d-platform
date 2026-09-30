@@ -99,4 +99,3 @@ test("Geo model derivative is additive and falls back to immutable source model 
   assert.match(integration, /geo\.sourceModelId === source\.id/);
   assert.match(integration, /return source/);
 });
-
