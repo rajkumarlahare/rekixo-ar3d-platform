@@ -1,6 +1,7 @@
 import { projectBySlug } from "@/modules/public-project";
 import { publicSiteEnabled } from "@/modules/public-site-access";
 import { resolvePublicGeo3DPlacement } from "@/modules/geo";
+import { fetchEnginePublishedModel } from "@/modules/engine-integration";
 
 function responseHeaders(source: Response) {
   const headers = new Headers();
@@ -34,12 +35,12 @@ export async function GET(request: Request) {
   const range = request.headers.get("range");
   if (range) headers.set("range", range);
 
-  const upstream = await fetch(resolved.sourceModelUrl, {
+  const upstream = await fetchEnginePublishedModel(resolved.sourceModelUrl, {
     method: "GET",
     headers,
-    cache: "no-store",
-    redirect: "error",
   });
+  if (!upstream)
+    return Response.json({ error: "3D model unavailable" }, { status: 502 });
   if (!upstream.ok && upstream.status !== 206)
     return Response.json({ error: "3D model unavailable" }, { status: 502 });
 
@@ -62,11 +63,10 @@ export async function HEAD(request: Request) {
   const resolved = await resolvePublicGeo3DPlacement(project.id);
   if (!resolved) return new Response(null, { status: 404 });
 
-  const upstream = await fetch(resolved.sourceModelUrl, {
+  const upstream = await fetchEnginePublishedModel(resolved.sourceModelUrl, {
     method: "HEAD",
-    cache: "no-store",
-    redirect: "error",
   });
+  if (!upstream) return new Response(null, { status: 502 });
   return new Response(null, {
     status: upstream.status,
     headers: responseHeaders(upstream),
