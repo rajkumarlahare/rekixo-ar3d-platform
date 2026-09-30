@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, IndianRupee, Search, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type PricingRow = {
   plotId: string;
@@ -103,6 +103,11 @@ export default function ClientPlotPricing({
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const notifyRef = useRef(notify);
+
+  useEffect(() => {
+    notifyRef.current = notify;
+  }, [notify]);
 
   const pageCount = Math.max(1, Math.ceil(total / PRICING_PAGE_SIZE));
   const selectedPlots = useMemo(
@@ -138,17 +143,23 @@ export default function ClientPlotPricing({
           setPricedCount(Number(data.pricedCount || 0));
         })
         .catch((error) => {
-          if (error instanceof DOMException && error.name === "AbortError") return;
-          notify(pricingErrorMessage(error, "Pricing load nahi hui"));
+          if (
+            controller.signal.aborted ||
+            (error instanceof DOMException && error.name === "AbortError")
+          )
+            return;
+          notifyRef.current(pricingErrorMessage(error, "Pricing load nahi hui"));
         })
-        .finally(() => setLoaded(true));
+        .finally(() => {
+          if (!controller.signal.aborted) setLoaded(true);
+        });
     }, query.trim() ? 220 : 0);
 
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [notify, page, query, refreshKey]);
+  }, [page, query, refreshKey]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, Math.max(0, pageCount - 1)));

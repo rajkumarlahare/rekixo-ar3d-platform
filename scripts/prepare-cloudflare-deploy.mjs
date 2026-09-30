@@ -52,6 +52,11 @@ const sharedDomainRoutes = platformHost
       `${platformHost}/projects/*`,
       `${platformHost}/__rekixo/*`,
       `${platformHost}/api/public-data*`,
+      // Customer-facing runtime state must stay on the same Generic Client Worker.
+      // Status/pricing are intentionally live (no Publish Update), while gallery is
+      // loaded lazily from the public shell. Keep these explicit on the shared host.
+      `${platformHost}/api/public-live*`,
+      `${platformHost}/api/public-gallery*`,
       // Customer Satellite Map data + promoted transparent masterplan asset.
       // Prefix wildcard keeps projectSlug/token query strings on the Client Worker.
       `${platformHost}/api/public-geo*`,
