@@ -143,6 +143,25 @@ function finite(value: number) {
   return Number.isFinite(value);
 }
 
+async function readResponsePrefix(response: Response, byteCount: number) {
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const output = new Uint8Array(byteCount);
+  let offset = 0;
+  try {
+    while (offset < byteCount) {
+      const { value, done } = await reader.read();
+      if (done || !value) break;
+      const take = Math.min(value.byteLength, byteCount - offset);
+      output.set(value.subarray(0, take), offset);
+      offset += take;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return output.subarray(0, offset);
+}
+
 function focus3DMap(
   map: Mutable3DMap,
   latitude: number,
@@ -410,7 +429,7 @@ export default function Geo3DPlacementVisual({
           cache: "no-store",
           credentials: "same-origin",
         });
-        if (modelCheck.status !== 206) {
+        if (modelCheck.status !== 200 && modelCheck.status !== 206) {
           let detail = "";
           const contentType = modelCheck.headers.get("content-type") || "";
           if (contentType.includes("application/json")) {
@@ -429,10 +448,11 @@ export default function Geo3DPlacementVisual({
             await modelCheck.body?.cancel().catch(() => {});
           }
           throw new Error(
-            `3D model byte-range unavailable (${modelCheck.status}${detail})`,
+            `3D model unavailable (${modelCheck.status}${detail})`,
           );
         }
-        const magic = new TextDecoder().decode(await modelCheck.arrayBuffer());
+        const magicBytes = await readResponsePrefix(modelCheck, 4);
+        const magic = new TextDecoder().decode(magicBytes);
         if (magic !== "glTF")
           throw new Error("3D model preview returned invalid GLB bytes");
 
