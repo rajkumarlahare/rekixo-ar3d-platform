@@ -37,6 +37,15 @@ test("visual placement supports satellite click positioning and live 3D model al
   assert.match(visual, /new google\.maps\.Polygon/);
   assert.match(visual, /Model3DElement/);
   assert.match(visual, /altitudeMode: "RELATIVE_TO_GROUND"/);
+  assert.match(visual, /credentials: "same-origin"/);
+  assert.match(visual, /gmp-steadychange/);
+  assert.match(visual, /function focus3DMap/);
+  assert.match(visual, /flyCameraTo/);
+  assert.match(visual, /altitudeMode: "RELATIVE_TO_GROUND" as const/);
+  assert.match(visual, /Math\.max\(0, altitudeM \+ 10\)/);
+  assert.match(visual, /range: 700/);
+  assert.match(visual, /center:\s*\{\s*lat: latitude,\s*lng: longitude,\s*\}/);
+  assert.doesNotMatch(visual, /altitude: Math\.max\(0, altitudeM \+ 35\)/);
   assert.match(visual, /model3DRef\.current\.orientation/);
   assert.match(visual, /model3DRef\.current\.scale = scale/);
 });
