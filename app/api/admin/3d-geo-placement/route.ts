@@ -4,6 +4,7 @@ import { writeAudit } from "@/modules/audit";
 import {
   geo3DPlacementSchemaReady,
   geo3DSuggestedCenter,
+  geo3DVisualFeatures,
   loadGeo3DPlacement,
   resolveGeo3DPlacementScope,
   publicGoogleMapsBrowserKey,
@@ -26,12 +27,14 @@ function finite(value: unknown, min: number, max: number) {
 async function state(projectId: string) {
   const scope = await resolveGeo3DPlacementScope(projectId);
   if (!scope) return { error: "Project nahi mila", status: 404 as const };
-  const [placement, link, suggestedCenter, mapsApiKey] = await Promise.all([
-    loadGeo3DPlacement(scope.platformProject.id),
-    project3DLink(scope.platformProject.id),
-    geo3DSuggestedCenter(scope.geoProjectId),
-    publicGoogleMapsBrowserKey(),
-  ]);
+  const [placement, link, suggestedCenter, mapsApiKey, visualFeatures] =
+    await Promise.all([
+      loadGeo3DPlacement(scope.platformProject.id),
+      project3DLink(scope.platformProject.id),
+      geo3DSuggestedCenter(scope.geoProjectId),
+      publicGoogleMapsBrowserKey(),
+      geo3DVisualFeatures(scope.geoProjectId),
+    ]);
   const engine = link ? await publishedEngineProject(link.engineSlug) : null;
   return {
     schemaReady: await geo3DPlacementSchemaReady(),
@@ -42,6 +45,7 @@ async function state(projectId: string) {
     },
     placement,
     suggestedCenter,
+    visualFeatures,
     maps: {
       enabled: Boolean(mapsApiKey),
       apiKey: mapsApiKey || null,
