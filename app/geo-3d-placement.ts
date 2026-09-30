@@ -4,6 +4,7 @@ import {
   project3DLink,
   publishedEngineProject,
 } from "@/modules/engine-integration";
+import { normalizeGeoGeometry } from "./geo-model";
 
 export type Geo3DPlacement = {
   platformProjectId: string;
@@ -105,6 +106,43 @@ export async function resolveGeo3DPlacementScope(requestedProjectId: string) {
     platformProject: source,
     isGeoLab: source.id !== requestedProjectId,
   };
+}
+
+export async function geo3DVisualFeatures(geoProjectId: string) {
+  try {
+    const rows = await env.DB.prepare(
+      "SELECT id,name,geometry,linked_plot_id AS linkedPlotId,source FROM geo_features WHERE project_id=? AND geometry_type='Polygon' ORDER BY CASE WHEN source='plot_mapper' THEN 0 ELSE 1 END,layer,name,id LIMIT 400",
+    )
+      .bind(geoProjectId)
+      .all<{
+        id: string;
+        name: string;
+        geometry: string;
+        linkedPlotId: string | null;
+        source: string;
+      }>();
+
+    return rows.results.flatMap((row) => {
+      try {
+        const geometry = normalizeGeoGeometry(JSON.parse(row.geometry));
+        if (geometry.type !== "Polygon" || !geometry.coordinates[0]?.length)
+          return [];
+        return [
+          {
+            id: row.id,
+            name: row.name,
+            linkedPlotId: row.linkedPlotId,
+            source: row.source,
+            path: geometry.coordinates[0],
+          },
+        ];
+      } catch {
+        return [];
+      }
+    });
+  } catch {
+    return [];
+  }
 }
 
 export async function geo3DSuggestedCenter(geoProjectId: string) {

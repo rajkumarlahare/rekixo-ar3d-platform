@@ -4,8 +4,10 @@ import { writeAudit } from "@/modules/audit";
 import {
   geo3DPlacementSchemaReady,
   geo3DSuggestedCenter,
+  geo3DVisualFeatures,
   loadGeo3DPlacement,
   resolveGeo3DPlacementScope,
+  publicGoogleMapsBrowserKey,
 } from "@/modules/geo";
 import {
   project3DLink,
@@ -25,11 +27,14 @@ function finite(value: unknown, min: number, max: number) {
 async function state(projectId: string) {
   const scope = await resolveGeo3DPlacementScope(projectId);
   if (!scope) return { error: "Project nahi mila", status: 404 as const };
-  const [placement, link, suggestedCenter] = await Promise.all([
-    loadGeo3DPlacement(scope.platformProject.id),
-    project3DLink(scope.platformProject.id),
-    geo3DSuggestedCenter(scope.geoProjectId),
-  ]);
+  const [placement, link, suggestedCenter, mapsApiKey, visualFeatures] =
+    await Promise.all([
+      loadGeo3DPlacement(scope.platformProject.id),
+      project3DLink(scope.platformProject.id),
+      geo3DSuggestedCenter(scope.geoProjectId),
+      publicGoogleMapsBrowserKey(),
+      geo3DVisualFeatures(scope.geoProjectId),
+    ]);
   const engine = link ? await publishedEngineProject(link.engineSlug) : null;
   return {
     schemaReady: await geo3DPlacementSchemaReady(),
@@ -40,6 +45,11 @@ async function state(projectId: string) {
     },
     placement,
     suggestedCenter,
+    visualFeatures,
+    maps: {
+      enabled: Boolean(mapsApiKey),
+      apiKey: mapsApiKey || null,
+    },
     link: link
       ? {
           engineProjectId: link.engineProjectId,
@@ -60,6 +70,11 @@ async function state(projectId: string) {
               }
             : null,
           release: engine.release ?? null,
+          previewModelUrl:
+            engine.model?.mimeType === "model/gltf-binary" &&
+            engine.model.available !== false
+              ? `/api/admin/3d-geo-model?projectId=${encodeURIComponent(projectId)}&release=${encodeURIComponent(String(engine.release?.id || ""))}`
+              : null,
         }
       : null,
   };
