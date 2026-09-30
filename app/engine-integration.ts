@@ -10,11 +10,31 @@ type EngineProject = {
   status: "draft" | "published" | "archived";
 };
 
-type EngineStatusPayload = {
+export type EnginePublishedModel = {
+  id: string;
+  projectId: string;
+  name: string;
+  version: number;
+  mimeType: string;
+  byteSize?: number;
+  available?: boolean;
+  url?: string;
+};
+
+export type EnginePublishedRelease = {
+  id: string;
+  version: number;
+  manifestSha256?: string;
+  createdAt?: string;
+};
+
+export type EngineStatusPayload = {
   contractVersion?: number;
   project: EngineProject;
   enabledSceneCount?: number;
   activeModelAvailable?: boolean;
+  model?: EnginePublishedModel;
+  release?: EnginePublishedRelease;
 };
 
 export type Project3DLink = {
@@ -82,6 +102,24 @@ export async function engineProjectStatus(slug: string) {
   const payload = await fetchEngineJson(url.toString());
   if (!payload || payload.contractVersion !== AR3D_INTEGRATION_CONTRACT_VERSION) return null;
   return payload;
+}
+
+export function enginePublishedModelUrl(modelUrl: string | undefined) {
+  const raw = String(modelUrl || "").trim();
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw, enginePublicOrigin());
+  } catch {
+    return null;
+  }
+  if (url.origin !== new URL(enginePublicOrigin()).origin) return null;
+  if (
+    !url.pathname.startsWith("/3Dprojects/api/releases/") &&
+    !url.pathname.startsWith("/3Dprojects/api/models/")
+  )
+    return null;
+  return url.toString();
 }
 
 export async function publishedEngineProject(slug: string) {
