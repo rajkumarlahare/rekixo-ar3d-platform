@@ -3,6 +3,7 @@ import {
   resolveGeo3DPlacementScope,
 } from "@/modules/geo";
 import {
+  engineGeoRenderableModel,
   enginePublishedModelUrl,
   project3DLink,
   publishedEngineProject,
@@ -38,7 +39,8 @@ async function resolvePreview(projectId: string) {
   )
     return null;
 
-  const sourceModelUrl = enginePublishedModelUrl(engine.model.url);
+  const renderModel = engineGeoRenderableModel(engine);
+  const sourceModelUrl = enginePublishedModelUrl(renderModel?.url);
   if (!sourceModelUrl) return null;
   return { sourceModelUrl };
 }
