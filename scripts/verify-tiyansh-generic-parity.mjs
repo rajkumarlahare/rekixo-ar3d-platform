@@ -99,6 +99,29 @@ async function verifyGallery(origin, data, query) {
   assert.match(response.headers.get("content-type") || "", /^image\//i);
 }
 
+async function verifyPublicLive(origin, data, query) {
+  const response = await read(`${origin}/api/public-live${query}`, {
+    headers: { accept: "application/json" },
+  });
+  assert.equal(response.status, 200, `${origin} public-live HTTP ${response.status}`);
+  assert.equal(
+    response.headers.get("x-rekixo-live-state"),
+    "1",
+    `${origin} public-live escaped Generic Client Worker`,
+  );
+  const live = await response.json();
+  assert.equal(live.projectId, projectId, `${origin} public-live resolved wrong project`);
+  assert.ok(Array.isArray(live.statuses), "public-live statuses missing");
+  const statusById = new Map(live.statuses.map((row) => [String(row.id), String(row.status)]));
+  for (const plot of data.plots || []) {
+    assert.ok(statusById.has(String(plot.id)), `public-live missing plot ${plot.id}`);
+    assert.ok(
+      ["available", "booked", "sold"].includes(statusById.get(String(plot.id))),
+      `public-live invalid status for plot ${plot.id}`,
+    );
+  }
+}
+
 async function verifySharedProjectRuntime(origin, data) {
   const publishVersion = Number(data?.publishVersion || 0);
   const url =
@@ -159,6 +182,7 @@ await verifyGallery(
   `?projectId=${encodeURIComponent(projectId)}`,
 );
 await verifyGallery(legacyOrigin, legacy.data, "");
+await verifyPublicLive(genericOrigin, generic.data, genericQuery);
 await verifyEmailLogin(
   genericOrigin,
   `/projects/${encodeURIComponent(projectSlug)}/admin-login`,
