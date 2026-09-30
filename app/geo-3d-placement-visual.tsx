@@ -451,6 +451,7 @@ export default function Geo3DPlacementVisual({
             `3D model unavailable (${modelCheck.status}${detail})`,
           );
         }
+        const finalModelUrl = modelCheck.url || modelUrl;
         const magicBytes = await readResponsePrefix(modelCheck, 4);
         const magic = new TextDecoder().decode(magicBytes);
         if (magic !== "glTF")
@@ -470,7 +471,10 @@ export default function Geo3DPlacementVisual({
           gestureHandling: "GREEDY",
         }) as Mutable3DMap;
         const model = new library.Model3DElement({
-          src: modelUrl,
+          // Use the final public Engine URL reached by the authenticated
+          // preflight. Model3DElement performs its own fetch and must not rely
+          // on Super Admin cookies being forwarded by the Maps renderer.
+          src: finalModelUrl,
           position: {
             lat: latitude,
             lng: longitude,
