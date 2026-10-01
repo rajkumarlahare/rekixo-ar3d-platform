@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import {
   enginePublishedModelUrl,
+  preferredEngineGeoRenderModel,
   project3DLink,
   publishedEngineProject,
 } from "@/modules/engine-integration";
@@ -195,13 +196,26 @@ export async function resolvePublicGeo3DPlacement(platformProjectId: string) {
   )
     return null;
 
-  const sourceModelUrl = enginePublishedModelUrl(engine.model.url);
+  const renderModel = preferredEngineGeoRenderModel(engine);
+  if (
+    !renderModel ||
+    renderModel.mimeType !== "model/gltf-binary" ||
+    renderModel.available === false
+  )
+    return null;
+
+  const sourceModelUrl = enginePublishedModelUrl(renderModel.url);
   if (!sourceModelUrl) return null;
 
   return {
     placement,
     engine,
+    renderModel,
     sourceModelUrl,
+    modelVariant:
+      engine.geoModel && renderModel === engine.geoModel
+        ? ("geo-optimized" as const)
+        : ("source" as const),
     experienceUrl: link.publicUrl,
   };
 }
