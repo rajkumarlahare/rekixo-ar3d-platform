@@ -47,6 +47,7 @@ type PublicGeoData = {
     flattenHalfSizeM: number;
     releaseId: string;
     releaseVersion: number;
+    modelFingerprint?: string;
     modelUrl: string;
     experienceUrl: string;
   };
