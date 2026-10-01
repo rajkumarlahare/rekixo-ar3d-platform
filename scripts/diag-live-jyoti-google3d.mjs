@@ -120,8 +120,10 @@ const liveState = await page.evaluate(async (projectId) => {
 }, project.projectId);
 
 const render = liveState.placement || {
-  longitude: liveState.suggestedCenter?.longitude,
-  latitude: liveState.suggestedCenter?.latitude,
+  // Current unsaved working values visible in the user's live Geo Mapper.
+  // Diagnostic only: never persisted by this workflow.
+  longitude: liveState.suggestedCenter?.longitude ?? 82.9545003,
+  latitude: liveState.suggestedCenter?.latitude ?? 21.9949849,
   altitudeM: 0,
   headingDeg: 0,
   pitchDeg: 0,
