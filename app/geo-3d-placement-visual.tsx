@@ -722,7 +722,8 @@ export default function Geo3DPlacementVisual({
             tilt: pitchDeg,
             roll: rollDeg,
           };
-      model3DRef.current.scale = rendererProbe ? 0.15 : scale;
+      if (rendererProbe) model3DRef.current.scale = 0.15;
+      else model3DRef.current.scale = scale;
     }
   }, [
     mode,
