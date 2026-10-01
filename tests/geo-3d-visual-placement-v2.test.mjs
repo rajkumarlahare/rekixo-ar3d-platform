@@ -79,12 +79,17 @@ test("placement manager exposes fine visual controls without auto-enabling custo
   assert.match(manager, /publicEnabled: false/);
 });
 
-test("placement state exposes only browser-safe maps key plus internal preview route", () => {
+test("placement state exposes a validated same-origin Engine model path", () => {
   const route = read("app/api/admin/3d-geo-placement/route.ts");
+  const integration = read("app/engine-integration.ts");
 
   assert.match(route, /publicGoogleMapsBrowserKey\(\)/);
   assert.match(route, /previewModelUrl:/);
-  assert.match(route, /\/api\/geo-3d-model-proxy\?projectId=/);
+  assert.match(route, /engineSameOriginAdminModelPath\(renderModel\.url\)/);
+  assert.match(integration, /export function engineSameOriginAdminModelPath/);
+  assert.match(integration, /const safeUrl = enginePublishedModelUrl\(modelUrl\)/);
+  assert.match(integration, /return `\$\{url\.pathname\}\$\{url\.search\}`/);
+  assert.doesNotMatch(route, /\/api\/geo-3d-model-proxy\?projectId=/);
   assert.doesNotMatch(route, /engine\.model\.url\s*[,}]/);
 });
 
@@ -183,24 +188,20 @@ test("isolated Google Model3D probe compares stable/current/beta Maps JS globals
 });
 
 
-test("same-origin Geo model proxies remove cross-origin GLB loading from the renderer path", () => {
+test("Google windmill proxy preserves identity GLB bytes and Engine preview avoids Platform binary hopping", () => {
   const placement = read("app/api/admin/3d-geo-placement/route.ts");
-  const proxy = read("app/api/geo-3d-model-proxy/route.ts");
+  const integration = read("app/engine-integration.ts");
   const windmill = read("app/api/3d-google-windmill/route.ts");
   const isolated = read("app/api/admin/3d-google-model-probe/route.ts");
 
-  assert.match(placement, /\/api\/geo-3d-model-proxy\?projectId=/);
-  assert.match(proxy, /resolveGeo3DPlacementScope\(projectId\)/);
-  assert.match(proxy, /project3DLink\(scope\.platformProject\.id\)/);
-  assert.match(proxy, /publishedEngineProject\(link\.engineSlug\)/);
-  assert.match(proxy, /preferredEngineGeoRenderModel\(engine\)/);
-  assert.match(proxy, /fetchEnginePublishedModel\(resolved\.modelUrl/);
-  assert.match(proxy, /headers: range \? \{ Range: range \} : undefined/);
-  assert.match(proxy, /x-rekixo-model-proxy", "same-origin-engine"/);
-  assert.doesNotMatch(proxy, /searchParams\.get\("url"\)/);
+  assert.match(placement, /engineSameOriginAdminModelPath\(renderModel\.url\)/);
+  assert.match(integration, /\/3Dprojects\/api\/releases\//);
+  assert.match(integration, /\/3Dprojects\/api\/models\//);
+  assert.match(integration, /return `\$\{url\.pathname\}\$\{url\.search\}`/);
 
   assert.match(windmill, /maps-docs-team\.web\.app\/assets\/windmill\.glb/);
-  assert.match(windmill, /headers: range \? \{ Range: range \} : undefined/);
+  assert.match(windmill, /"Accept-Encoding": "identity"/);
+  assert.match(windmill, /headers\.set\("Range", range\)/);
   assert.match(windmill, /x-rekixo-model-proxy", "google-windmill"/);
   assert.match(isolated, /src: "\/api\/3d-google-windmill"/);
 });
