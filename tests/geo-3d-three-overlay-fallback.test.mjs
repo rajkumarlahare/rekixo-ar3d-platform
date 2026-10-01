@@ -23,13 +23,24 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(overlay, /three\/addons\/loaders\/GLTFLoader\.js/);
   assert.match(overlay, /parseAsync\(modelBytes\.slice\(0\), ""\)/);
   assert.match(overlay, /renderer\.setClearColor\(0x000000, 0\)/);
+  assert.match(overlay, /THREE\.NeutralToneMapping/);
+  assert.doesNotMatch(overlay, /ACESFilmicToneMapping/);
   assert.match(overlay, /map\.center/);
   assert.match(overlay, /map\.heading/);
   assert.match(overlay, /map\.tilt/);
   assert.match(overlay, /map\.range/);
   assert.match(overlay, /map\.fov/);
+  assert.match(overlay, /addEventListener\("pointerdown", onPointerDown\)/);
+  assert.match(overlay, /addEventListener\("pointermove", onPointerMove\)/);
+  assert.match(overlay, /addEventListener\("wheel", onWheel/);
+  assert.match(overlay, /map\.heading = normalizeHeading/);
+  assert.match(overlay, /map\.tilt = clampTilt/);
+  assert.match(overlay, /map\.range = clampRange/);
   assert.match(css, /\.modelOverlay/);
-  assert.match(css, /pointer-events: none/);
+  assert.match(css, /pointer-events: auto/);
+  assert.match(css, /touch-action: none/);
+  assert.match(visual, /View \+90°/);
+  assert.match(visual, /Controls: drag orbit\/tilt/);
 });
 
 test("Rekixo overlay remains preview-only and does not mutate customer publication", () => {
