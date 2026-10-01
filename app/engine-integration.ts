@@ -258,6 +258,20 @@ export function enginePublishedModelUrl(modelUrl: string | undefined) {
   return url.toString();
 }
 
+export function engineSameOriginAdminModelPath(
+  modelUrl: string | undefined,
+) {
+  const safeUrl = enginePublishedModelUrl(modelUrl);
+  if (!safeUrl) return null;
+  const url = new URL(safeUrl);
+
+  // Super Admin already lives on admin.rekixo.com, where /3Dprojects/* is
+  // routed directly to the isolated Engine Admin Worker. Returning only the
+  // validated path keeps the browser request same-origin and avoids a second
+  // Platform Worker binary hop.
+  return `${url.pathname}${url.search}`;
+}
+
 export async function publishedEngineProject(slug: string) {
   const clean = String(slug || "").trim().toLowerCase();
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(clean)) return null;
