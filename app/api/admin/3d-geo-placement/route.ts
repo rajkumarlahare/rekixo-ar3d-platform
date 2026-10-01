@@ -41,13 +41,6 @@ async function state(projectId: string) {
   const engine = link ? await publishedEngineProject(link.engineSlug) : null;
   const renderModel = preferredEngineGeoRenderModel(engine);
   const renderPolicy = geo3DRenderPolicy(engine?.project);
-  const renderFingerprint =
-    engine?.geoModel &&
-    renderModel === engine.geoModel &&
-    typeof engine.geoModel.sha256 === "string" &&
-    /^[a-f0-9]{64}$/.test(engine.geoModel.sha256)
-      ? engine.geoModel.sha256
-      : "";
   return {
     schemaReady: await geo3DPlacementSchemaReady(),
     scope: {
