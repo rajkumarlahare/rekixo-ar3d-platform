@@ -72,7 +72,7 @@ window.__rekixoProbeReady = async function () {
     });
 
     const model = new Model3DElement({
-      src: "/api/3d-google-windmill",
+      src: "/api/3d-google-windmill?transport=decoded-v2",
       position: { lat: 39.1178, lng: -106.4452, altitude: 4495.4952 },
       orientation: { heading: 0, tilt: 270, roll: 90 },
       scale: 0.15,

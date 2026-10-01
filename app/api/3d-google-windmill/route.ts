@@ -15,7 +15,7 @@ function responseHeaders(upstream: Response) {
     if (value) headers.set(name, value);
   }
   headers.set("content-type", "model/gltf-binary");
-  headers.set("cache-control", "public,max-age=3600");
+  headers.set("cache-control", "private,no-store");
   headers.set("x-content-type-options", "nosniff");
   headers.set("cross-origin-resource-policy", "cross-origin");
   headers.set("access-control-allow-origin", "*");
