@@ -101,13 +101,6 @@ page.on("response", (response) => {
 });
 
 await page.goto(`${baseUrl}/admin`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-await page.getByRole("button", { name: "Geo Mapper" }).click();
-const search = page.getByRole("textbox", { name: "Search client projects" });
-await search.fill("Jyoti Paradise Demo Admin");
-const select = page.locator("#workspace-project");
-await select.waitFor({ state: "visible", timeout: 30_000 });
-await select.selectOption(project.projectId);
-await page.getByText("3D Building on Geo Map", { exact: true }).waitFor({ state: "visible", timeout: 30_000 });
 
 const liveState = await page.evaluate(async (projectId) => {
   const response = await fetch(
@@ -134,6 +127,8 @@ if (!Number.isFinite(Number(render.longitude)) || !Number.isFinite(Number(render
   throw new Error("Live render coordinates unavailable");
 if (!liveState.engine?.previewModelUrl)
   throw new Error("Live preview model URL unavailable");
+if (!liveState.maps?.apiKey)
+  throw new Error("Live Google Maps browser key unavailable");
 
 const sanitizedState = JSON.parse(JSON.stringify(liveState));
 if (sanitizedState.maps) delete sanitizedState.maps.apiKey;
@@ -143,12 +138,33 @@ await writeFile(
 );
 
 await page.evaluate(
-  async ({ previewModelUrl, render, flattenBaseMesh, flattenHalfSizeM }) => {
-    const deadline = Date.now() + 30_000;
-    while (!window.google?.maps?.importLibrary && Date.now() < deadline)
-      await new Promise((resolve) => setTimeout(resolve, 100));
+  async ({ previewModelUrl, render, flattenBaseMesh, flattenHalfSizeM, apiKey }) => {
+    if (!window.google?.maps?.importLibrary) {
+      await new Promise((resolve, reject) => {
+        const callbackName = "__jyotiDiagMapsReady";
+        const timeout = window.setTimeout(
+          () => reject(new Error("Google Maps diagnostic loader timed out")),
+          30_000,
+        );
+        window[callbackName] = () => {
+          window.clearTimeout(timeout);
+          resolve();
+        };
+        const script = document.createElement("script");
+        script.async = true;
+        script.defer = true;
+        script.src =
+          `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}` +
+          `&v=weekly&loading=async&callback=${callbackName}`;
+        script.onerror = () => {
+          window.clearTimeout(timeout);
+          reject(new Error("Google Maps diagnostic script failed"));
+        };
+        document.head.append(script);
+      });
+    }
     if (!window.google?.maps?.importLibrary)
-      throw new Error("Google Maps library not available on live admin page");
+      throw new Error("Google Maps library unavailable after diagnostic load");
 
     const library = await window.google.maps.importLibrary("maps3d");
     const preflight = await fetch(previewModelUrl, {
@@ -262,6 +278,7 @@ await page.evaluate(
     render,
     flattenBaseMesh: liveState.engine?.renderPolicy?.flattenBaseMesh === true,
     flattenHalfSizeM: liveState.engine?.renderPolicy?.flattenHalfSizeM || 0,
+    apiKey: liveState.maps?.apiKey || "",
   },
 );
 await page.waitForTimeout(7000);
