@@ -127,6 +127,7 @@ export async function createGeo3DThreeOverlay({
   if (sourceBounds.isEmpty())
     throw new Error("Rekixo overlay GLB bounds empty hain");
   const sourceSize = sourceBounds.getSize(new THREE.Vector3());
+  const sourceBaseY = sourceBounds.min.y;
   const bounds = {
     widthM: sourceSize.x,
     heightM: sourceSize.y,
@@ -248,35 +249,6 @@ export async function createGeo3DThreeOverlay({
           };
   };
 
-  const deterministicCameraPosition = (
-    headingDeg: number,
-    tiltDeg: number,
-    rangeM: number,
-  ) => {
-    const placement = getPlacement();
-    const heading = THREE.MathUtils.degToRad(normalizeHeading(headingDeg));
-    const tilt = THREE.MathUtils.degToRad(clampTilt(tiltDeg));
-    const horizontalM = rangeM * Math.sin(tilt);
-    const verticalM = Math.max(0, rangeM * Math.cos(tilt));
-    const northM = -Math.cos(heading) * horizontalM;
-    const eastM = -Math.sin(heading) * horizontalM;
-    const cosLatitude = Math.max(
-      0.2,
-      Math.cos((placement.latitude * Math.PI) / 180),
-    );
-
-    return {
-      lat: placement.latitude + northM / 111_320,
-      lng:
-        placement.longitude +
-        eastM / (111_320 * cosLatitude),
-      altitude:
-        lockedCenterAltitudeM === null
-          ? undefined
-          : lockedCenterAltitudeM + verticalM,
-    };
-  };
-
   const writeOrbitToGoogleMap = () => {
     mapCameraFrame = 0;
     if (
@@ -285,23 +257,14 @@ export async function createGeo3DThreeOverlay({
       orbitRange === null
     )
       return;
+    // Target-point mode is the source of truth. Google documents that
+    // cameraPosition takes precedence over center when both are changed in the
+    // same run loop, which makes the target wander. Keep center immutable and
+    // let Map3DElement derive cameraPosition from center + heading/tilt/range.
+    pinGoogleCenterToBuilding();
     map.heading = orbitHeading;
     map.tilt = orbitTilt;
     map.range = orbitRange;
-
-    const cameraPosition = deterministicCameraPosition(
-      orbitHeading,
-      orbitTilt,
-      orbitRange,
-    );
-    if ("cameraPosition" in map) {
-      map.cameraPosition =
-        cameraPosition.altitude === undefined
-          ? { lat: cameraPosition.lat, lng: cameraPosition.lng }
-          : cameraPosition;
-    } else {
-      pinGoogleCenterToBuilding();
-    }
   };
 
   const queueOrbitToGoogleMap = () => {
@@ -502,8 +465,15 @@ export async function createGeo3DThreeOverlay({
     // Rekixo preview is intentionally building-centric: the GLB origin is the
     // immutable geographic anchor. Camera orbit must move around this fixed
     // pivot; it must never translate the model as Google changes camera center.
-    root.position.set(0, placement.altitudeM, 0);
-    root.scale.setScalar(Math.max(0.001, finite(placement.scale, 1)));
+    const modelScale = Math.max(0.001, finite(placement.scale, 1));
+    // Base-align every GLB, even when its authored origin is not at y=0.
+    // placement.altitudeM is therefore always the visual ground offset.
+    root.position.set(
+      0,
+      placement.altitudeM - sourceBaseY * modelScale,
+      0,
+    );
+    root.scale.setScalar(modelScale);
     applyModelOrientation(
       root,
       finite(placement.headingDeg, 0),
@@ -511,7 +481,7 @@ export async function createGeo3DThreeOverlay({
       finite(placement.rollDeg, 0),
     );
 
-    const scale = Math.max(0.001, finite(placement.scale, 1));
+    const scale = modelScale;
     const targetY =
       placement.altitudeM + Math.max(2, (bounds.heightM * scale) / 2);
 
