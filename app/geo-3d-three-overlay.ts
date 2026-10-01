@@ -400,7 +400,6 @@ export async function createGeo3DThreeOverlay({
     const factor = Math.exp(
       THREE.MathUtils.clamp(event.deltaY, -180, 180) * 0.00105,
     );
-    pinGoogleCenterToBuilding();
     applyBuildingCenteredCamera(
       orbitHeading ?? normalizeHeading(finite(map.heading, 0)),
       orbitTilt ?? clampTilt(finite(map.tilt, 68)),
