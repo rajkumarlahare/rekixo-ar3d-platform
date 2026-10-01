@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Box, MapPinned } from "lucide-react";
 import styles from "./geo-3d-placement-visual.module.css";
+import {
+  createGeo3DThreeOverlay,
+  type Geo3DOverlayBounds,
+  type Geo3DOverlayPlacement,
+} from "./geo-3d-three-overlay";
 
 type LatLng = { lat(): number; lng(): number };
 type MapClickEvent = { latLng?: LatLng | null };
@@ -361,6 +366,11 @@ export default function Geo3DPlacementVisual({
   const [rendererProbe, setRendererProbe] = useState(false);
   const [isolatedProbeVersion, setIsolatedProbeVersion] =
     useState<IsolatedProbeVersion | null>(null);
+  const [projectRenderer, setProjectRenderer] = useState<
+    "rekixo-overlay" | "google-native"
+  >("rekixo-overlay");
+  const [overlayBounds, setOverlayBounds] =
+    useState<Geo3DOverlayBounds | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [modelDiagnostic, setModelDiagnostic] = useState<ModelDiagnostic>({
@@ -370,6 +380,16 @@ export default function Geo3DPlacementVisual({
     useState<RendererRuntimeDiagnostic>({});
   const satelliteRef = useRef<HTMLDivElement | null>(null);
   const threeDRef = useRef<HTMLDivElement | null>(null);
+  const threeOverlayRef = useRef<HTMLDivElement | null>(null);
+  const placementRef = useRef<Geo3DOverlayPlacement>({
+    longitude,
+    latitude,
+    altitudeM,
+    headingDeg,
+    pitchDeg,
+    rollDeg,
+    scale,
+  });
   const mapRef = useRef<MapInstance | null>(null);
   const markerRef = useRef<Circle | null>(null);
   const headingRef = useRef<Polyline | null>(null);
@@ -381,6 +401,15 @@ export default function Geo3DPlacementVisual({
   const flattener3DRef = useRef<Mutable3DFlattener | null>(null);
 
   disabledRef.current = disabled;
+  placementRef.current = {
+    longitude,
+    latitude,
+    altitudeM,
+    headingDeg,
+    pitchDeg,
+    rollDeg,
+    scale,
+  };
 
   const validPosition =
     finite(longitude) &&
@@ -528,9 +557,14 @@ export default function Geo3DPlacementVisual({
 
     let cancelled = false;
     let cleanup3D: (() => void) | undefined;
+    let overlayCleanup: (() => void) | undefined;
     let modelObjectUrl: string | undefined;
+    let projectModelBytes: ArrayBuffer | undefined;
+    let overlayReady = false;
+    let projectElementsAttached = false;
     setReady(false);
     setError("");
+    setOverlayBounds(null);
     setModelDiagnostic({ stage: "loading-map" });
     setRendererRuntime({});
 
@@ -599,6 +633,7 @@ export default function Geo3DPlacementVisual({
           const contentType = modelCheck.headers.get("content-type") || "";
           const modelStatus = modelCheck.status;
           const modelBytes = await modelCheck.arrayBuffer();
+          projectModelBytes = modelBytes;
           if (modelBytes.byteLength < 12)
             throw new Error("3D model preview returned an incomplete GLB");
           const magic = new TextDecoder().decode(
@@ -702,14 +737,19 @@ export default function Geo3DPlacementVisual({
           : null;
 
         let modelAttached = false;
-        const markAttached = () => {
+        const markAttached = (nativeModel: boolean) => {
+          if (modelAttached) return;
           modelAttached = true;
-          model3DRef.current = model;
-          setRendererRuntime((current) => ({
-            ...current,
-            modelTag: model.tagName.toLowerCase(),
-            modelConnected: model.isConnected,
-          }));
+          if (nativeModel) {
+            model3DRef.current = model;
+            setRendererRuntime((current) => ({
+              ...current,
+              modelTag: model.tagName.toLowerCase(),
+              modelConnected: model.isConnected,
+            }));
+          } else {
+            model3DRef.current = null;
+          }
           setModelDiagnostic((current) => ({
             ...current,
             stage: "model-attached",
@@ -717,15 +757,20 @@ export default function Geo3DPlacementVisual({
           setReady(true);
         };
         const attachProjectModel = () => {
-          if (cancelled || modelAttached) return;
+          if (cancelled || projectElementsAttached) return;
+          projectElementsAttached = true;
           focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
           if (flattener) {
             map.append(flattener);
             flattener3DRef.current = flattener;
           }
           if (anchorBeacon) map.append(anchorBeacon);
-          map.append(model);
-          markAttached();
+          if (projectRenderer === "google-native") {
+            map.append(model);
+            markAttached(true);
+          } else if (overlayReady) {
+            markAttached(false);
+          }
           // Re-focus after custom elements are attached. This avoids a stale
           // broad camera target surviving the initial terrain steady-state.
           window.requestAnimationFrame(() => {
@@ -750,13 +795,32 @@ export default function Geo3DPlacementVisual({
         threeDRef.current.replaceChildren(map);
         map3DRef.current = map;
 
+        if (!rendererProbe && projectRenderer === "rekixo-overlay") {
+          if (!projectModelBytes || !threeOverlayRef.current)
+            throw new Error("Rekixo Geo overlay initialize nahi hua");
+          const overlay = await createGeo3DThreeOverlay({
+            host: threeOverlayRef.current,
+            map,
+            modelBytes: projectModelBytes,
+            getPlacement: () => placementRef.current,
+          });
+          if (cancelled) {
+            overlay.dispose();
+            return;
+          }
+          overlayCleanup = overlay.dispose;
+          overlayReady = true;
+          setOverlayBounds(overlay.bounds);
+          if (projectElementsAttached) markAttached(false);
+        }
+
         let attachFallback: number | undefined;
         let probeObservationTimer: number | undefined;
         if (rendererProbe) {
           // Google docs append the model directly after the map is connected.
           // Do exactly that: no flattener, marker, steady wait or camera helper.
           map.append(model);
-          markAttached();
+          markAttached(true);
           probeObservationTimer = window.setTimeout(() => {
             if (cancelled) return;
             setRendererRuntime((current) => ({
@@ -778,6 +842,7 @@ export default function Geo3DPlacementVisual({
             window.clearTimeout(probeObservationTimer);
           map.removeEventListener("gmp-steadychange", steadyListener);
           map.removeEventListener("gmp-error", mapErrorListener);
+          overlayCleanup?.();
         };
       })
       .catch((reason) => {
@@ -809,6 +874,7 @@ export default function Geo3DPlacementVisual({
     modelFingerprint,
     rendererProbe,
     isolatedProbeVersion,
+    projectRenderer,
     mode,
     validPosition,
     flattenBaseMesh,
@@ -934,21 +1000,37 @@ export default function Geo3DPlacementVisual({
                 </>
               ) : null}
               {!rendererProbe ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (map3DRef.current)
-                      focus3DMap(
+                <>
+                  <button
+                    type="button"
+                    aria-pressed={projectRenderer === "rekixo-overlay"}
+                    onClick={() => setProjectRenderer("rekixo-overlay")}
+                  >
+                    Rekixo GLB
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={projectRenderer === "google-native"}
+                    onClick={() => setProjectRenderer("google-native")}
+                  >
+                    Google native
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (map3DRef.current)
+                        focus3DMap(
                         map3DRef.current,
                         latitude,
                         longitude,
                         altitudeM,
                         headingDeg,
                       );
-                  }}
-                >
-                  Focus building
-                </button>
+                    }}
+                  >
+                    Focus building
+                  </button>
+                </>
               ) : null}
             </>
           ) : null}
@@ -965,6 +1047,16 @@ export default function Geo3DPlacementVisual({
           className={
             mode === "three-d" && !(rendererProbe && isolatedProbeVersion)
               ? styles.canvas
+              : styles.hidden
+          }
+        />
+        <div
+          ref={threeOverlayRef}
+          className={
+            mode === "three-d" &&
+            !rendererProbe &&
+            projectRenderer === "rekixo-overlay"
+              ? styles.modelOverlay
               : styles.hidden
           }
         />
@@ -1054,6 +1146,24 @@ export default function Geo3DPlacementVisual({
             ) : null}
             {rendererProbe && isolatedProbeVersion ? (
               <span>Isolated iframe · separate Maps JS global</span>
+            ) : !rendererProbe && projectRenderer === "rekixo-overlay" ? (
+              <>
+                <span>
+                  Renderer: Rekixo Three overlay ·{" "}
+                  {modelDiagnostic.stage === "model-attached"
+                    ? "rendered"
+                    : modelDiagnostic.stage === "model-error"
+                      ? "error"
+                      : "loading"}
+                </span>
+                {overlayBounds ? (
+                  <span>
+                    GLB bounds: {overlayBounds.widthM.toFixed(1)}m ×{" "}
+                    {overlayBounds.heightM.toFixed(1)}m ×{" "}
+                    {overlayBounds.depthM.toFixed(1)}m
+                  </span>
+                ) : null}
+              </>
             ) : (
               <span>
                 Model element:{" "}
