@@ -1,0 +1,46 @@
+name: Diagnostic Live Same Origin Model Proxy
+
+on:
+  push:
+    branches:
+      - diag/live-same-origin-model-proxy-20261001
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe windmill proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(mktemp)"
+          HDR="$(mktemp)"
+          STATUS="$(curl --silent --show-error --location --output "$BODY" --dump-header "$HDR" --write-out '%{http_code}' --header 'Range: bytes=0-3' 'https://admin.rekixo.com/api/3d-google-windmill')"
+          echo "WIND_STATUS=$STATUS"
+          grep -Ei '^(content-type|content-length|content-range|accept-ranges|x-rekixo-model-proxy):' "$HDR" || true
+          printf 'WIND_MAGIC='
+          od -An -tc -N4 "$BODY" | tr -d ' \n'
+          echo
+          test "$STATUS" = "206" -o "$STATUS" = "200"
+          test "$(head -c 4 "$BODY")" = "glTF"
+          rm -f "$BODY" "$HDR"
+      - name: Probe Jyoti same-origin proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(mktemp)"
+          HDR="$(mktemp)"
+          URL='https://admin.rekixo.com/api/geo-3d-model-proxy?projectId=056fc8a2-0a39-40b8-87bc-20595141ffeb'
+          STATUS="$(curl --silent --show-error --location --output "$BODY" --dump-header "$HDR" --write-out '%{http_code}' --header 'Range: bytes=0-3' "$URL")"
+          echo "JYOTI_STATUS=$STATUS"
+          grep -Ei '^(content-type|content-length|content-range|accept-ranges|x-rekixo-model-proxy|x-rekixo-sha256|x-rekixo-engine-model-transport):' "$HDR" || true
+          printf 'JYOTI_MAGIC='
+          od -An -tc -N4 "$BODY" | tr -d ' \n'
+          echo
+          test "$STATUS" = "206" -o "$STATUS" = "200"
+          test "$(head -c 4 "$BODY")" = "glTF"
+          rm -f "$BODY" "$HDR"
