@@ -709,6 +709,11 @@ export default function Geo3DPlacementVisual({
         const markAttached = () => {
           modelAttached = true;
           model3DRef.current = model;
+          setRendererRuntime((current) => ({
+            ...current,
+            modelTag: model.tagName.toLowerCase(),
+            modelConnected: model.isConnected,
+          }));
           setModelDiagnostic((current) => ({
             ...current,
             stage: "model-attached",
@@ -750,11 +755,19 @@ export default function Geo3DPlacementVisual({
         map3DRef.current = map;
 
         let attachFallback: number | undefined;
+        let probeObservationTimer: number | undefined;
         if (rendererProbe) {
           // Google docs append the model directly after the map is connected.
           // Do exactly that: no flattener, marker, steady wait or camera helper.
           map.append(model);
           markAttached();
+          probeObservationTimer = window.setTimeout(() => {
+            if (cancelled) return;
+            setRendererRuntime((current) => ({
+              ...current,
+              ...rendererResourceObservation(),
+            }));
+          }, 3000);
         } else {
           map.addEventListener("gmp-steadychange", steadyListener);
           // Some Maps JS versions can become steady before the first event
@@ -765,6 +778,8 @@ export default function Geo3DPlacementVisual({
         cleanup3D = () => {
           if (attachFallback !== undefined)
             window.clearTimeout(attachFallback);
+          if (probeObservationTimer !== undefined)
+            window.clearTimeout(probeObservationTimer);
           map.removeEventListener("gmp-steadychange", steadyListener);
           map.removeEventListener("gmp-error", mapErrorListener);
         };
@@ -898,21 +913,23 @@ export default function Geo3DPlacementVisual({
               >
                 {rendererProbe ? "Project model" : "Google model test"}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (map3DRef.current)
-                    focus3DMap(
-                      map3DRef.current,
-                      latitude,
-                      longitude,
-                      altitudeM,
-                      headingDeg,
-                    );
-                }}
-              >
-                Focus building
-              </button>
+              {!rendererProbe ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (map3DRef.current)
+                      focus3DMap(
+                        map3DRef.current,
+                        latitude,
+                        longitude,
+                        altitudeM,
+                        headingDeg,
+                      );
+                  }}
+                >
+                  Focus building
+                </button>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -943,7 +960,16 @@ export default function Geo3DPlacementVisual({
 
       <footer className={styles.status}>
         <span>
-          Anchor: {latitude.toFixed(7)}, {longitude.toFixed(7)}
+          {rendererProbe ? "Probe anchor" : "Anchor"}:{" "}
+          {(rendererProbe
+            ? GOOGLE_RENDERER_PROBE_MODEL.position.lat
+            : latitude
+          ).toFixed(7)}
+          ,{" "}
+          {(rendererProbe
+            ? GOOGLE_RENDERER_PROBE_MODEL.position.lng
+            : longitude
+          ).toFixed(7)}
         </span>
         <span>Heading {headingDeg.toFixed(1)}°</span>
         <span>Scale {scale.toFixed(3)}</span>
@@ -981,7 +1007,29 @@ export default function Geo3DPlacementVisual({
                   ? "error"
                   : "pending"}
             </span>
-            {flattenBaseMesh ? (
+            {rendererProbe && rendererRuntime.mapsVersion ? (
+              <span>
+                Maps JS {rendererRuntime.mapsVersion} · loader{" "}
+                {rendererRuntime.loaderVersion || "unknown"} · maps3d{" "}
+                {rendererRuntime.maps3dPreloaded ? "preloaded" : "dynamic"}
+              </span>
+            ) : null}
+            {rendererProbe && rendererRuntime.modelTag ? (
+              <span>
+                {rendererRuntime.modelTag} · DOM{" "}
+                {rendererRuntime.modelConnected ? "connected" : "detached"} · resource{" "}
+                {rendererRuntime.resourceObserved
+                  ? "observed" +
+                    (rendererRuntime.resourceDurationMs
+                      ? ` · ${rendererRuntime.resourceDurationMs}ms`
+                      : "")
+                  : "not exposed yet"}
+              </span>
+            ) : null}
+            {rendererProbe && rendererRuntime.webglRenderer ? (
+              <span>GPU: {rendererRuntime.webglRenderer}</span>
+            ) : null}
+            {!rendererProbe && flattenBaseMesh ? (
               <span>
                 Google base mesh: flattened · {(flattenHalfSizeM * 2).toFixed(0)}m ×{" "}
                 {(flattenHalfSizeM * 2).toFixed(0)}m
