@@ -56,7 +56,14 @@ const cookie = `${body}.${signature}`;
 
 await mkdir("artifacts/jyoti-live-geo-debug", { recursive: true });
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  args: [
+    "--enable-unsafe-swiftshader",
+    "--ignore-gpu-blocklist",
+    "--enable-webgl",
+  ],
+});
 const context = await browser.newContext({
   viewport: { width: 1440, height: 1100 },
   deviceScaleFactor: 1,
