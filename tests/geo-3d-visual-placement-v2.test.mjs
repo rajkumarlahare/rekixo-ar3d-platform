@@ -116,3 +116,19 @@ test("Geo derivative SHA invalidates same-release Super Admin preview cache", ()
   assert.equal(visual.includes("modelFingerprint,"), true);
   assert.equal(visual.includes("Geo build: {modelFingerprint.slice(0, 12)}"), true);
 });
+
+
+test("Super Admin Geo 3D has an independent Google renderer probe and anchor focus recovery", () => {
+  const visual = read("app/geo-3d-placement-visual.tsx");
+
+  assert.match(visual, /maps-docs-team\.web\.app\/assets\/windmill\.glb/);
+  assert.match(visual, /Google model test/);
+  assert.match(visual, /Renderer probe: Google official windmill/);
+  assert.match(visual, /Marker3DElement/);
+  assert.match(visual, /label: "ANCHOR"/);
+  assert.match(visual, /Focus building/);
+  assert.match(visual, /window\.requestAnimationFrame\(\(\) => \{/);
+  assert.match(visual, /focus3DMap\(map, latitude, longitude, altitudeM, headingDeg\)/);
+  assert.match(visual, /rendererProbe \? \{ heading: 0, tilt: 270, roll: 90 \}/);
+  assert.match(visual, /rendererProbe \? 0\.15 : scale/);
+});
