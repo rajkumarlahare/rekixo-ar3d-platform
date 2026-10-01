@@ -35,7 +35,8 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(overlay, /addEventListener\("wheel", onWheel/);
   assert.match(overlay, /applyBuildingCenteredCamera/);
   assert.match(overlay, /flyCameraTo\(\{ endCamera, durationMillis: 0 \}\)/);
-  assert.match(overlay, /root\.position\.set\(0, placement\.altitudeM, 0\)/);
+  assert.match(overlay, /const sourceBaseY = sourceBounds\.min\.y/);
+  assert.match(overlay, /placement\.altitudeM - sourceBaseY \* modelScale/);
   assert.doesNotMatch(overlay, /localMeters/);
   assert.match(overlay, /map\.heading = orbitHeading/);
   assert.match(overlay, /map\.tilt = orbitTilt/);
@@ -64,22 +65,27 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(visual, /Controls: drag orbit\/tilt/);
 });
 
-test("Geo orbit drives Google and Rekixo from one deterministic camera state", () => {
+test("Geo orbit keeps Map3D in center-target mode without cameraPosition fights", () => {
   const overlay = read("app/geo-3d-three-overlay.ts");
+  const visual = read("app/geo-3d-placement-visual.tsx");
 
   assert.match(overlay, /lockedCenterAltitudeM/);
-  assert.match(overlay, /deterministicCameraPosition/);
-  assert.match(overlay, /map\.cameraPosition =/);
-  assert.match(overlay, /northM = -Math\.cos\(heading\) \* horizontalM/);
-  assert.match(overlay, /eastM = -Math\.sin\(heading\) \* horizontalM/);
+  assert.match(overlay, /pinGoogleCenterToBuilding/);
+  assert.doesNotMatch(overlay, /map\.cameraPosition\s*=/);
+  assert.match(
+    overlay,
+    /let Map3DElement derive cameraPosition from center \+ heading\/tilt\/range/,
+  );
 
-  const applyStart = overlay.indexOf("const applyBuildingCenteredCamera");
-  const pointerStart = overlay.indexOf("const pointerSeparation", applyStart);
-  assert.ok(applyStart >= 0 && pointerStart > applyStart);
-  const applyBlock = overlay.slice(applyStart, pointerStart);
-  assert.doesNotMatch(applyBlock, /flyCameraTo/);
-  assert.doesNotMatch(applyBlock, /map\.center\s*=/);
-  assert.match(applyBlock, /queueOrbitToGoogleMap/);
+  const writeStart = overlay.indexOf("const writeOrbitToGoogleMap");
+  const queueStart = overlay.indexOf("const queueOrbitToGoogleMap", writeStart);
+  assert.ok(writeStart >= 0 && queueStart > writeStart);
+  const writeBlock = overlay.slice(writeStart, queueStart);
+  assert.match(writeBlock, /pinGoogleCenterToBuilding\(\)/);
+  assert.match(writeBlock, /map\.heading = orbitHeading/);
+  assert.match(writeBlock, /map\.tilt = orbitTilt/);
+  assert.match(writeBlock, /map\.range = orbitRange/);
+  assert.doesNotMatch(writeBlock, /cameraPosition\s*=/);
 
   const releaseStart = overlay.indexOf("const releasePointer");
   const wheelStart = overlay.indexOf("const onWheel", releaseStart);
@@ -96,9 +102,9 @@ test("Geo orbit drives Google and Rekixo from one deterministic camera state", (
   assert.match(renderBlock, /orbitTilt \?\?/);
   assert.match(renderBlock, /orbitRange \?\?/);
   assert.doesNotMatch(renderBlock, /const cameraPosition = map\.cameraPosition/);
-  assert.doesNotMatch(renderBlock, /const center = map\.center/);
   assert.match(renderBlock, /Never read asynchronous Google camera values back/);
-  assert.match(renderBlock, /finite\(map\.fov, overlayFovDeg\)/);
+
+  assert.match(visual, /overlay\.focusView\(headingDeg, 68, 190\)/);
 });
 
 test("Rekixo overlay remains preview-only and does not mutate customer publication", () => {
