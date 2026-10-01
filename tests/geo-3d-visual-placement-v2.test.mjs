@@ -48,10 +48,12 @@ test("visual placement supports satellite click positioning and live 3D model al
   assert.match(visual, /Geo GLB:/);
   assert.match(visual, /altitudeMode: "RELATIVE_TO_GROUND"/);
   assert.match(visual, /credentials: "same-origin"/);
-  assert.match(visual, /headers: \{ Range: "bytes=0-3" \}/);
   assert.match(visual, /modelCheck\.status !== 200 && modelCheck\.status !== 206/);
-  assert.match(visual, /const finalModelUrl = modelCheck\.url \|\| modelUrl/);
-  assert.match(visual, /readResponsePrefix\(modelCheck, 4\)/);
+  assert.match(visual, /const modelBytes = await modelCheck\.arrayBuffer\(\)/);
+  assert.match(visual, /URL\.createObjectURL/);
+  assert.match(visual, /new Blob\(\[modelBytes\], \{ type: "model\/gltf-binary" \}\)/);
+  assert.match(visual, /rendererModelUrl = modelObjectUrl/);
+  assert.match(visual, /URL\.revokeObjectURL\(modelObjectUrl\)/);
   assert.match(visual, /src: finalModelUrl/);
   assert.match(visual, /magic !== "glTF"/);
   assert.doesNotMatch(visual, /method: "HEAD"/);
@@ -208,6 +210,26 @@ test("Google windmill proxy preserves encoded body metadata and Engine preview a
   assert.match(windmill, /status: 200/);
   assert.doesNotMatch(windmill, /headers\.set\("Range", range\)/);
   assert.match(windmill, /x-rekixo-model-proxy", "google-windmill"/);
-  assert.match(isolated, /src: "\/api\/3d-google-windmill\?transport=decoded-v2"/);
+  assert.match(isolated, /fetch\(\s*"\/api\/3d-google-windmill\?transport=decoded-v2"/);
+  assert.match(isolated, /response\.arrayBuffer\(\)/);
+  assert.match(isolated, /URL\.createObjectURL/);
+  assert.match(isolated, /src: objectUrl/);
   assert.match(windmill, /cache-control", "private,no-store"/);
+});
+
+
+test("Model3D blob transport removes internal model networking from both Jyoti and Google probes", () => {
+  const visual = read("app/geo-3d-placement-visual.tsx");
+  const probe = read("app/api/admin/3d-google-model-probe/route.ts");
+
+  assert.match(visual, /Fetch the complete validated GLB into the page/);
+  assert.match(visual, /const modelBytes = await modelCheck\.arrayBuffer\(\)/);
+  assert.match(visual, /new Blob\(\[modelBytes\], \{ type: "model\/gltf-binary" \}\)/);
+  assert.match(visual, /rendererModelUrl = modelObjectUrl/);
+  assert.match(visual, /URL\.revokeObjectURL\(modelObjectUrl\)/);
+
+  assert.match(probe, /const bytes = await response\.arrayBuffer\(\)/);
+  assert.match(probe, /windmill proxy returned invalid GLB bytes/);
+  assert.match(probe, /const objectUrl = URL\.createObjectURL/);
+  assert.match(probe, /src: objectUrl/);
 });
