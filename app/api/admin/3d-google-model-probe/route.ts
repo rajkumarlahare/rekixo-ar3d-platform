@@ -71,8 +71,22 @@ window.__rekixoProbeReady = async function () {
       mode: "HYBRID",
     });
 
+    const response = await fetch(
+      "/api/3d-google-windmill?transport=decoded-v2",
+      { cache: "no-store" },
+    );
+    if (!response.ok)
+      throw new Error("windmill proxy HTTP " + response.status);
+    const bytes = await response.arrayBuffer();
+    const magic = new TextDecoder().decode(new Uint8Array(bytes, 0, 4));
+    if (magic !== "glTF")
+      throw new Error("windmill proxy returned invalid GLB bytes");
+    const objectUrl = URL.createObjectURL(
+      new Blob([bytes], { type: "model/gltf-binary" }),
+    );
+
     const model = new Model3DElement({
-      src: "/api/3d-google-windmill?transport=decoded-v2",
+      src: objectUrl,
       position: { lat: 39.1178, lng: -106.4452, altitude: 4495.4952 },
       orientation: { heading: 0, tilt: 270, roll: 90 },
       scale: 0.15,
@@ -84,7 +98,9 @@ window.__rekixoProbeReady = async function () {
     status.textContent =
       "requested ${safeVersion} · runtime " +
       String(google.maps.version || "unknown") +
-      " · gmp-model-3d attached · same-origin windmill proxy";
+      " · gmp-model-3d attached · blob GLB " +
+      String(bytes.byteLength) +
+      " bytes";
   } catch (error) {
     status.className = "error";
     status.textContent =
