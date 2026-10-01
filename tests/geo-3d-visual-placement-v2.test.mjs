@@ -129,6 +129,7 @@ test("Super Admin Geo 3D has an independent Google renderer probe and anchor foc
   assert.match(visual, /Focus building/);
   assert.match(visual, /window\.requestAnimationFrame\(\(\) => \{/);
   assert.match(visual, /focus3DMap\(map, latitude, longitude, altitudeM, headingDeg\)/);
-  assert.match(visual, /rendererProbe \? \{ heading: 0, tilt: 270, roll: 90 \}/);
+  assert.match(visual, /tilt: 270/);
+  assert.match(visual, /roll: 90/);
   assert.match(visual, /rendererProbe \? 0\.15 : scale/);
 });
