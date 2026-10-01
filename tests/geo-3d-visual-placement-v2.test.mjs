@@ -208,5 +208,6 @@ test("Google windmill proxy preserves encoded body metadata and Engine preview a
   assert.match(windmill, /status: 200/);
   assert.doesNotMatch(windmill, /headers\.set\("Range", range\)/);
   assert.match(windmill, /x-rekixo-model-proxy", "google-windmill"/);
-  assert.match(isolated, /src: "\/api\/3d-google-windmill"/);
+  assert.match(isolated, /src: "\/api\/3d-google-windmill\?transport=decoded-v2"/);
+  assert.match(windmill, /cache-control", "private,no-store"/);
 });
