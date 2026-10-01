@@ -415,10 +415,6 @@ export default function Geo3DPlacementVisual({
           reason instanceof Error
             ? reason.message
             : "Visual placement map load nahi hua";
-        setModelDiagnostic((current) => ({
-          ...current,
-          stage: "model-error",
-        }));
         setError(message);
         notify(message);
       });
@@ -622,6 +618,10 @@ export default function Geo3DPlacementVisual({
           reason instanceof Error
             ? reason.message
             : "3D visual preview load nahi hua";
+        setModelDiagnostic((current) => ({
+          ...current,
+          stage: "model-error",
+        }));
         setError(message);
         notify(message);
       });
