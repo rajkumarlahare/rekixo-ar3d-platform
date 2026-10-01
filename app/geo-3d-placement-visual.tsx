@@ -93,6 +93,17 @@ type ModelDiagnostic = {
 
 const GOOGLE_RENDERER_PROBE_URL =
   "https://maps-docs-team.web.app/assets/windmill.glb";
+const GOOGLE_RENDERER_PROBE_MAP = {
+  center: { lat: 39.1178, lng: -106.4452, altitude: 4395.4952 },
+  range: 1500,
+  tilt: 74,
+  heading: 0,
+} as const;
+const GOOGLE_RENDERER_PROBE_MODEL = {
+  position: { lat: 39.1178, lng: -106.4452, altitude: 4495.4952 },
+  orientation: { heading: 0, tilt: 270, roll: 90 },
+  scale: 0.15,
+} as const;
 
 let mapsPromise: Promise<GoogleRoot> | null = null;
 
@@ -542,20 +553,32 @@ export default function Geo3DPlacementVisual({
 
         const finalModelUrl = rendererModelUrl;
 
-        const map = new library.Map3DElement({
-          // Start broad. Once terrain is steady, focus with a terrain-relative
-          // CameraOptions target so no absolute elevation is guessed.
-          center: {
-            lat: latitude,
-            lng: longitude,
-          },
-          range: 700,
-          tilt: 52,
-          heading: headingDeg,
-          mode: "HYBRID",
-          gestureHandling: "GREEDY",
-        }) as Mutable3DMap;
-        const flattener = flattenBaseMesh
+        const map = new library.Map3DElement(
+          rendererProbe
+            ? {
+                // Exact Google documentation sample. Keep this branch free of
+                // Rekixo/Jyoti camera assumptions so it isolates Model3DElement.
+                center: GOOGLE_RENDERER_PROBE_MAP.center,
+                range: GOOGLE_RENDERER_PROBE_MAP.range,
+                tilt: GOOGLE_RENDERER_PROBE_MAP.tilt,
+                heading: GOOGLE_RENDERER_PROBE_MAP.heading,
+                mode: "HYBRID",
+              }
+            : {
+                // Start broad. Once terrain is steady, focus with a
+                // terrain-relative CameraOptions target.
+                center: {
+                  lat: latitude,
+                  lng: longitude,
+                },
+                range: 700,
+                tilt: 52,
+                heading: headingDeg,
+                mode: "HYBRID",
+                gestureHandling: "GREEDY",
+              },
+        ) as Mutable3DMap;
+        const flattener = !rendererProbe && flattenBaseMesh
           ? (() => {
               if (!library.FlattenerElement)
                 throw new Error(
@@ -576,25 +599,27 @@ export default function Geo3DPlacementVisual({
           // authenticated preflight. Probe mode mirrors Google's official
           // Model3DElement sample at the exact same Rekixo anchor.
           src: finalModelUrl,
-          position: {
-            lat: latitude,
-            lng: longitude,
-            altitude: rendererProbe ? 0 : altitudeM,
-          },
+          position: rendererProbe
+            ? GOOGLE_RENDERER_PROBE_MODEL.position
+            : {
+                lat: latitude,
+                lng: longitude,
+                altitude: altitudeM,
+              },
           orientation: rendererProbe
-            ? { heading: 0, tilt: 270, roll: 90 }
+            ? GOOGLE_RENDERER_PROBE_MODEL.orientation
             : {
                 heading: headingDeg,
                 tilt: pitchDeg,
                 roll: rollDeg,
               },
-          scale: rendererProbe ? 0.15 : scale,
+          scale: rendererProbe ? GOOGLE_RENDERER_PROBE_MODEL.scale : scale,
           altitudeMode: rendererProbe
             ? "CLAMP_TO_GROUND"
             : "RELATIVE_TO_GROUND",
         }) as Mutable3DModel;
 
-        const anchorBeacon = library.Marker3DElement
+        const anchorBeacon = !rendererProbe && library.Marker3DElement
           ? new library.Marker3DElement({
               position: {
                 lat: latitude,
@@ -609,9 +634,17 @@ export default function Geo3DPlacementVisual({
           : null;
 
         let modelAttached = false;
-        const attachModel = () => {
-          if (cancelled || modelAttached) return;
+        const markAttached = () => {
           modelAttached = true;
+          model3DRef.current = model;
+          setModelDiagnostic((current) => ({
+            ...current,
+            stage: "model-attached",
+          }));
+          setReady(true);
+        };
+        const attachProjectModel = () => {
+          if (cancelled || modelAttached) return;
           focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
           if (flattener) {
             map.append(flattener);
@@ -619,22 +652,17 @@ export default function Geo3DPlacementVisual({
           }
           if (anchorBeacon) map.append(anchorBeacon);
           map.append(model);
-          model3DRef.current = model;
+          markAttached();
           // Re-focus after custom elements are attached. This avoids a stale
           // broad camera target surviving the initial terrain steady-state.
           window.requestAnimationFrame(() => {
             if (!cancelled)
               focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
           });
-          setModelDiagnostic((current) => ({
-            ...current,
-            stage: "model-attached",
-          }));
-          setReady(true);
         };
         const steadyListener = (event: Event) => {
           const steady = event as Event & { isSteady?: boolean };
-          if (steady.isSteady) attachModel();
+          if (steady.isSteady) attachProjectModel();
         };
         const mapErrorListener = () => {
           if (cancelled) return;
@@ -644,18 +672,27 @@ export default function Geo3DPlacementVisual({
           }));
           setError("Google 3D map initialize nahi hui");
         };
-        map.addEventListener("gmp-steadychange", steadyListener);
         map.addEventListener("gmp-error", mapErrorListener);
 
         threeDRef.current.replaceChildren(map);
         map3DRef.current = map;
 
-        // Some Maps JS versions can become steady before the first event reaches
-        // app code. Keep a bounded fallback so the model never waits forever.
-        const attachFallback = window.setTimeout(attachModel, 1500);
+        let attachFallback: number | undefined;
+        if (rendererProbe) {
+          // Google docs append the model directly after the map is connected.
+          // Do exactly that: no flattener, marker, steady wait or camera helper.
+          map.append(model);
+          markAttached();
+        } else {
+          map.addEventListener("gmp-steadychange", steadyListener);
+          // Some Maps JS versions can become steady before the first event
+          // reaches app code. Keep a bounded project-mode fallback.
+          attachFallback = window.setTimeout(attachProjectModel, 1500);
+        }
 
         cleanup3D = () => {
-          window.clearTimeout(attachFallback);
+          if (attachFallback !== undefined)
+            window.clearTimeout(attachFallback);
           map.removeEventListener("gmp-steadychange", steadyListener);
           map.removeEventListener("gmp-error", mapErrorListener);
         };
@@ -694,7 +731,7 @@ export default function Geo3DPlacementVisual({
   ]);
 
   useEffect(() => {
-    if (mode !== "three-d" || !validPosition) return;
+    if (mode !== "three-d" || !validPosition || rendererProbe) return;
     if (map3DRef.current) {
       focus3DMap(
         map3DRef.current,
@@ -860,7 +897,7 @@ export default function Geo3DPlacementVisual({
               </span>
             ) : null}
             {rendererProbe ? (
-              <span>Renderer probe: Google official windmill</span>
+              <span>Renderer probe: exact Google docs sample · Colorado</span>
             ) : modelFingerprint ? (
               <span>Geo build: {modelFingerprint.slice(0, 12)}</span>
             ) : null}
