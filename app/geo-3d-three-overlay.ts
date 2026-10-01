@@ -136,11 +136,15 @@ export async function createGeo3DThreeOverlay({
 
   const scene = new THREE.Scene();
   scene.add(root);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x6f7d8d, 2.15));
-  const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+
+  // Preserve the GLB's authored PBR material colors. Architectural models are
+  // often textureless and encode their visual identity in baseColorFactor, so
+  // over-bright lights + cinematic tone mapping can wash those colors out.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x596575, 0.95));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
   keyLight.position.set(-80, 120, 70);
   scene.add(keyLight);
-  const fillLight = new THREE.DirectionalLight(0xcbdcff, 1.25);
+  const fillLight = new THREE.DirectionalLight(0xcbdcff, 0.4);
   fillLight.position.set(100, 55, -90);
   scene.add(fillLight);
 
@@ -154,18 +158,21 @@ export async function createGeo3DThreeOverlay({
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
     antialias: true,
-    premultipliedAlpha: true,
+    premultipliedAlpha: false,
     powerPreference: "high-performance",
   });
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = 1;
   renderer.domElement.dataset.rekixoGeoRenderer = "three-overlay";
   renderer.domElement.setAttribute("aria-hidden", "true");
   renderer.domElement.style.width = "100%";
   renderer.domElement.style.height = "100%";
   renderer.domElement.style.display = "block";
+  renderer.domElement.style.touchAction = "none";
+  renderer.domElement.style.cursor = "grab";
+  renderer.domElement.style.userSelect = "none";
   host.replaceChildren(renderer.domElement);
 
   let width = 0;
@@ -173,6 +180,109 @@ export async function createGeo3DThreeOverlay({
   let disposed = false;
   let animationFrame = 0;
   let previousFrameAt = 0;
+
+  type PointerSample = { x: number; y: number };
+  const activePointers = new Map<number, PointerSample>();
+  let primaryPointerId: number | null = null;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+  let pinchDistance = 0;
+
+  const normalizeHeading = (value: number) => ((value % 360) + 360) % 360;
+  const clampTilt = (value: number) => THREE.MathUtils.clamp(value, 12, 89);
+  const clampRange = (value: number) => THREE.MathUtils.clamp(value, 18, 5_000);
+
+  const pointerSeparation = () => {
+    const points = Array.from(activePointers.values());
+    if (points.length < 2) return 0;
+    return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+  };
+
+  const continueWithRemainingPointer = () => {
+    if (activePointers.size !== 1) {
+      primaryPointerId = null;
+      return;
+    }
+    const [id, point] = Array.from(activePointers.entries())[0];
+    primaryPointerId = id;
+    lastPointerX = point.x;
+    lastPointerY = point.y;
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    try {
+      renderer.domElement.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail if the browser has already cancelled a touch.
+    }
+    renderer.domElement.style.cursor = "grabbing";
+    if (activePointers.size === 1) {
+      primaryPointerId = event.pointerId;
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
+      pinchDistance = 0;
+    } else {
+      primaryPointerId = null;
+      pinchDistance = pointerSeparation();
+    }
+    event.preventDefault();
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!activePointers.has(event.pointerId)) return;
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointers.size >= 2) {
+      const distance = pointerSeparation();
+      if (distance > 0 && pinchDistance > 0) {
+        const currentRange = clampRange(finite(map.range, 190));
+        map.range = clampRange(currentRange * (pinchDistance / distance));
+      }
+      pinchDistance = distance;
+      event.preventDefault();
+      return;
+    }
+
+    if (primaryPointerId !== event.pointerId) return;
+    const dx = event.clientX - lastPointerX;
+    const dy = event.clientY - lastPointerY;
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+    if (dx || dy) {
+      map.heading = normalizeHeading(finite(map.heading, 0) - dx * 0.36);
+      map.tilt = clampTilt(finite(map.tilt, 68) - dy * 0.24);
+    }
+    event.preventDefault();
+  };
+
+  const releasePointer = (event: PointerEvent) => {
+    if (!activePointers.has(event.pointerId)) return;
+    activePointers.delete(event.pointerId);
+    try {
+      renderer.domElement.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore browsers that already released capture.
+    }
+    pinchDistance = activePointers.size >= 2 ? pointerSeparation() : 0;
+    continueWithRemainingPointer();
+    if (activePointers.size === 0) renderer.domElement.style.cursor = "grab";
+    event.preventDefault();
+  };
+
+  const onWheel = (event: WheelEvent) => {
+    const currentRange = clampRange(finite(map.range, 190));
+    const factor = Math.exp(THREE.MathUtils.clamp(event.deltaY, -240, 240) * 0.0017);
+    map.range = clampRange(currentRange * factor);
+    event.preventDefault();
+  };
+
+  renderer.domElement.addEventListener("pointerdown", onPointerDown);
+  renderer.domElement.addEventListener("pointermove", onPointerMove);
+  renderer.domElement.addEventListener("pointerup", releasePointer);
+  renderer.domElement.addEventListener("pointercancel", releasePointer);
+  renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 
   const resize = () => {
     const rect = host.getBoundingClientRect();
@@ -266,6 +376,11 @@ export async function createGeo3DThreeOverlay({
       disposed = true;
       window.cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", releasePointer);
+      renderer.domElement.removeEventListener("pointercancel", releasePointer);
+      renderer.domElement.removeEventListener("wheel", onWheel);
       root.traverse((node) => {
         const mesh = node as THREE.Mesh;
         mesh.geometry?.dispose?.();
