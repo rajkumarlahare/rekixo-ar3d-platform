@@ -34,14 +34,16 @@ page.on("pageerror", (error) => browserErrors.push(String(error)));
 
 try {
   const response = await page.goto(`${origin}/admin/login`, {
-    waitUntil: "domcontentloaded",
+    waitUntil: "networkidle",
     timeout: 45_000,
   });
   assert.ok(response?.ok(), `production origin HTTP ${response?.status()}`);
 
   const runtime = await page.evaluate(
     async ({ mapsKey, modelUrl, latitude, longitude }) => {
-      document.body.innerHTML = "";
+      document.open();
+      document.write("<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>");
+      document.close();
       document.documentElement.style.margin = "0";
       document.body.style.margin = "0";
       const host = document.createElement("div");
@@ -124,6 +126,7 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 8_000));
 
       return {
+        hostConnected: host.isConnected,
         mapTag: map.tagName,
         modelTag: model.tagName,
         flattenerTag: flattener.tagName,
