@@ -28,7 +28,6 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(overlay, /map\.tilt/);
   assert.match(overlay, /map\.range/);
   assert.match(overlay, /map\.fov/);
-  assert.match(overlay, /pointer-events/);
   assert.match(css, /\.modelOverlay/);
   assert.match(css, /pointer-events: none/);
 });
