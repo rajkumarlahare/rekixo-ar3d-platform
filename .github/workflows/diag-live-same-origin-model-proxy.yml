@@ -70,6 +70,29 @@ jobs:
           head -c 16 "$BODY" | strings | head -1 || true
           echo
           rm -f "$BODY" "$HDR"
+      - name: Inspect no-follow and identity transport
+        shell: bash
+        run: |
+          set -u
+          for LABEL in GOOGLE_IDENTITY ENGINE_NOFOLLOW ENGINE_IDENTITY; do
+            BODY="$(mktemp)"
+            HDR="$(mktemp)"
+            if [ "$LABEL" = "GOOGLE_IDENTITY" ]; then
+              URL='https://maps-docs-team.web.app/assets/windmill.glb'
+              EXTRA=(--header 'Accept-Encoding: identity')
+            else
+              URL='https://ar3dstudio.in/3Dprojects/api/releases/release_57c56ec2-50c0-4ee2-b916-df89bead1b94/geo-models/b162a605-c922-4d7d-a4d6-194e44c37a95/model.glb?v=1&geo=c413a6ff2fc3d869fb76222f69c005109c5a40b26a4a036394e52d3552e53e10'
+              EXTRA=()
+              if [ "$LABEL" = "ENGINE_IDENTITY" ]; then EXTRA=(--header 'Accept-Encoding: identity'); fi
+            fi
+            STATUS="$(curl --silent --show-error --output "$BODY" --dump-header "$HDR" --write-out '%{http_code}' --header 'Range: bytes=0-15' "${EXTRA[@]}" "$URL" || true)"
+            echo "${LABEL}_STATUS=$STATUS"
+            grep -Ei '^(location|content-type|content-length|content-range|content-encoding|accept-ranges|server|cf-ray):' "$HDR" || true
+            echo -n "${LABEL}_HEX="
+            xxd -p -l 16 "$BODY" | tr -d '\n'
+            echo
+            rm -f "$BODY" "$HDR"
+          done
       - name: Probe Jyoti same-origin bytes
         shell: bash
         run: |
