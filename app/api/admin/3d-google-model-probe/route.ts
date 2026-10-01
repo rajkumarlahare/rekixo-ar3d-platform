@@ -55,7 +55,7 @@ gmp-map-3d{position:absolute;inset:0;width:100%;height:100%}
 </style>
 </head>
 <body>
-<div id="status">Maps JS ${safeVersion} · loading exact Google windmill sample…</div>
+<div id="status">Maps JS ${safeVersion} · loading Google windmill through same-origin proxy…</div>
 <script>
 window.__rekixoProbeReady = async function () {
   const status = document.getElementById("status");
@@ -72,7 +72,7 @@ window.__rekixoProbeReady = async function () {
     });
 
     const model = new Model3DElement({
-      src: "https://maps-docs-team.web.app/assets/windmill.glb",
+      src: "/api/3d-google-windmill",
       position: { lat: 39.1178, lng: -106.4452, altitude: 4495.4952 },
       orientation: { heading: 0, tilt: 270, roll: 90 },
       scale: 0.15,
@@ -84,7 +84,7 @@ window.__rekixoProbeReady = async function () {
     status.textContent =
       "requested ${safeVersion} · runtime " +
       String(google.maps.version || "unknown") +
-      " · gmp-model-3d attached";
+      " · gmp-model-3d attached · same-origin windmill proxy";
   } catch (error) {
     status.className = "error";
     status.textContent =
