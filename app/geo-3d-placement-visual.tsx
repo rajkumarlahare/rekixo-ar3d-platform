@@ -481,64 +481,66 @@ export default function Geo3DPlacementVisual({
         if (cancelled || !threeDRef.current) return;
         setModelDiagnostic({ stage: "map-ready" });
 
-        // Verify the exact byte path used by the project renderer. The Google
-        // probe deliberately bypasses this project transport so the same live
-        // browser can independently prove whether Model3DElement itself works.
+        // Project mode verifies the exact authenticated byte path before handing
+        // the final public Engine URL to Model3DElement. The Google renderer probe
+        // intentionally skips browser fetch(): Google's own documented sample
+        // loads the official GLB directly through Model3DElement, and a JS fetch
+        // can be blocked by cross-origin policy before the renderer is tested.
         setModelDiagnostic({ stage: "loading-model" });
-        const effectiveModelUrl = rendererProbe
-          ? GOOGLE_RENDERER_PROBE_URL
-          : modelUrl;
-        const modelCheck = await fetch(
-          effectiveModelUrl,
-          rendererProbe
-            ? {
-                method: "GET",
-                cache: "no-store",
-                credentials: "omit",
-              }
-            : {
-                method: "GET",
-                headers: { Range: "bytes=0-3" },
-                cache: "no-store",
-                credentials: "same-origin",
-              },
-        );
-        if (modelCheck.status !== 200 && modelCheck.status !== 206) {
-          let detail = "";
-          const contentType = modelCheck.headers.get("content-type") || "";
-          if (contentType.includes("application/json")) {
-            const payload = (await modelCheck.json().catch(() => null)) as
-              | {
-                  upstreamStatus?: number;
-                  transport?: string;
-                  diagnostic?: string;
-                }
-              | null;
-            if (payload?.upstreamStatus)
-              detail += ` · upstream ${payload.upstreamStatus}`;
-            if (payload?.transport) detail += ` · ${payload.transport}`;
-            if (payload?.diagnostic) detail += ` · ${payload.diagnostic}`;
-          } else {
-            await modelCheck.body?.cancel().catch(() => {});
+        let rendererModelUrl = modelUrl;
+        if (rendererProbe) {
+          rendererModelUrl = GOOGLE_RENDERER_PROBE_URL;
+          setModelDiagnostic({
+            stage: "loading-model",
+            finalUrl: rendererModelUrl,
+          });
+        } else {
+          const modelCheck = await fetch(modelUrl, {
+            method: "GET",
+            headers: { Range: "bytes=0-3" },
+            cache: "no-store",
+            credentials: "same-origin",
+          });
+          if (modelCheck.status !== 200 && modelCheck.status !== 206) {
+            let detail = "";
+            const contentType = modelCheck.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+              const payload = (await modelCheck.json().catch(() => null)) as
+                | {
+                    upstreamStatus?: number;
+                    transport?: string;
+                    diagnostic?: string;
+                  }
+                | null;
+              if (payload?.upstreamStatus)
+                detail += ` · upstream ${payload.upstreamStatus}`;
+              if (payload?.transport) detail += ` · ${payload.transport}`;
+              if (payload?.diagnostic) detail += ` · ${payload.diagnostic}`;
+            } else {
+              await modelCheck.body?.cancel().catch(() => {});
+            }
+            throw new Error(
+              `3D model unavailable (${modelCheck.status}${detail})`,
+            );
           }
-          throw new Error(
-            `3D model unavailable (${modelCheck.status}${detail})`,
-          );
+          const finalModelUrl = modelCheck.url || modelUrl;
+          rendererModelUrl = finalModelUrl;
+          const contentType = modelCheck.headers.get("content-type") || "";
+          const modelStatus = modelCheck.status;
+          const magicBytes = await readResponsePrefix(modelCheck, 4);
+          const magic = new TextDecoder().decode(magicBytes);
+          if (magic !== "glTF")
+            throw new Error("3D model preview returned invalid GLB bytes");
+          setModelDiagnostic({
+            stage: "loading-model",
+            httpStatus: modelStatus,
+            contentType,
+            finalUrl: finalModelUrl,
+            glbVerified: true,
+          });
         }
-        const finalModelUrl = modelCheck.url || modelUrl;
-        const contentType = modelCheck.headers.get("content-type") || "";
-        const modelStatus = modelCheck.status;
-        const magicBytes = await readResponsePrefix(modelCheck, 4);
-        const magic = new TextDecoder().decode(magicBytes);
-        if (magic !== "glTF")
-          throw new Error("3D model preview returned invalid GLB bytes");
-        setModelDiagnostic({
-          stage: "loading-model",
-          httpStatus: modelStatus,
-          contentType,
-          finalUrl: finalModelUrl,
-          glbVerified: true,
-        });
+
+        const finalModelUrl = rendererModelUrl;
 
         const map = new library.Map3DElement({
           // Start broad. Once terrain is steady, focus with a terrain-relative
@@ -839,14 +841,17 @@ export default function Geo3DPlacementVisual({
         <span>Ground {altitudeM.toFixed(2)} m</span>
         {mode === "three-d" ? (
           <>
-            <span>
-              {rendererProbe ? "Probe GLB:" : "Geo GLB:"}{" "}
-              {modelDiagnostic.glbVerified ? "verified" : "checking"}
-              {!rendererProbe && modelByteSize
-                ? ` · ${(modelByteSize / 1_000_000).toFixed(2)} MB`
-                : ""}
-            </span>
-            {modelDiagnostic.httpStatus ? (
+            {rendererProbe ? (
+              <span>Probe source: direct Google official GLB</span>
+            ) : (
+              <span>
+                Geo GLB: {modelDiagnostic.glbVerified ? "verified" : "checking"}
+                {modelByteSize
+                  ? ` · ${(modelByteSize / 1_000_000).toFixed(2)} MB`
+                  : ""}
+              </span>
+            )}
+            {!rendererProbe && modelDiagnostic.httpStatus ? (
               <span>
                 HTTP {modelDiagnostic.httpStatus}
                 {modelDiagnostic.contentType
