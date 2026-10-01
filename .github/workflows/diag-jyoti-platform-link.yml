@@ -1,0 +1,42 @@
+name: Diagnostic Jyoti Platform Link Audit
+
+on:
+  push:
+    branches:
+      - diag/jyoti-platform-link-audit-20261001
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read-only production Platform link audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== PLATFORM PROJECT/LINK ==='
+          npx --yes wrangler@4 d1 execute tiyansh-production --remote --json \
+            --command "SELECT p.id AS projectId,p.slug,p.name,p.status,l.engine_project_id AS engineProjectId,l.engine_slug AS engineSlug,l.status AS linkStatus,l.public_enabled AS enginePublicEnabled,l.public_url AS enginePublicUrl,l.updated_at AS linkUpdatedAt FROM projects p LEFT JOIN project_3d_links l ON l.platform_project_id=p.id WHERE p.name='Jyoti Paradise Demo Admin' OR p.slug LIKE '%jyoti%';"
+          echo '=== GEO 3D PLACEMENT ==='
+          npx --yes wrangler@4 d1 execute tiyansh-production --remote --json \
+            --command "SELECT p.name,p.slug,g.platform_project_id AS platformProjectId,g.geo_project_id AS geoProjectId,g.engine_project_id AS engineProjectId,g.engine_slug AS engineSlug,g.engine_release_id AS engineReleaseId,g.engine_release_version AS engineReleaseVersion,g.engine_model_id AS engineModelId,g.longitude,g.latitude,g.altitude_m AS altitudeM,g.heading_deg AS headingDeg,g.pitch_deg AS pitchDeg,g.roll_deg AS rollDeg,g.scale,g.public_enabled AS publicEnabled,g.updated_at AS updatedAt FROM geo_3d_placements g JOIN projects p ON p.id=g.platform_project_id WHERE p.name='Jyoti Paradise Demo Admin' OR p.slug LIKE '%jyoti%';"
+          echo '=== PROJECT SNAPSHOT ENGINE PINS ==='
+          npx --yes wrangler@4 d1 execute tiyansh-production --remote --json \
+            --command "SELECT p.name,p.slug,s.version,s.status,s.engine_project_id AS engineProjectId,s.engine_slug AS engineSlug,s.engine_link_status AS engineLinkStatus,s.engine_public_enabled AS enginePublicEnabled,s.engine_public_url AS enginePublicUrl FROM project_publish_snapshots s JOIN projects p ON p.id=s.project_id WHERE p.name='Jyoti Paradise Demo Admin' OR p.slug LIKE '%jyoti%' ORDER BY s.version DESC LIMIT 10;" || true
+      - name: Read-only live Engine contract for linked slug
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://ar3dstudio.in/3Dprojects/api/projects/jyoti-paradise-local-backup-302a8799"
+          BODY="$(mktemp)"
+          STATUS="$(curl --silent --show-error --location --output "$BODY" --write-out '%{http_code}' "$URL" || true)"
+          echo "status=$STATUS"
+          cat "$BODY"
+          rm -f "$BODY"
