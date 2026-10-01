@@ -46,6 +46,7 @@ type RekixoWindow = Window &
 type Maps3DLibrary = {
   Map3DElement: new (options: Record<string, unknown>) => HTMLElement;
   Model3DElement: new (options: Record<string, unknown>) => HTMLElement;
+  FlattenerElement?: new (options: Record<string, unknown>) => HTMLElement;
 };
 
 type Mutable3DMap = HTMLElement & {
@@ -66,6 +67,25 @@ type Mutable3DModel = HTMLElement & {
   position?: unknown;
   orientation?: unknown;
   scale?: number;
+};
+type Mutable3DFlattener = HTMLElement & {
+  path?: unknown;
+};
+
+type ModelDiagnosticStage =
+  | "idle"
+  | "loading-map"
+  | "map-ready"
+  | "loading-model"
+  | "model-attached"
+  | "model-error";
+
+type ModelDiagnostic = {
+  stage: ModelDiagnosticStage;
+  httpStatus?: number;
+  contentType?: string;
+  finalUrl?: string;
+  glbVerified?: boolean;
 };
 
 let mapsPromise: Promise<GoogleRoot> | null = null;
@@ -210,9 +230,32 @@ function headingEnd(
   return { lat, lng };
 }
 
+function flatteningSquarePath(
+  latitude: number,
+  longitude: number,
+  halfSizeM: number,
+) {
+  const safeHalfSize = Math.max(1, halfSizeM);
+  const latDelta = safeHalfSize / 111_320;
+  const cosLat = Math.max(
+    0.2,
+    Math.cos((latitude * Math.PI) / 180),
+  );
+  const lngDelta = safeHalfSize / (111_320 * cosLat);
+  return [
+    { lat: latitude + latDelta, lng: longitude - lngDelta },
+    { lat: latitude + latDelta, lng: longitude + lngDelta },
+    { lat: latitude - latDelta, lng: longitude + lngDelta },
+    { lat: latitude - latDelta, lng: longitude - lngDelta },
+  ];
+}
+
 export default function Geo3DPlacementVisual({
   apiKey,
   modelUrl,
+  modelByteSize,
+  flattenBaseMesh,
+  flattenHalfSizeM,
   features,
   longitude,
   latitude,
@@ -227,6 +270,9 @@ export default function Geo3DPlacementVisual({
 }: {
   apiKey: string | null;
   modelUrl: string | null;
+  modelByteSize?: number;
+  flattenBaseMesh: boolean;
+  flattenHalfSizeM: number;
   features: Array<{
     id: string;
     name: string;
@@ -248,6 +294,9 @@ export default function Geo3DPlacementVisual({
   const [mode, setMode] = useState<"satellite" | "three-d">("satellite");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
+  const [modelDiagnostic, setModelDiagnostic] = useState<ModelDiagnostic>({
+    stage: "idle",
+  });
   const satelliteRef = useRef<HTMLDivElement | null>(null);
   const threeDRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
@@ -258,6 +307,7 @@ export default function Geo3DPlacementVisual({
   const disabledRef = useRef(disabled);
   const map3DRef = useRef<Mutable3DMap | null>(null);
   const model3DRef = useRef<Mutable3DModel | null>(null);
+  const flattener3DRef = useRef<Mutable3DFlattener | null>(null);
 
   disabledRef.current = disabled;
 
@@ -408,6 +458,7 @@ export default function Geo3DPlacementVisual({
     let cleanup3D: (() => void) | undefined;
     setReady(false);
     setError("");
+    setModelDiagnostic({ stage: "loading-map" });
 
     loadGoogleMaps(apiKey)
       .then(async (google) => {
@@ -419,10 +470,12 @@ export default function Geo3DPlacementVisual({
           "maps3d",
         )) as Maps3DLibrary;
         if (cancelled || !threeDRef.current) return;
+        setModelDiagnostic({ stage: "map-ready" });
 
         // Verify the exact byte path used by the renderer. A 4-byte Range
         // request proves both the authenticated Platform proxy and the Engine
         // immutable GLB transport without downloading the full model.
+        setModelDiagnostic({ stage: "loading-model" });
         const modelCheck = await fetch(modelUrl, {
           method: "GET",
           headers: { Range: "bytes=0-3" },
@@ -452,10 +505,19 @@ export default function Geo3DPlacementVisual({
           );
         }
         const finalModelUrl = modelCheck.url || modelUrl;
+        const contentType = modelCheck.headers.get("content-type") || "";
+        const modelStatus = modelCheck.status;
         const magicBytes = await readResponsePrefix(modelCheck, 4);
         const magic = new TextDecoder().decode(magicBytes);
         if (magic !== "glTF")
           throw new Error("3D model preview returned invalid GLB bytes");
+        setModelDiagnostic({
+          stage: "loading-model",
+          httpStatus: modelStatus,
+          contentType,
+          finalUrl: finalModelUrl,
+          glbVerified: true,
+        });
 
         const map = new library.Map3DElement({
           // Start broad. Once terrain is steady, focus with a terrain-relative
@@ -470,6 +532,22 @@ export default function Geo3DPlacementVisual({
           mode: "HYBRID",
           gestureHandling: "GREEDY",
         }) as Mutable3DMap;
+        const flattener = flattenBaseMesh
+          ? (() => {
+              if (!library.FlattenerElement)
+                throw new Error(
+                  "Google 3D mesh flattener is unavailable in this Maps build",
+                );
+              return new library.FlattenerElement({
+                path: flatteningSquarePath(
+                  latitude,
+                  longitude,
+                  flattenHalfSizeM,
+                ),
+              }) as Mutable3DFlattener;
+            })()
+          : null;
+
         const model = new library.Model3DElement({
           // Use the final public Engine URL reached by the authenticated
           // preflight. Model3DElement performs its own fetch and must not rely
@@ -494,8 +572,16 @@ export default function Geo3DPlacementVisual({
           if (cancelled || modelAttached) return;
           modelAttached = true;
           focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
+          if (flattener) {
+            map.append(flattener);
+            flattener3DRef.current = flattener;
+          }
           map.append(model);
           model3DRef.current = model;
+          setModelDiagnostic((current) => ({
+            ...current,
+            stage: "model-attached",
+          }));
           setReady(true);
         };
         const steadyListener = (event: Event) => {
@@ -504,6 +590,10 @@ export default function Geo3DPlacementVisual({
         };
         const mapErrorListener = () => {
           if (cancelled) return;
+          setModelDiagnostic((current) => ({
+            ...current,
+            stage: "model-error",
+          }));
           setError("Google 3D map initialize nahi hui");
         };
         map.addEventListener("gmp-steadychange", steadyListener);
@@ -528,6 +618,10 @@ export default function Geo3DPlacementVisual({
           reason instanceof Error
             ? reason.message
             : "3D visual preview load nahi hua";
+        setModelDiagnostic((current) => ({
+          ...current,
+          stage: "model-error",
+        }));
         setError(message);
         notify(message);
       });
@@ -537,9 +631,17 @@ export default function Geo3DPlacementVisual({
       cleanup3D?.();
       map3DRef.current = null;
       model3DRef.current = null;
+      flattener3DRef.current = null;
       threeDRef.current?.replaceChildren();
     };
-  }, [apiKey, modelUrl, mode, validPosition]);
+  }, [
+    apiKey,
+    modelUrl,
+    mode,
+    validPosition,
+    flattenBaseMesh,
+    flattenHalfSizeM,
+  ]);
 
   useEffect(() => {
     if (mode !== "three-d" || !validPosition) return;
@@ -550,6 +652,13 @@ export default function Geo3DPlacementVisual({
         longitude,
         altitudeM,
         headingDeg,
+      );
+    }
+    if (flattener3DRef.current && flattenBaseMesh) {
+      flattener3DRef.current.path = flatteningSquarePath(
+        latitude,
+        longitude,
+        flattenHalfSizeM,
       );
     }
     if (model3DRef.current) {
@@ -575,6 +684,8 @@ export default function Geo3DPlacementVisual({
     pitchDeg,
     rollDeg,
     scale,
+    flattenBaseMesh,
+    flattenHalfSizeM,
   ]);
 
   if (!apiKey || !validPosition) {
@@ -628,7 +739,15 @@ export default function Geo3DPlacementVisual({
           className={mode === "three-d" ? styles.canvas : styles.hidden}
         />
         {!ready && !error ? (
-          <div className={styles.loading}>Preview initialize ho raha hai…</div>
+          <div className={styles.loading}>
+            {mode === "three-d"
+              ? modelDiagnostic.stage === "loading-model"
+                ? "Geo GLB verify ho raha hai…"
+                : modelDiagnostic.stage === "map-ready"
+                  ? "3D model initialize ho raha hai…"
+                  : "Google 3D map initialize ho raha hai…"
+              : "Preview initialize ho raha hai…"}
+          </div>
         ) : null}
         {error ? <div className={styles.error}>{error}</div> : null}
       </div>
@@ -640,6 +759,36 @@ export default function Geo3DPlacementVisual({
         <span>Heading {headingDeg.toFixed(1)}°</span>
         <span>Scale {scale.toFixed(3)}</span>
         <span>Ground {altitudeM.toFixed(2)} m</span>
+        {mode === "three-d" ? (
+          <>
+            <span>
+              Geo GLB: {modelDiagnostic.glbVerified ? "verified" : "checking"}
+              {modelByteSize ? ` · ${(modelByteSize / 1_000_000).toFixed(2)} MB` : ""}
+            </span>
+            {modelDiagnostic.httpStatus ? (
+              <span>
+                HTTP {modelDiagnostic.httpStatus}
+                {modelDiagnostic.contentType
+                  ? ` · ${modelDiagnostic.contentType.split(";")[0]}`
+                  : ""}
+              </span>
+            ) : null}
+            <span>
+              Model element:{" "}
+              {modelDiagnostic.stage === "model-attached"
+                ? "attached"
+                : modelDiagnostic.stage === "model-error"
+                  ? "error"
+                  : "pending"}
+            </span>
+            {flattenBaseMesh ? (
+              <span>
+                Google base mesh: flattened · {(flattenHalfSizeM * 2).toFixed(0)}m ×{" "}
+                {(flattenHalfSizeM * 2).toFixed(0)}m
+              </span>
+            ) : null}
+          </>
+        ) : null}
       </footer>
     </section>
   );

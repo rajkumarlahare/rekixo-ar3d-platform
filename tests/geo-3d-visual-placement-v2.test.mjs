@@ -40,6 +40,12 @@ test("visual placement supports satellite click positioning and live 3D model al
   assert.match(visual, /onPositionChange\(event\.latLng\.lng\(\), event\.latLng\.lat\(\)\)/);
   assert.match(visual, /new google\.maps\.Polygon/);
   assert.match(visual, /Model3DElement/);
+  assert.match(visual, /FlattenerElement/);
+  assert.match(visual, /flatteningSquarePath/);
+  assert.match(visual, /map\.append\(flattener\)/);
+  assert.match(visual, /Google base mesh: flattened/);
+  assert.match(visual, /Model element:/);
+  assert.match(visual, /Geo GLB:/);
   assert.match(visual, /altitudeMode: "RELATIVE_TO_GROUND"/);
   assert.match(visual, /credentials: "same-origin"/);
   assert.match(visual, /headers: \{ Range: "bytes=0-3" \}/);
@@ -80,4 +86,20 @@ test("placement state exposes only browser-safe maps key plus internal preview r
   assert.match(route, /previewModelUrl:/);
   assert.match(route, /\/api\/admin\/3d-geo-model\?projectId=/);
   assert.doesNotMatch(route, /engine\.model\.url\s*[,}]/);
+});
+
+
+test("Jyoti mesh flattening policy is exact-project scoped and never global", () => {
+  const policy = read("app/geo-3d-render-policy.ts");
+  const route = read("app/api/admin/3d-geo-placement/route.ts");
+  const manager = read("app/geo-3d-placement-manager.tsx");
+
+  assert.match(policy, /302a8799-24de-4b9f-b217-95fb2c3883c8/);
+  assert.match(policy, /jyoti-paradise-local-backup-302a8799/);
+  assert.match(policy, /project\?\.id === JYOTI_ENGINE_PROJECT_ID/);
+  assert.match(policy, /project\?\.slug === JYOTI_ENGINE_SLUG/);
+  assert.match(policy, /flattenBaseMesh: isJyotiParadise/);
+  assert.match(policy, /flattenHalfSizeM: isJyotiParadise \? 20 : 0/);
+  assert.match(route, /geo3DRenderPolicy\(engine\?\.project\)/);
+  assert.match(manager, /flattenBaseMesh=\{state\?\.engine\?\.renderPolicy\?\.flattenBaseMesh === true\}/);
 });

@@ -54,6 +54,9 @@ test("existing public Geo remains Satellite by default and 3D failure falls back
   assert.match(viewer, /setMode\("satellite"\)/);
   assert.match(viewer, /3D Site unavailable tha, isliye safe Satellite view/);
   assert.match(viewer, /Model3DElement/);
+  assert.match(viewer, /FlattenerElement/);
+  assert.match(viewer, /building\.flattenBaseMesh/);
+  assert.match(viewer, /map\.append\(flattener\)/);
   assert.match(viewer, /altitudeMode: "RELATIVE_TO_GROUND"/);
 });
 
@@ -62,5 +65,6 @@ test("public Geo payload only exposes 3D placement when resolver succeeds", () =
   assert.match(handler, /resolvePublicGeo3DPlacement\(source\.id\)/);
   assert.match(handler, /\.\.\.\(geo3d/);
   assert.match(handler, /building3d:/);
+  assert.match(handler, /geo3DRenderPolicy\(geo3d\.engine\.project\)/);
   assert.match(handler, /public-geo-3d-model/);
 });

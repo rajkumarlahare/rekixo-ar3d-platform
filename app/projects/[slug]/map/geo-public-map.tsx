@@ -43,6 +43,8 @@ type PublicGeoData = {
     pitchDeg: number;
     rollDeg: number;
     scale: number;
+    flattenBaseMesh: boolean;
+    flattenHalfSizeM: number;
     releaseId: string;
     releaseVersion: number;
     modelUrl: string;
@@ -100,6 +102,7 @@ type GoogleRoot = {
 type Maps3DLibrary = {
   Map3DElement: new (options: Record<string, unknown>) => HTMLElement;
   Model3DElement: new (options: Record<string, unknown>) => HTMLElement;
+  FlattenerElement?: new (options: Record<string, unknown>) => HTMLElement;
 };
 
 type RekixoWindow = Window &
@@ -242,6 +245,23 @@ function validatePublicGeoData(payload: PublicGeoData) {
   }
 
   return payload;
+}
+
+function flatteningSquarePath(
+  latitude: number,
+  longitude: number,
+  halfSizeM: number,
+) {
+  const safeHalfSize = Math.max(1, halfSizeM);
+  const latDelta = safeHalfSize / 111_320;
+  const cosLat = Math.max(0.2, Math.cos((latitude * Math.PI) / 180));
+  const lngDelta = safeHalfSize / (111_320 * cosLat);
+  return [
+    { lat: latitude + latDelta, lng: longitude - lngDelta },
+    { lat: latitude + latDelta, lng: longitude + lngDelta },
+    { lat: latitude - latDelta, lng: longitude + lngDelta },
+    { lat: latitude - latDelta, lng: longitude - lngDelta },
+  ];
 }
 
 function googleMapsLinks(data: PublicGeoData) {
@@ -709,6 +729,22 @@ export default function GeoPublicMap({
           mode: "HYBRID",
           gestureHandling: "GREEDY",
         });
+        const flattener = building.flattenBaseMesh
+          ? (() => {
+              if (!library.FlattenerElement)
+                throw new Error(
+                  "Google 3D mesh flattener is unavailable in this Maps build",
+                );
+              return new library.FlattenerElement({
+                path: flatteningSquarePath(
+                  building.latitude,
+                  building.longitude,
+                  building.flattenHalfSizeM,
+                ),
+              });
+            })()
+          : null;
+
         const model = new library.Model3DElement({
           src: building.modelUrl,
           position: {
@@ -726,6 +762,7 @@ export default function GeoPublicMap({
         });
 
         map3dNodeRef.current.replaceChildren(map);
+        if (flattener) map.append(flattener);
         map.append(model);
         setThreeDReady(true);
       })
