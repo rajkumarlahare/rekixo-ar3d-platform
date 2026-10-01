@@ -110,13 +110,15 @@ test("Jyoti mesh flattening policy is exact-project scoped and never global", ()
 });
 
 
-test("Geo derivative SHA invalidates same-release Super Admin preview cache", () => {
+test("Geo derivative SHA stays visible and same-origin model path preserves Engine query identity", () => {
   const route = read("app/api/admin/3d-geo-placement/route.ts");
+  const integration = read("app/engine-integration.ts");
   const manager = read("app/geo-3d-placement-manager.tsx");
   const visual = read("app/geo-3d-placement-visual.tsx");
 
   assert.equal(route.includes("sha256: engine.geoModel.sha256"), true);
-  assert.equal(route.includes("&geo=${encodeURIComponent(renderFingerprint)}"), true);
+  assert.match(route, /engineSameOriginAdminModelPath\(renderModel\.url\)/);
+  assert.match(integration, /return `\$\{url\.pathname\}\$\{url\.search\}`/);
   assert.equal(manager.includes("modelFingerprint={state?.engine?.geoModel?.sha256}"), true);
   assert.equal(visual.includes("modelFingerprint,"), true);
   assert.equal(visual.includes("Geo build: {modelFingerprint.slice(0, 12)}"), true);
