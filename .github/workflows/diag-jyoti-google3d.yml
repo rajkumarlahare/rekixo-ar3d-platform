@@ -1,0 +1,52 @@
+name: Diagnostic Jyoti Live Google 3D
+
+on:
+  push:
+    branches:
+      - diag/live-jyoti-google3d-render-20261001
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install isolated browser tooling
+        run: npm install --prefix /tmp/rekixo-browser --no-package-lock playwright@1.55.0
+      - name: Install Chromium
+        run: /tmp/rekixo-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Read-only production identity snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/jyoti-live-geo-debug
+          npx wrangler d1 execute tiyansh-production --remote --json \
+            --command "SELECT session_version AS sessionVersion FROM super_admin_security WHERE id='owner' LIMIT 1;" \
+            > /tmp/owner.json
+          npx wrangler d1 execute tiyansh-production --remote --json \
+            --command "SELECT p.id AS projectId,p.name AS projectName,l.engine_slug AS engineSlug,g.longitude,g.latitude,g.altitude_m AS altitudeM,g.heading_deg AS headingDeg,g.pitch_deg AS pitchDeg,g.roll_deg AS rollDeg,g.scale,g.public_enabled AS publicEnabled FROM project_3d_links l JOIN projects p ON p.id=l.platform_project_id LEFT JOIN geo_3d_placements g ON g.platform_project_id=p.id WHERE l.engine_slug='jyoti-paradise-local-backup-302a8799' LIMIT 1;" \
+            > /tmp/jyoti.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Instrument live Super Admin Google 3D preview
+        run: node scripts/diag-live-jyoti-google3d.mjs
+        env:
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          PLOT_PLAYWRIGHT_MODULE: /tmp/rekixo-browser/node_modules/playwright/index.mjs
+          OWNER_JSON: /tmp/owner.json
+          JYOTI_JSON: /tmp/jyoti.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jyoti-live-geo-debug
+          path: artifacts/jyoti-live-geo-debug
+          if-no-files-found: error
