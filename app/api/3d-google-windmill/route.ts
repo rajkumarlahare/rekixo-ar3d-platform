@@ -36,9 +36,11 @@ async function proxy(request: Request) {
     return new Response(null, { status: 405 });
 
   const range = request.headers.get("range");
+  const headers = new Headers({ "Accept-Encoding": "identity" });
+  if (range) headers.set("Range", range);
   const upstream = await fetch(WINDMILL_URL, {
     method: request.method,
-    headers: range ? { Range: range } : undefined,
+    headers,
     cache: "no-store",
     redirect: "follow",
   });
