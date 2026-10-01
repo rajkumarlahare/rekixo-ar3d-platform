@@ -36,6 +36,24 @@ jobs:
             echo
             rm -f "$BODY" "$HDR"
           done
+      - name: Verify decoded same-origin windmill payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY="$(mktemp)"
+          HDR="$(mktemp)"
+          STATUS="$(curl --compressed --silent --show-error --location --output "$BODY" --dump-header "$HDR" --write-out '%{http_code}' --header 'Range: bytes=0-15' 'https://admin.rekixo.com/api/3d-google-windmill')"
+          echo "PROXY_DECODED_STATUS=$STATUS"
+          grep -Ei '^(content-type|content-length|content-range|content-encoding|accept-ranges|x-rekixo-model-proxy|x-rekixo-upstream-content-encoding):' "$HDR" || true
+          echo -n 'PROXY_DECODED_HEX='
+          xxd -p -l 16 "$BODY" | tr -d '\n'
+          echo
+          echo -n 'PROXY_DECODED_ASCII='
+          head -c 16 "$BODY" | strings | head -1 || true
+          echo
+          test "$STATUS" = "200"
+          test "$(head -c 4 "$BODY")" = "glTF"
+          rm -f "$BODY" "$HDR"
       - name: Probe direct Jyoti Engine Geo bytes
         shell: bash
         run: |
@@ -115,4 +133,4 @@ jobs:
             echo
           fi
           rm -f "$BODY" "$HDR"
-# rerun after production fix #112
+# rerun after production fix #113
