@@ -1028,7 +1028,12 @@ export default function Geo3DPlacementVisual({
         {mode === "three-d" ? (
           <>
             {rendererProbe ? (
-              <span>Probe source: direct Google official GLB</span>
+              <span>
+              Probe source:{" "}
+              {isolatedProbeVersion
+                ? "same-origin Google windmill proxy"
+                : "direct Google official GLB"}
+            </span>
             ) : (
               <span>
                 Geo GLB: {modelDiagnostic.glbVerified ? "verified" : "checking"}
