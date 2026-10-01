@@ -68,3 +68,13 @@ test("public Geo payload only exposes 3D placement when resolver succeeds", () =
   assert.match(handler, /geo3DRenderPolicy\(geo3d\.engine\.project\)/);
   assert.match(handler, /public-geo-3d-model/);
 });
+
+
+test("public Geo 3D model URL is content-fingerprinted for immutable derivative rebuilds", () => {
+  const handler = read("app/api/public-geo/handler.ts");
+  const viewer = read("app/projects/[slug]/map/geo-public-map.tsx");
+
+  assert.equal(handler.includes("modelFingerprint:"), true);
+  assert.equal(handler.includes("&geo=${encodeURIComponent(geo3d.engine.geoModel.sha256)}"), true);
+  assert.equal(viewer.includes("modelFingerprint?: string"), true);
+});
