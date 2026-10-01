@@ -161,3 +161,25 @@ test("Super Admin Geo 3D has an independent Google renderer probe and anchor foc
     /fetch\(\s*GOOGLE_RENDERER_PROBE_URL/,
   );
 });
+
+
+test("isolated Google Model3D probe compares stable/current/beta Maps JS globals", () => {
+  const visual = read("app/geo-3d-placement-visual.tsx");
+  const route = read("app/api/admin/3d-google-model-probe/route.ts");
+
+  assert.match(visual, /IsolatedProbeVersion = "3\.65" \| "3\.66" \| "beta"/);
+  assert.match(visual, /Maps 3\.65/);
+  assert.match(visual, /Maps 3\.66/);
+  assert.match(visual, /Maps \{version\}/);
+  assert.match(visual, /\/api\/admin\/3d-google-model-probe\?v=/);
+  assert.match(visual, /Isolated iframe · separate Maps JS global/);
+
+  assert.match(route, /requireSuperAdmin/);
+  assert.match(route, /publicGoogleMapsBrowserKey/);
+  assert.match(route, /new Set\(\["3\.65", "3\.66", "beta", "weekly"\]\)/);
+  assert.match(route, /libraries=maps3d/);
+  assert.match(route, /maps-docs-team\.web\.app\/assets\/windmill\.glb/);
+  assert.match(route, /center: \{ lat: 39\.1178, lng: -106\.4452, altitude: 4395\.4952 \}/);
+  assert.match(route, /position: \{ lat: 39\.1178, lng: -106\.4452, altitude: 4495\.4952 \}/);
+  assert.match(route, /cache-control": "private,no-store"/);
+});
