@@ -948,8 +948,8 @@ export default function Geo3DPlacementVisual({
         <div>
           <strong>Visual placement</strong>
           <small>
-            Satellite par click karke building anchor move karein; 3D me heading,
-            scale aur ground offset live verify karein.
+            Satellite par anchor move karein; Rekixo GLB me drag = 360° orbit/tilt,
+            wheel ya pinch = zoom. Placement values save tabhi honge jab Save placement dabayenge.
           </small>
         </div>
         <div className={styles.modes} role="group" aria-label="Placement preview mode">
@@ -1018,14 +1018,28 @@ export default function Geo3DPlacementVisual({
                   <button
                     type="button"
                     onClick={() => {
+                      const map = map3DRef.current;
+                      if (!map) return;
+                      const currentHeading = Number(map.heading);
+                      map.heading =
+                        ((Number.isFinite(currentHeading) ? currentHeading : 0) + 90) %
+                        360;
+                    }}
+                    title="Camera view ko building ke around 90° rotate karein"
+                  >
+                    View +90°
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
                       if (map3DRef.current)
                         focus3DMap(
-                        map3DRef.current,
-                        latitude,
-                        longitude,
-                        altitudeM,
-                        headingDeg,
-                      );
+                          map3DRef.current,
+                          latitude,
+                          longitude,
+                          altitudeM,
+                          headingDeg,
+                        );
                     }}
                   >
                     Focus building
@@ -1156,6 +1170,7 @@ export default function Geo3DPlacementVisual({
                       ? "error"
                       : "loading"}
                 </span>
+                <span>Controls: drag orbit/tilt · wheel/pinch zoom · View +90°</span>
                 {overlayBounds ? (
                   <span>
                     GLB bounds: {overlayBounds.widthM.toFixed(1)}m ×{" "}
