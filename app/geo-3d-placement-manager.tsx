@@ -48,6 +48,7 @@ type PlacementState = {
       byteSize?: number;
       available: boolean;
       variant: "geo-optimized";
+      sha256?: string;
     } | null;
     renderVariant?: "geo-optimized" | "source";
     renderPolicy?: { flattenBaseMesh: boolean; flattenHalfSizeM: number };
@@ -334,6 +335,7 @@ export default function Geo3DPlacementManager({
           apiKey={state?.maps?.apiKey || null}
           modelUrl={state?.engine?.previewModelUrl || null}
           modelByteSize={state?.engine?.geoModel?.byteSize}
+          modelFingerprint={state?.engine?.geoModel?.sha256}
           flattenBaseMesh={state?.engine?.renderPolicy?.flattenBaseMesh === true}
           flattenHalfSizeM={state?.engine?.renderPolicy?.flattenHalfSizeM || 0}
           features={state?.visualFeatures || []}
