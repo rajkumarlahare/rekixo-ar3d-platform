@@ -254,6 +254,7 @@ export default function Geo3DPlacementVisual({
   apiKey,
   modelUrl,
   modelByteSize,
+  modelFingerprint,
   flattenBaseMesh,
   flattenHalfSizeM,
   features,
@@ -271,6 +272,7 @@ export default function Geo3DPlacementVisual({
   apiKey: string | null;
   modelUrl: string | null;
   modelByteSize?: number;
+  modelFingerprint?: string;
   flattenBaseMesh: boolean;
   flattenHalfSizeM: number;
   features: Array<{
@@ -637,6 +639,7 @@ export default function Geo3DPlacementVisual({
   }, [
     apiKey,
     modelUrl,
+    modelFingerprint,
     mode,
     validPosition,
     flattenBaseMesh,
@@ -772,6 +775,9 @@ export default function Geo3DPlacementVisual({
                   ? ` · ${modelDiagnostic.contentType.split(";")[0]}`
                   : ""}
               </span>
+            ) : null}
+            {modelFingerprint ? (
+              <span>Geo build: {modelFingerprint.slice(0, 12)}</span>
             ) : null}
             <span>
               Model element:{" "}
