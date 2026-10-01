@@ -14,6 +14,7 @@ import {
   publicSiteEnabled,
   publicSiteUnavailableResponse,
 } from "@/modules/public-site-access";
+import { geo3DRenderPolicy } from "@/app/geo-3d-render-policy";
 
 const LIVE_SETTING_KEYS = [
   "geoPublicEnabled",
@@ -272,6 +273,7 @@ export async function GET(request: Request) {
                 pitchDeg: geo3d.placement.pitchDeg,
                 rollDeg: geo3d.placement.rollDeg,
                 scale: geo3d.placement.scale,
+                ...geo3DRenderPolicy(geo3d.engine.project),
                 releaseId: geo3d.placement.engineReleaseId,
                 releaseVersion: geo3d.placement.engineReleaseVersion,
                 modelUrl:
