@@ -150,7 +150,7 @@ test("Super Admin Geo 3D has an independent Google renderer probe and anchor foc
   assert.match(visual, /scale: 0\.15/);
   assert.match(visual, /rendererProbe \? GOOGLE_RENDERER_PROBE_MODEL\.scale : scale/);
   assert.match(visual, /rendererModelUrl = GOOGLE_RENDERER_PROBE_URL/);
-  assert.match(visual, /Probe source: direct Google official GLB/);
+  assert.match(visual, /same-origin Google windmill proxy/);
   assert.match(visual, /Maps JS \{rendererRuntime\.mapsVersion\}/);
   assert.match(visual, /maps3dPreloaded/);
   assert.match(visual, /rendererResourceObservation/);
