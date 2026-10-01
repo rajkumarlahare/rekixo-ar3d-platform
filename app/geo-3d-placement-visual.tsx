@@ -487,12 +487,12 @@ export default function Geo3DPlacementVisual({
         // loads the official GLB directly through Model3DElement, and a JS fetch
         // can be blocked by cross-origin policy before the renderer is tested.
         setModelDiagnostic({ stage: "loading-model" });
-        let finalModelUrl = modelUrl;
+        let rendererModelUrl = modelUrl;
         if (rendererProbe) {
-          finalModelUrl = GOOGLE_RENDERER_PROBE_URL;
+          rendererModelUrl = GOOGLE_RENDERER_PROBE_URL;
           setModelDiagnostic({
             stage: "loading-model",
-            finalUrl: finalModelUrl,
+            finalUrl: rendererModelUrl,
           });
         } else {
           const modelCheck = await fetch(modelUrl, {
@@ -523,7 +523,8 @@ export default function Geo3DPlacementVisual({
               `3D model unavailable (${modelCheck.status}${detail})`,
             );
           }
-          finalModelUrl = modelCheck.url || modelUrl;
+          const finalModelUrl = modelCheck.url || modelUrl;
+          rendererModelUrl = finalModelUrl;
           const contentType = modelCheck.headers.get("content-type") || "";
           const modelStatus = modelCheck.status;
           const magicBytes = await readResponsePrefix(modelCheck, 4);
@@ -538,6 +539,8 @@ export default function Geo3DPlacementVisual({
             glbVerified: true,
           });
         }
+
+        const finalModelUrl = rendererModelUrl;
 
         const map = new library.Map3DElement({
           // Start broad. Once terrain is steady, focus with a terrain-relative
