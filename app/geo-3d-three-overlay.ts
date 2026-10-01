@@ -40,6 +40,8 @@ export type Geo3DOverlayBounds = {
 
 export type Geo3DOverlayHandle = {
   bounds: Geo3DOverlayBounds;
+  rotateViewBy: (deltaHeadingDeg: number) => void;
+  focusView: (headingDeg: number, tiltDeg?: number, rangeM?: number) => void;
   dispose: () => void;
 };
 
@@ -478,6 +480,20 @@ export async function createGeo3DThreeOverlay({
 
   return {
     bounds,
+    rotateViewBy: (deltaHeadingDeg: number) => {
+      if (orbitHeading === null || orbitTilt === null || orbitRange === null)
+        syncOrbitFromMap();
+      applyBuildingCenteredCamera(
+        (orbitHeading ?? 0) + finite(deltaHeadingDeg, 0),
+        orbitTilt ?? 68,
+        orbitRange ?? 190,
+      );
+      scheduleGoogleCameraSettle(0);
+    },
+    focusView: (headingDeg: number, tiltDeg = 68, rangeM = 190) => {
+      applyBuildingCenteredCamera(headingDeg, tiltDeg, rangeM);
+      scheduleGoogleCameraSettle(0);
+    },
     dispose: () => {
       if (disposed) return;
       disposed = true;
