@@ -488,12 +488,21 @@ export default function Geo3DPlacementVisual({
         const effectiveModelUrl = rendererProbe
           ? GOOGLE_RENDERER_PROBE_URL
           : modelUrl;
-        const modelCheck = await fetch(effectiveModelUrl, {
-          method: "GET",
-          headers: rendererProbe ? undefined : { Range: "bytes=0-3" },
-          cache: "no-store",
-          credentials: rendererProbe ? "omit" : "same-origin",
-        });
+        const modelCheck = await fetch(
+          effectiveModelUrl,
+          rendererProbe
+            ? {
+                method: "GET",
+                cache: "no-store",
+                credentials: "omit",
+              }
+            : {
+                method: "GET",
+                headers: { Range: "bytes=0-3" },
+                cache: "no-store",
+                credentials: "same-origin",
+              },
+        );
         if (modelCheck.status !== 200 && modelCheck.status !== 206) {
           let detail = "";
           const contentType = modelCheck.headers.get("content-type") || "";
