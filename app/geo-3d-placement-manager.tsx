@@ -41,6 +41,15 @@ type PlacementState = {
   engine?: {
     project: { id: string; name: string; slug: string; status: string };
     model?: { id: string; name: string; mimeType: string; available: boolean } | null;
+    geoModel?: {
+      id: string;
+      name: string;
+      mimeType: string;
+      byteSize?: number;
+      available: boolean;
+      variant: "geo-optimized";
+    } | null;
+    renderVariant?: "geo-optimized" | "source";
     release?: { id: string; version: number } | null;
     previewModelUrl?: string | null;
   } | null;
@@ -301,8 +310,16 @@ export default function Geo3DPlacementManager({
         </article>
         <article>
           <span>MODEL</span>
-          <strong>{state?.engine?.model?.name || "—"}</strong>
-          <small>{state?.engine?.model?.mimeType || "Published GLB required"}</small>
+          <strong>
+            {state?.engine?.renderVariant === "geo-optimized"
+              ? state.engine.geoModel?.name || state.engine.model?.name || "—"
+              : state?.engine?.model?.name || "—"}
+          </strong>
+          <small>
+            {state?.engine?.renderVariant === "geo-optimized"
+              ? `Geo optimized${state.engine.geoModel?.byteSize ? ` · ${(state.engine.geoModel.byteSize / 1_000_000).toFixed(1)} MB` : ""} · source release pinned`
+              : state?.engine?.model?.mimeType || "Published GLB required"}
+          </small>
         </article>
         <article>
           <span>PINNED RELEASE</span>
