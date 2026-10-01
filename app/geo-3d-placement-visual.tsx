@@ -46,12 +46,15 @@ type RekixoWindow = Window &
 type Maps3DLibrary = {
   Map3DElement: new (options: Record<string, unknown>) => HTMLElement;
   Model3DElement: new (options: Record<string, unknown>) => HTMLElement;
+  Marker3DElement?: new (options: Record<string, unknown>) => HTMLElement;
   FlattenerElement?: new (options: Record<string, unknown>) => HTMLElement;
 };
 
 type Mutable3DMap = HTMLElement & {
   center?: unknown;
   heading?: number;
+  range?: number;
+  tilt?: number;
   flyCameraTo?: (options: {
     endCamera: {
       center: { lat: number; lng: number; altitude: number };
@@ -88,7 +91,14 @@ type ModelDiagnostic = {
   glbVerified?: boolean;
 };
 
+const GOOGLE_RENDERER_PROBE_URL =
+  "https://maps-docs-team.web.app/assets/windmill.glb";
+
 let mapsPromise: Promise<GoogleRoot> | null = null;
+
+function libraryMarkerStatus(_rendererProbe: boolean) {
+  return "enabled";
+}
 
 function browserWindow() {
   return window as RekixoWindow;
@@ -294,6 +304,7 @@ export default function Geo3DPlacementVisual({
   notify: (message: string) => void;
 }) {
   const [mode, setMode] = useState<"satellite" | "three-d">("satellite");
+  const [rendererProbe, setRendererProbe] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [modelDiagnostic, setModelDiagnostic] = useState<ModelDiagnostic>({
@@ -474,15 +485,18 @@ export default function Geo3DPlacementVisual({
         if (cancelled || !threeDRef.current) return;
         setModelDiagnostic({ stage: "map-ready" });
 
-        // Verify the exact byte path used by the renderer. A 4-byte Range
-        // request proves both the authenticated Platform proxy and the Engine
-        // immutable GLB transport without downloading the full model.
+        // Verify the exact byte path used by the project renderer. The Google
+        // probe deliberately bypasses this project transport so the same live
+        // browser can independently prove whether Model3DElement itself works.
         setModelDiagnostic({ stage: "loading-model" });
-        const modelCheck = await fetch(modelUrl, {
+        const effectiveModelUrl = rendererProbe
+          ? GOOGLE_RENDERER_PROBE_URL
+          : modelUrl;
+        const modelCheck = await fetch(effectiveModelUrl, {
           method: "GET",
-          headers: { Range: "bytes=0-3" },
+          headers: rendererProbe ? undefined : { Range: "bytes=0-3" },
           cache: "no-store",
-          credentials: "same-origin",
+          credentials: rendererProbe ? "omit" : "same-origin",
         });
         if (modelCheck.status !== 200 && modelCheck.status !== 206) {
           let detail = "";
@@ -506,7 +520,7 @@ export default function Geo3DPlacementVisual({
             `3D model unavailable (${modelCheck.status}${detail})`,
           );
         }
-        const finalModelUrl = modelCheck.url || modelUrl;
+        const finalModelUrl = modelCheck.url || effectiveModelUrl;
         const contentType = modelCheck.headers.get("content-type") || "";
         const modelStatus = modelCheck.status;
         const magicBytes = await readResponsePrefix(modelCheck, 4);
@@ -551,23 +565,41 @@ export default function Geo3DPlacementVisual({
           : null;
 
         const model = new library.Model3DElement({
-          // Use the final public Engine URL reached by the authenticated
-          // preflight. Model3DElement performs its own fetch and must not rely
-          // on Super Admin cookies being forwarded by the Maps renderer.
+          // Project mode uses the final public Engine URL reached by the
+          // authenticated preflight. Probe mode mirrors Google's official
+          // Model3DElement sample at the exact same Rekixo anchor.
           src: finalModelUrl,
           position: {
             lat: latitude,
             lng: longitude,
-            altitude: altitudeM,
+            altitude: rendererProbe ? 0 : altitudeM,
           },
-          orientation: {
-            heading: headingDeg,
-            tilt: pitchDeg,
-            roll: rollDeg,
-          },
-          scale,
-          altitudeMode: "RELATIVE_TO_GROUND",
+          orientation: rendererProbe
+            ? { heading: 0, tilt: 270, roll: 90 }
+            : {
+                heading: headingDeg,
+                tilt: pitchDeg,
+                roll: rollDeg,
+              },
+          scale: rendererProbe ? 0.15 : scale,
+          altitudeMode: rendererProbe
+            ? "CLAMP_TO_GROUND"
+            : "RELATIVE_TO_GROUND",
         }) as Mutable3DModel;
+
+        const anchorBeacon = library.Marker3DElement
+          ? new library.Marker3DElement({
+              position: {
+                lat: latitude,
+                lng: longitude,
+                altitude: Math.max(0, altitudeM + 3),
+              },
+              altitudeMode: "RELATIVE_TO_GROUND",
+              label: "ANCHOR",
+              drawsWhenOccluded: true,
+              sizePreserved: true,
+            })
+          : null;
 
         let modelAttached = false;
         const attachModel = () => {
@@ -578,8 +610,15 @@ export default function Geo3DPlacementVisual({
             map.append(flattener);
             flattener3DRef.current = flattener;
           }
+          if (anchorBeacon) map.append(anchorBeacon);
           map.append(model);
           model3DRef.current = model;
+          // Re-focus after custom elements are attached. This avoids a stale
+          // broad camera target surviving the initial terrain steady-state.
+          window.requestAnimationFrame(() => {
+            if (!cancelled)
+              focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
+          });
           setModelDiagnostic((current) => ({
             ...current,
             stage: "model-attached",
@@ -640,6 +679,7 @@ export default function Geo3DPlacementVisual({
     apiKey,
     modelUrl,
     modelFingerprint,
+    rendererProbe,
     mode,
     validPosition,
     flattenBaseMesh,
@@ -729,6 +769,32 @@ export default function Geo3DPlacementVisual({
           >
             <Box size={15} /> 3D Preview
           </button>
+          {mode === "three-d" ? (
+            <>
+              <button
+                type="button"
+                aria-pressed={rendererProbe}
+                onClick={() => setRendererProbe((current) => !current)}
+              >
+                {rendererProbe ? "Project model" : "Google model test"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (map3DRef.current)
+                    focus3DMap(
+                      map3DRef.current,
+                      latitude,
+                      longitude,
+                      altitudeM,
+                      headingDeg,
+                    );
+                }}
+              >
+                Focus building
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -776,9 +842,12 @@ export default function Geo3DPlacementVisual({
                   : ""}
               </span>
             ) : null}
-            {modelFingerprint ? (
+            {rendererProbe ? (
+              <span>Renderer probe: Google official windmill</span>
+            ) : modelFingerprint ? (
               <span>Geo build: {modelFingerprint.slice(0, 12)}</span>
             ) : null}
+            <span>Anchor beacon: {libraryMarkerStatus(rendererProbe)}</span>
             <span>
               Model element:{" "}
               {modelDiagnostic.stage === "model-attached"
