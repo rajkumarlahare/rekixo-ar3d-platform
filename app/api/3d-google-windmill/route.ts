@@ -6,10 +6,10 @@ function responseHeaders(upstream: Response) {
   for (const name of [
     "content-type",
     "content-length",
-    "content-range",
-    "accept-ranges",
+    "content-encoding",
     "etag",
     "last-modified",
+    "vary",
   ]) {
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
@@ -23,7 +23,11 @@ function responseHeaders(upstream: Response) {
   headers.set("access-control-allow-headers", "Range");
   headers.set(
     "access-control-expose-headers",
-    "Accept-Ranges,Content-Range,Content-Length,ETag",
+    "Content-Length,Content-Encoding,ETag,X-Rekixo-Upstream-Content-Encoding",
+  );
+  headers.set(
+    "x-rekixo-upstream-content-encoding",
+    upstream.headers.get("content-encoding") || "identity",
   );
   headers.set("x-rekixo-model-proxy", "google-windmill");
   return headers;
@@ -35,17 +39,19 @@ async function proxy(request: Request) {
   if (request.method !== "GET" && request.method !== "HEAD")
     return new Response(null, { status: 405 });
 
-  const range = request.headers.get("range");
-  const headers = new Headers({ "Accept-Encoding": "identity" });
-  if (range) headers.set("Range", range);
+  // Do not forward byte ranges to this cross-zone diagnostic asset. Cloudflare
+  // may negotiate a compressed representation for Worker subrequests even when
+  // identity is requested. Returning the complete encoded representation while
+  // preserving Content-Encoding lets the browser decode it correctly before
+  // Model3DElement consumes it.
   const upstream = await fetch(WINDMILL_URL, {
     method: request.method,
-    headers,
+    headers: { "Accept-Encoding": "identity" },
     cache: "no-store",
     redirect: "follow",
   });
 
-  if (upstream.status !== 200 && upstream.status !== 206) {
+  if (upstream.status !== 200) {
     await upstream.body?.cancel().catch(() => {});
     return Response.json(
       { error: "Google windmill proxy upstream unavailable", status: upstream.status },
@@ -54,8 +60,8 @@ async function proxy(request: Request) {
   }
 
   return new Response(request.method === "HEAD" ? null : upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
+    status: 200,
+    statusText: "OK",
     headers: responseHeaders(upstream),
   });
 }
