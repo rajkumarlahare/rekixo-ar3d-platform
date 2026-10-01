@@ -276,8 +276,19 @@ export async function GET(request: Request) {
                 ...geo3DRenderPolicy(geo3d.engine.project),
                 releaseId: geo3d.placement.engineReleaseId,
                 releaseVersion: geo3d.placement.engineReleaseVersion,
+                modelFingerprint:
+                  geo3d.engine.geoModel &&
+                  geo3d.renderModel === geo3d.engine.geoModel &&
+                  typeof geo3d.engine.geoModel.sha256 === "string"
+                    ? geo3d.engine.geoModel.sha256
+                    : undefined,
                 modelUrl:
-                  `/api/public-geo-3d-model?projectSlug=${encodeURIComponent(source.slug)}&release=${encodeURIComponent(geo3d.placement.engineReleaseId)}`,
+                  `/api/public-geo-3d-model?projectSlug=${encodeURIComponent(source.slug)}&release=${encodeURIComponent(geo3d.placement.engineReleaseId)}` +
+                  (geo3d.engine.geoModel &&
+                  geo3d.renderModel === geo3d.engine.geoModel &&
+                  typeof geo3d.engine.geoModel.sha256 === "string"
+                    ? `&geo=${encodeURIComponent(geo3d.engine.geoModel.sha256)}`
+                    : ""),
                 experienceUrl: geo3d.experienceUrl,
               },
             }

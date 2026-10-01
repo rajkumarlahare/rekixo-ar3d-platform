@@ -40,6 +40,13 @@ async function state(projectId: string) {
   const engine = link ? await publishedEngineProject(link.engineSlug) : null;
   const renderModel = preferredEngineGeoRenderModel(engine);
   const renderPolicy = geo3DRenderPolicy(engine?.project);
+  const renderFingerprint =
+    engine?.geoModel &&
+    renderModel === engine.geoModel &&
+    typeof engine.geoModel.sha256 === "string" &&
+    /^[a-f0-9]{64}$/.test(engine.geoModel.sha256)
+      ? engine.geoModel.sha256
+      : "";
   return {
     schemaReady: await geo3DPlacementSchemaReady(),
     scope: {
@@ -81,6 +88,7 @@ async function state(projectId: string) {
                 byteSize: engine.geoModel.byteSize,
                 available: engine.geoModel.available !== false,
                 variant: engine.geoModel.variant,
+                sha256: engine.geoModel.sha256,
               }
             : null,
           renderVariant:
@@ -92,7 +100,7 @@ async function state(projectId: string) {
           previewModelUrl:
             renderModel?.mimeType === "model/gltf-binary" &&
             renderModel.available !== false
-              ? `/api/admin/3d-geo-model?projectId=${encodeURIComponent(projectId)}&release=${encodeURIComponent(String(engine.release?.id || ""))}`
+              ? `/api/admin/3d-geo-model?projectId=${encodeURIComponent(projectId)}&release=${encodeURIComponent(String(engine.release?.id || ""))}${renderFingerprint ? `&geo=${encodeURIComponent(renderFingerprint)}` : ""}`
               : null,
         }
       : null,
