@@ -53,6 +53,23 @@ jobs:
           head -c 16 "$BODY" | strings | head -1 || true
           echo
           rm -f "$BODY" "$HDR"
+      - name: Probe Jyoti Engine on admin same-origin path
+        shell: bash
+        run: |
+          set -u
+          BODY="$(mktemp)"
+          HDR="$(mktemp)"
+          URL='https://admin.rekixo.com/3Dprojects/api/releases/release_57c56ec2-50c0-4ee2-b916-df89bead1b94/geo-models/b162a605-c922-4d7d-a4d6-194e44c37a95/model.glb?v=1&geo=c413a6ff2fc3d869fb76222f69c005109c5a40b26a4a036394e52d3552e53e10'
+          STATUS="$(curl --silent --show-error --location --output "$BODY" --dump-header "$HDR" --write-out '%{http_code}' --header 'Range: bytes=0-15' "$URL" || true)"
+          echo "ADMIN_ENGINE_STATUS=$STATUS"
+          grep -Ei '^(content-type|content-length|content-range|content-encoding|accept-ranges|x-rekixo-sha256):' "$HDR" || true
+          echo -n 'ADMIN_ENGINE_HEX='
+          xxd -p -l 16 "$BODY" | tr -d '\n'
+          echo
+          echo -n 'ADMIN_ENGINE_ASCII='
+          head -c 16 "$BODY" | strings | head -1 || true
+          echo
+          rm -f "$BODY" "$HDR"
       - name: Probe Jyoti same-origin bytes
         shell: bash
         run: |
