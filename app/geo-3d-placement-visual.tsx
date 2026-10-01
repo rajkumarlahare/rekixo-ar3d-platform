@@ -830,7 +830,7 @@ export default function Geo3DPlacementVisual({
         {mode === "three-d" ? (
           <>
             <span>
-              {rendererProbe ? "Probe GLB" : "Geo GLB"}:{" "}
+              {rendererProbe ? "Probe GLB:" : "Geo GLB:"}{" "}
               {modelDiagnostic.glbVerified ? "verified" : "checking"}
               {!rendererProbe && modelByteSize
                 ? ` · ${(modelByteSize / 1_000_000).toFixed(2)} MB`
