@@ -40,12 +40,13 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(overlay, /map\.heading = orbitHeading/);
   assert.match(overlay, /map\.tilt = orbitTilt/);
   assert.match(overlay, /map\.range = orbitRange/);
-  assert.match(overlay, /lockedMapCenterAltitude/);
+  assert.match(overlay, /cameraPosition\?: unknown/);
+  assert.match(overlay, /pinGoogleCenterToBuilding/);
   assert.match(overlay, /coordinate\(map\.center, "altitude"\)/);
   assert.match(overlay, /lat: placement\.latitude/);
   assert.match(overlay, /lng: placement\.longitude/);
   assert.match(overlay, /queueOrbitToGoogleMap/);
-  assert.match(overlay, /scheduleGoogleCameraSettle/);
+  assert.doesNotMatch(overlay, /scheduleGoogleCameraSettle/);
   assert.match(overlay, /const minFrameInterval = interactive \? 15 : 32/);
   assert.match(overlay, /const overlayFovDeg/);
   assert.match(overlay, /THREE\.MathUtils\.clamp\(value, 28, 82\)/);
@@ -63,7 +64,7 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(visual, /Controls: drag orbit\/tilt/);
 });
 
-test("Geo orbit avoids per-pointer flyCamera feedback and map-read jitter", () => {
+test("Geo orbit mirrors Google's actual camera without release snap-back", () => {
   const overlay = read("app/geo-3d-three-overlay.ts");
 
   const applyStart = overlay.indexOf("const applyBuildingCenteredCamera");
@@ -71,20 +72,26 @@ test("Geo orbit avoids per-pointer flyCamera feedback and map-read jitter", () =
   assert.ok(applyStart >= 0 && pointerStart > applyStart);
   const applyBlock = overlay.slice(applyStart, pointerStart);
   assert.doesNotMatch(applyBlock, /flyCameraTo/);
+  assert.doesNotMatch(applyBlock, /map\.center\s*=/);
   assert.match(applyBlock, /queueOrbitToGoogleMap/);
+
+  const releaseStart = overlay.indexOf("const releasePointer");
+  const wheelStart = overlay.indexOf("const onWheel", releaseStart);
+  assert.ok(releaseStart >= 0 && wheelStart > releaseStart);
+  const releaseBlock = overlay.slice(releaseStart, wheelStart);
+  assert.doesNotMatch(releaseBlock, /flyCameraTo/);
+  assert.doesNotMatch(releaseBlock, /map\.center\s*=/);
 
   const renderStart = overlay.indexOf("const render =");
   const frameStart = overlay.indexOf("const frame =", renderStart);
   assert.ok(renderStart >= 0 && frameStart > renderStart);
   const renderBlock = overlay.slice(renderStart, frameStart);
-  assert.match(renderBlock, /orbitHeading \?\?/);
-  assert.match(renderBlock, /orbitTilt \?\?/);
-  assert.match(renderBlock, /orbitRange \?\?/);
-  assert.doesNotMatch(
-    renderBlock,
-    /finite\(map\.heading, orbitHeading \?\?/,
-  );
-  assert.doesNotMatch(renderBlock, /finite\(map\.fov/);
+  assert.match(renderBlock, /const cameraPosition = map\.cameraPosition/);
+  assert.match(renderBlock, /const hasExactGoogleCamera/);
+  assert.match(renderBlock, /cameraAlt - centerAlt/);
+  assert.match(renderBlock, /cameraLng - centerLng/);
+  assert.match(renderBlock, /cameraLat - centerLat/);
+  assert.match(renderBlock, /finite\(map\.fov, overlayFovDeg\)/);
 });
 
 test("Rekixo overlay remains preview-only and does not mutate customer publication", () => {

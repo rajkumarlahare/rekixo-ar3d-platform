@@ -5,11 +5,13 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 export type Map3DCameraSource = HTMLElement & {
   center?: unknown;
+  cameraPosition?: unknown;
   heading?: number;
   tilt?: number;
   roll?: number;
   range?: number;
   fov?: number;
+  stopCameraAnimation?: () => void;
   flyCameraTo?: (options: {
     endCamera: {
       center: { lat: number; lng: number; altitude: number };
@@ -188,9 +190,7 @@ export async function createGeo3DThreeOverlay({
   let orbitTilt: number | null = null;
   let orbitRange: number | null = null;
   let mapCameraFrame = 0;
-  let settleTimer: number | undefined;
   let smoothInteractionUntil = 0;
-  let lockedMapCenterAltitude: number | undefined;
 
   const modelSpanM = Math.max(
     bounds.widthM,
@@ -214,7 +214,19 @@ export async function createGeo3DThreeOverlay({
     orbitHeading = normalizeHeading(finite(map.heading, getPlacement().headingDeg));
     orbitTilt = clampTilt(finite(map.tilt, 68));
     orbitRange = clampRange(finite(map.range, 190));
-    lockedMapCenterAltitude = coordinate(map.center, "altitude");
+  };
+
+  const pinGoogleCenterToBuilding = () => {
+    const placement = getPlacement();
+    const centerAltitude = coordinate(map.center, "altitude");
+    map.center =
+      centerAltitude === undefined
+        ? { lat: placement.latitude, lng: placement.longitude }
+        : {
+            lat: placement.latitude,
+            lng: placement.longitude,
+            altitude: centerAltitude,
+          };
   };
 
   const writeOrbitToGoogleMap = () => {
@@ -225,15 +237,6 @@ export async function createGeo3DThreeOverlay({
       orbitRange === null
     )
       return;
-    const placement = getPlacement();
-    map.center =
-      lockedMapCenterAltitude === undefined
-        ? { lat: placement.latitude, lng: placement.longitude }
-        : {
-            lat: placement.latitude,
-            lng: placement.longitude,
-            altitude: lockedMapCenterAltitude,
-          };
     map.heading = orbitHeading;
     map.tilt = orbitTilt;
     map.range = orbitRange;
@@ -244,41 +247,40 @@ export async function createGeo3DThreeOverlay({
     mapCameraFrame = window.requestAnimationFrame(writeOrbitToGoogleMap);
   };
 
-  const settleGoogleCamera = () => {
-    settleTimer = undefined;
-    if (
-      orbitHeading === null ||
-      orbitTilt === null ||
-      orbitRange === null
-    )
-      return;
+  const flyToBuildingCamera = (
+    heading: number,
+    tilt: number,
+    range: number,
+  ) => {
     const placement = getPlacement();
+    const safeHeading = normalizeHeading(heading);
+    const safeTilt = clampTilt(tilt);
+    const safeRange = clampRange(range);
+    orbitHeading = safeHeading;
+    orbitTilt = safeTilt;
+    orbitRange = safeRange;
     const endCamera = {
       center: {
         lat: placement.latitude,
         lng: placement.longitude,
         altitude:
-          placement.altitudeM + Math.max(2, bounds.heightM * 0.5),
+          placement.altitudeM +
+          Math.max(2, (bounds.heightM * Math.max(0.001, placement.scale)) / 2),
       },
       altitudeMode: "RELATIVE_TO_GROUND" as const,
-      range: orbitRange,
-      tilt: orbitTilt,
-      heading: orbitHeading,
+      range: safeRange,
+      tilt: safeTilt,
+      heading: safeHeading,
     };
     if (typeof map.flyCameraTo === "function") {
       void map.flyCameraTo({ endCamera, durationMillis: 0 });
     } else {
-      map.center = { lat: placement.latitude, lng: placement.longitude };
-      writeOrbitToGoogleMap();
+      pinGoogleCenterToBuilding();
+      map.heading = safeHeading;
+      map.tilt = safeTilt;
+      map.range = safeRange;
     }
-    window.requestAnimationFrame(() => {
-      lockedMapCenterAltitude = coordinate(map.center, "altitude");
-    });
-  };
-
-  const scheduleGoogleCameraSettle = (delayMs: number) => {
-    if (settleTimer !== undefined) window.clearTimeout(settleTimer);
-    settleTimer = window.setTimeout(settleGoogleCamera, delayMs);
+    markSmoothInteraction();
   };
 
   const applyBuildingCenteredCamera = (
@@ -320,10 +322,8 @@ export async function createGeo3DThreeOverlay({
     }
     renderer.domElement.style.cursor = "grabbing";
     markSmoothInteraction();
-    if (settleTimer !== undefined) {
-      window.clearTimeout(settleTimer);
-      settleTimer = undefined;
-    }
+    map.stopCameraAnimation?.();
+    pinGoogleCenterToBuilding();
     if (orbitHeading === null || orbitTilt === null || orbitRange === null)
       syncOrbitFromMap();
     if (activePointers.size === 1) {
@@ -388,7 +388,6 @@ export async function createGeo3DThreeOverlay({
     continueWithRemainingPointer();
     if (activePointers.size === 0) {
       renderer.domElement.style.cursor = "grab";
-      scheduleGoogleCameraSettle(70);
     }
     markSmoothInteraction();
     event.preventDefault();
@@ -406,7 +405,6 @@ export async function createGeo3DThreeOverlay({
       orbitTilt ?? clampTilt(finite(map.tilt, 68)),
       currentRange * factor,
     );
-    scheduleGoogleCameraSettle(120);
     event.preventDefault();
   };
 
@@ -447,31 +445,57 @@ export async function createGeo3DThreeOverlay({
       finite(placement.rollDeg, 0),
     );
 
-    // While the user interacts, the Rekixo orbit state is the source of truth.
-    // Reading Google's asynchronous camera values back into the overlay creates
-    // a feedback loop and visible zoom/position vibration.
-    const headingDeg =
-      orbitHeading ??
-      normalizeHeading(finite(map.heading, placement.headingDeg));
-    const tiltDeg = orbitTilt ?? clampTilt(finite(map.tilt, 68));
-    const range = orbitRange ?? clampRange(finite(map.range, 190));
-    const heading = THREE.MathUtils.degToRad(headingDeg);
-    const tilt = THREE.MathUtils.degToRad(
-      THREE.MathUtils.clamp(tiltDeg, 1, 89.5),
-    );
+    const scale = Math.max(0.001, finite(placement.scale, 1));
     const targetY =
-      placement.altitudeM + Math.max(2, bounds.heightM * 0.5);
-    const horizontal = range * Math.sin(tilt);
-    const vertical = Math.max(1, range * Math.cos(tilt));
+      placement.altitudeM + Math.max(2, (bounds.heightM * scale) / 2);
+    const center = map.center;
+    const cameraPosition = map.cameraPosition;
+    const centerLat = coordinate(center, "lat");
+    const centerLng = coordinate(center, "lng");
+    const centerAlt = coordinate(center, "altitude");
+    const cameraLat = coordinate(cameraPosition, "lat");
+    const cameraLng = coordinate(cameraPosition, "lng");
+    const cameraAlt = coordinate(cameraPosition, "altitude");
+    const hasExactGoogleCamera =
+      centerLat !== undefined &&
+      centerLng !== undefined &&
+      centerAlt !== undefined &&
+      cameraLat !== undefined &&
+      cameraLng !== undefined &&
+      cameraAlt !== undefined;
 
-    camera.fov = overlayFovDeg;
+    const range = clampRange(finite(map.range, orbitRange ?? 190));
+    camera.fov = THREE.MathUtils.clamp(finite(map.fov, overlayFovDeg), 20, 55);
     camera.near = Math.max(0.05, range / 10_000);
     camera.far = Math.max(5_000, range * 20);
-    camera.position.set(
-      -Math.sin(heading) * horizontal,
-      targetY + vertical,
-      Math.cos(heading) * horizontal,
-    );
+
+    if (hasExactGoogleCamera) {
+      const cosLatitude = Math.max(
+        0.2,
+        Math.cos((centerLat * Math.PI) / 180),
+      );
+      const eastM = (cameraLng - centerLng) * 111_320 * cosLatitude;
+      const northM = (cameraLat - centerLat) * 111_320;
+      const upM = cameraAlt - centerAlt;
+      camera.position.set(eastM, targetY + upM, -northM);
+    } else {
+      const headingDeg = normalizeHeading(
+        finite(map.heading, orbitHeading ?? placement.headingDeg),
+      );
+      const tiltDeg = clampTilt(finite(map.tilt, orbitTilt ?? 68));
+      const heading = THREE.MathUtils.degToRad(headingDeg);
+      const tilt = THREE.MathUtils.degToRad(
+        THREE.MathUtils.clamp(tiltDeg, 1, 89.5),
+      );
+      const horizontal = range * Math.sin(tilt);
+      const vertical = Math.max(1, range * Math.cos(tilt));
+      camera.position.set(
+        -Math.sin(heading) * horizontal,
+        targetY + vertical,
+        Math.cos(heading) * horizontal,
+      );
+    }
+
     camera.up.set(0, 1, 0);
     camera.lookAt(0, targetY, 0);
     const cameraRoll = finite(map.roll, 0);
@@ -511,23 +535,20 @@ export async function createGeo3DThreeOverlay({
     rotateViewBy: (deltaHeadingDeg: number) => {
       if (orbitHeading === null || orbitTilt === null || orbitRange === null)
         syncOrbitFromMap();
-      applyBuildingCenteredCamera(
+      flyToBuildingCamera(
         (orbitHeading ?? 0) + finite(deltaHeadingDeg, 0),
         orbitTilt ?? 68,
         orbitRange ?? 190,
       );
-      scheduleGoogleCameraSettle(0);
     },
     focusView: (headingDeg: number, tiltDeg = 68, rangeM = 190) => {
-      applyBuildingCenteredCamera(headingDeg, tiltDeg, rangeM);
-      scheduleGoogleCameraSettle(0);
+      flyToBuildingCamera(headingDeg, tiltDeg, rangeM);
     },
     dispose: () => {
       if (disposed) return;
       disposed = true;
       window.cancelAnimationFrame(animationFrame);
       if (mapCameraFrame) window.cancelAnimationFrame(mapCameraFrame);
-      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
       resizeObserver?.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
