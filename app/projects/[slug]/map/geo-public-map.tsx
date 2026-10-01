@@ -2,6 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { solveHomography, type MapperPoint } from "../../../mapper-geometry";
+import {
+  createGeo3DThreeOverlay,
+  type Geo3DOverlayHandle,
+  type Map3DCameraSource,
+} from "../../../geo-3d-three-overlay";
 import styles from "./geo-public-map.module.css";
 
 type PublicFeature = {
@@ -101,8 +106,7 @@ type GoogleRoot = {
 };
 
 type Maps3DLibrary = {
-  Map3DElement: new (options: Record<string, unknown>) => HTMLElement;
-  Model3DElement: new (options: Record<string, unknown>) => HTMLElement;
+  Map3DElement: new (options: Record<string, unknown>) => Map3DCameraSource;
   FlattenerElement?: new (options: Record<string, unknown>) => HTMLElement;
 };
 
@@ -537,6 +541,8 @@ export default function GeoPublicMap({
 }) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const map3dNodeRef = useRef<HTMLDivElement | null>(null);
+  const map3dOverlayRef = useRef<HTMLDivElement | null>(null);
+  const public3DOverlayRef = useRef<Geo3DOverlayHandle | null>(null);
   const [data, setData] = useState<PublicGeoData | null>(null);
   const [mode, setMode] = useState<"satellite" | "three-d">("satellite");
   const [mapReady, setMapReady] = useState(false);
@@ -692,7 +698,8 @@ export default function GeoPublicMap({
     if (
       mode !== "three-d" ||
       !data?.building3d ||
-      !map3dNodeRef.current
+      !map3dNodeRef.current ||
+      !map3dOverlayRef.current
     )
       return;
 
@@ -704,28 +711,56 @@ export default function GeoPublicMap({
     }
 
     let cancelled = false;
+    let overlay: Geo3DOverlayHandle | null = null;
     setThreeDReady(false);
     setThreeDError("");
 
     loadGoogleMaps(effectiveMapsKey)
       .then(async (google) => {
-        if (cancelled || !map3dNodeRef.current) return;
+        if (
+          cancelled ||
+          !map3dNodeRef.current ||
+          !map3dOverlayRef.current
+        )
+          return;
         if (!google.maps.importLibrary)
           throw new Error("Google 3D Maps library available nahi hai");
 
         const library = (await google.maps.importLibrary(
           "maps3d",
         )) as Maps3DLibrary;
-        if (cancelled || !map3dNodeRef.current) return;
+        if (
+          cancelled ||
+          !map3dNodeRef.current ||
+          !map3dOverlayRef.current
+        )
+          return;
 
         const building = data.building3d!;
+        const modelResponse = await fetch(building.modelUrl, {
+          method: "GET",
+          cache: "force-cache",
+        });
+        if (!modelResponse.ok)
+          throw new Error(
+            `Published 3D model load nahi hua (${modelResponse.status})`,
+          );
+        const modelBytes = await modelResponse.arrayBuffer();
+        if (modelBytes.byteLength < 12)
+          throw new Error("Published 3D model incomplete hai");
+        const magic = new TextDecoder().decode(
+          new Uint8Array(modelBytes, 0, 4),
+        );
+        if (magic !== "glTF")
+          throw new Error("Published 3D model valid GLB nahi hai");
+
         const map = new library.Map3DElement({
           center: {
             lat: building.latitude,
             lng: building.longitude,
           },
-          range: 260,
-          tilt: 67.5,
+          range: 190,
+          tilt: 68,
           heading: building.headingDeg,
           mode: "HYBRID",
           gestureHandling: "GREEDY",
@@ -746,25 +781,29 @@ export default function GeoPublicMap({
             })()
           : null;
 
-        const model = new library.Model3DElement({
-          src: building.modelUrl,
-          position: {
-            lat: building.latitude,
-            lng: building.longitude,
-            altitude: building.altitudeM,
-          },
-          orientation: {
-            heading: building.headingDeg,
-            tilt: building.pitchDeg,
-            roll: building.rollDeg,
-          },
-          scale: building.scale,
-          altitudeMode: "RELATIVE_TO_GROUND",
-        });
-
         map3dNodeRef.current.replaceChildren(map);
         if (flattener) map.append(flattener);
-        map.append(model);
+
+        overlay = await createGeo3DThreeOverlay({
+          host: map3dOverlayRef.current,
+          map,
+          modelBytes,
+          getPlacement: () => ({
+            longitude: building.longitude,
+            latitude: building.latitude,
+            altitudeM: building.altitudeM,
+            headingDeg: building.headingDeg,
+            pitchDeg: building.pitchDeg,
+            rollDeg: building.rollDeg,
+            scale: building.scale,
+          }),
+        });
+        if (cancelled) {
+          overlay.dispose();
+          return;
+        }
+        public3DOverlayRef.current = overlay;
+        overlay.focusView(building.headingDeg, 68, 190);
         setThreeDReady(true);
       })
       .catch((reason) => {
@@ -782,6 +821,10 @@ export default function GeoPublicMap({
 
     return () => {
       cancelled = true;
+      if (public3DOverlayRef.current === overlay)
+        public3DOverlayRef.current = null;
+      overlay?.dispose();
+      map3dOverlayRef.current?.replaceChildren();
       map3dNodeRef.current?.replaceChildren();
     };
   }, [data, mapsApiKey, mode]);
@@ -800,10 +843,12 @@ export default function GeoPublicMap({
         aria-label={`${projectName} satellite map`}
       />
       <div
-        ref={map3dNodeRef}
         className={`${styles.map} ${mode === "three-d" ? "" : styles.mapHidden}`}
         aria-label={`${projectName} 3D site map`}
-      />
+      >
+        <div ref={map3dNodeRef} className={styles.map3dBase} />
+        <div ref={map3dOverlayRef} className={styles.map3dOverlay} />
+      </div>
 
       <header className={styles.header}>
         <div>
@@ -837,7 +882,35 @@ export default function GeoPublicMap({
             3D Site
           </button>
           {mode === "three-d" ? (
-            <a href={data.building3d.experienceUrl}>Enter Building</a>
+            <>
+              <button
+                type="button"
+                onClick={() => public3DOverlayRef.current?.rotateViewBy(-45)}
+                aria-label="Rotate 3D site left"
+              >
+                ↺ 45°
+              </button>
+              <button
+                type="button"
+                onClick={() => public3DOverlayRef.current?.rotateViewBy(45)}
+                aria-label="Rotate 3D site right"
+              >
+                45° ↻
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  public3DOverlayRef.current?.focusView(
+                    data.building3d!.headingDeg,
+                    68,
+                    190,
+                  )
+                }
+              >
+                Reset view
+              </button>
+              <a href={data.building3d.experienceUrl}>Enter Building</a>
+            </>
           ) : null}
         </nav>
       ) : null}
