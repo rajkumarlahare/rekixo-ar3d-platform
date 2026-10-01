@@ -53,11 +53,15 @@ test("existing public Geo remains Satellite by default and 3D failure falls back
   assert.match(viewer, /data\?\.building3d \?/);
   assert.match(viewer, /setMode\("satellite"\)/);
   assert.match(viewer, /3D Site unavailable tha, isliye safe Satellite view/);
-  assert.match(viewer, /Model3DElement/);
+  assert.match(viewer, /createGeo3DThreeOverlay/);
+  assert.match(viewer, /fetch\(building\.modelUrl/);
+  assert.match(viewer, /new Uint8Array\(modelBytes, 0, 4\)/);
+  assert.match(viewer, /magic !== "glTF"/);
   assert.match(viewer, /FlattenerElement/);
   assert.match(viewer, /building\.flattenBaseMesh/);
   assert.match(viewer, /map\.append\(flattener\)/);
-  assert.match(viewer, /altitudeMode: "RELATIVE_TO_GROUND"/);
+  assert.match(viewer, /overlay\.focusView\(building\.headingDeg, 68, 190\)/);
+  assert.doesNotMatch(viewer, /new library\.Model3DElement/);
 });
 
 test("public Geo payload only exposes 3D placement when resolver succeeds", () => {
@@ -77,4 +81,18 @@ test("public Geo 3D model URL is content-fingerprinted for immutable derivative 
   assert.equal(handler.includes("modelFingerprint:"), true);
   assert.equal(handler.includes("&geo=${encodeURIComponent(geo3d.engine.geoModel.sha256)}"), true);
   assert.equal(viewer.includes("modelFingerprint?: string"), true);
+});
+
+test("public Geo 3D demo reuses the stable Rekixo orbit renderer", () => {
+  const viewer = read("app/projects/[slug]/map/geo-public-map.tsx");
+  const css = read("app/projects/[slug]/map/geo-public-map.module.css");
+
+  assert.match(viewer, /map3dOverlayRef/);
+  assert.match(viewer, /public3DOverlayRef/);
+  assert.match(viewer, /rotateViewBy\(-45\)/);
+  assert.match(viewer, /rotateViewBy\(45\)/);
+  assert.match(viewer, /Reset view/);
+  assert.match(css, /\.map3dOverlay/);
+  assert.match(css, /pointer-events:\s*auto/);
+  assert.match(css, /touch-action:\s*none/);
 });
