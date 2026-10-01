@@ -34,6 +34,7 @@ type GoogleRoot = {
       extend(position: { lat: number; lng: number }): void;
     };
     importLibrary?: (name: string) => Promise<unknown>;
+    version?: string;
   };
 };
 
@@ -91,6 +92,17 @@ type ModelDiagnostic = {
   glbVerified?: boolean;
 };
 
+type RendererRuntimeDiagnostic = {
+  mapsVersion?: string;
+  loaderVersion?: string;
+  maps3dPreloaded?: boolean;
+  modelTag?: string;
+  modelConnected?: boolean;
+  resourceObserved?: boolean;
+  resourceDurationMs?: number;
+  webglRenderer?: string;
+};
+
 const GOOGLE_RENDERER_PROBE_URL =
   "https://maps-docs-team.web.app/assets/windmill.glb";
 const GOOGLE_RENDERER_PROBE_MAP = {
@@ -109,6 +121,58 @@ let mapsPromise: Promise<GoogleRoot> | null = null;
 
 function browserWindow() {
   return window as RekixoWindow;
+}
+
+function mapsLoaderRuntime() {
+  const script = Array.from(
+    document.querySelectorAll<HTMLScriptElement>(
+      'script[src*="maps.googleapis.com/maps/api/js"]',
+    ),
+  )[0];
+  if (!script?.src) return {};
+  try {
+    const url = new URL(script.src);
+    const libraries = (url.searchParams.get("libraries") || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    return {
+      loaderVersion: url.searchParams.get("v") || "default",
+      maps3dPreloaded: libraries.includes("maps3d"),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function webglRendererName() {
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+    if (!gl) return "WebGL unavailable";
+    const extension = gl.getExtension("WEBGL_debug_renderer_info");
+    if (!extension) return "WebGL renderer hidden";
+    return String(
+      gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) || "Unknown renderer",
+    ).slice(0, 160);
+  } catch {
+    return "WebGL renderer unavailable";
+  }
+}
+
+function rendererResourceObservation() {
+  try {
+    const entry = performance
+      .getEntriesByType("resource")
+      .find((item) => item.name.includes("windmill.glb"));
+    if (!entry) return {};
+    return {
+      resourceObserved: true,
+      resourceDurationMs: Math.round(entry.duration),
+    };
+  } catch {
+    return {};
+  }
 }
 
 function completeExistingGoogleMaps(resolve: (google: GoogleRoot) => void) {
@@ -165,7 +229,7 @@ function loadGoogleMaps(apiKey: string) {
     script.defer = true;
     script.src =
       `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}` +
-      `&v=weekly&loading=async&callback=${callbackName}`;
+      `&v=weekly&loading=async&libraries=maps3d&callback=${callbackName}`;
     script.onerror = () => {
       mapsPromise = null;
       reject(new Error("Google Maps JavaScript API load fail hui"));
@@ -317,6 +381,8 @@ export default function Geo3DPlacementVisual({
   const [modelDiagnostic, setModelDiagnostic] = useState<ModelDiagnostic>({
     stage: "idle",
   });
+  const [rendererRuntime, setRendererRuntime] =
+    useState<RendererRuntimeDiagnostic>({});
   const satelliteRef = useRef<HTMLDivElement | null>(null);
   const threeDRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapInstance | null>(null);
@@ -479,6 +545,7 @@ export default function Geo3DPlacementVisual({
     setReady(false);
     setError("");
     setModelDiagnostic({ stage: "loading-map" });
+    setRendererRuntime({});
 
     loadGoogleMaps(apiKey)
       .then(async (google) => {
@@ -490,6 +557,11 @@ export default function Geo3DPlacementVisual({
           "maps3d",
         )) as Maps3DLibrary;
         if (cancelled || !threeDRef.current) return;
+        setRendererRuntime({
+          mapsVersion: String(google.maps.version || "unknown"),
+          ...mapsLoaderRuntime(),
+          webglRenderer: webglRendererName(),
+        });
         setModelDiagnostic({ stage: "map-ready" });
 
         // Project mode verifies the exact authenticated byte path before handing
@@ -637,6 +709,11 @@ export default function Geo3DPlacementVisual({
         const markAttached = () => {
           modelAttached = true;
           model3DRef.current = model;
+          setRendererRuntime((current) => ({
+            ...current,
+            modelTag: model.tagName.toLowerCase(),
+            modelConnected: model.isConnected,
+          }));
           setModelDiagnostic((current) => ({
             ...current,
             stage: "model-attached",
@@ -678,11 +755,19 @@ export default function Geo3DPlacementVisual({
         map3DRef.current = map;
 
         let attachFallback: number | undefined;
+        let probeObservationTimer: number | undefined;
         if (rendererProbe) {
           // Google docs append the model directly after the map is connected.
           // Do exactly that: no flattener, marker, steady wait or camera helper.
           map.append(model);
           markAttached();
+          probeObservationTimer = window.setTimeout(() => {
+            if (cancelled) return;
+            setRendererRuntime((current) => ({
+              ...current,
+              ...rendererResourceObservation(),
+            }));
+          }, 3000);
         } else {
           map.addEventListener("gmp-steadychange", steadyListener);
           // Some Maps JS versions can become steady before the first event
@@ -693,6 +778,8 @@ export default function Geo3DPlacementVisual({
         cleanup3D = () => {
           if (attachFallback !== undefined)
             window.clearTimeout(attachFallback);
+          if (probeObservationTimer !== undefined)
+            window.clearTimeout(probeObservationTimer);
           map.removeEventListener("gmp-steadychange", steadyListener);
           map.removeEventListener("gmp-error", mapErrorListener);
         };
@@ -826,21 +913,23 @@ export default function Geo3DPlacementVisual({
               >
                 {rendererProbe ? "Project model" : "Google model test"}
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (map3DRef.current)
-                    focus3DMap(
-                      map3DRef.current,
-                      latitude,
-                      longitude,
-                      altitudeM,
-                      headingDeg,
-                    );
-                }}
-              >
-                Focus building
-              </button>
+              {!rendererProbe ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (map3DRef.current)
+                      focus3DMap(
+                        map3DRef.current,
+                        latitude,
+                        longitude,
+                        altitudeM,
+                        headingDeg,
+                      );
+                  }}
+                >
+                  Focus building
+                </button>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -871,7 +960,16 @@ export default function Geo3DPlacementVisual({
 
       <footer className={styles.status}>
         <span>
-          Anchor: {latitude.toFixed(7)}, {longitude.toFixed(7)}
+          {rendererProbe ? "Probe anchor" : "Anchor"}:{" "}
+          {(rendererProbe
+            ? GOOGLE_RENDERER_PROBE_MODEL.position.lat
+            : latitude
+          ).toFixed(7)}
+          ,{" "}
+          {(rendererProbe
+            ? GOOGLE_RENDERER_PROBE_MODEL.position.lng
+            : longitude
+          ).toFixed(7)}
         </span>
         <span>Heading {headingDeg.toFixed(1)}°</span>
         <span>Scale {scale.toFixed(3)}</span>
@@ -909,7 +1007,29 @@ export default function Geo3DPlacementVisual({
                   ? "error"
                   : "pending"}
             </span>
-            {flattenBaseMesh ? (
+            {rendererProbe && rendererRuntime.mapsVersion ? (
+              <span>
+                Maps JS {rendererRuntime.mapsVersion} · loader{" "}
+                {rendererRuntime.loaderVersion || "unknown"} · maps3d{" "}
+                {rendererRuntime.maps3dPreloaded ? "preloaded" : "dynamic"}
+              </span>
+            ) : null}
+            {rendererProbe && rendererRuntime.modelTag ? (
+              <span>
+                {rendererRuntime.modelTag} · DOM{" "}
+                {rendererRuntime.modelConnected ? "connected" : "detached"} · resource{" "}
+                {rendererRuntime.resourceObserved
+                  ? "observed" +
+                    (rendererRuntime.resourceDurationMs
+                      ? ` · ${rendererRuntime.resourceDurationMs}ms`
+                      : "")
+                  : "not exposed yet"}
+              </span>
+            ) : null}
+            {rendererProbe && rendererRuntime.webglRenderer ? (
+              <span>GPU: {rendererRuntime.webglRenderer}</span>
+            ) : null}
+            {!rendererProbe && flattenBaseMesh ? (
               <span>
                 Google base mesh: flattened · {(flattenHalfSizeM * 2).toFixed(0)}m ×{" "}
                 {(flattenHalfSizeM * 2).toFixed(0)}m

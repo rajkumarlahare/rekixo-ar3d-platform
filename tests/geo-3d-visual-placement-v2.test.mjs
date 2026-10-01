@@ -118,6 +118,15 @@ test("Geo derivative SHA invalidates same-release Super Admin preview cache", ()
 });
 
 
+test("all Geo Maps bootstraps preload maps3d before custom-model use", () => {
+  const placement = read("app/geo-3d-placement-visual.tsx");
+  const calibration = read("app/geo-visual-calibration.tsx");
+  const customer = read("app/projects/[slug]/map/geo-public-map.tsx");
+
+  for (const source of [placement, calibration, customer])
+    assert.match(source, /libraries=maps3d/);
+});
+
 test("Super Admin Geo 3D has an independent Google renderer probe and anchor focus recovery", () => {
   const visual = read("app/geo-3d-placement-visual.tsx");
 
@@ -142,6 +151,11 @@ test("Super Admin Geo 3D has an independent Google renderer probe and anchor foc
   assert.match(visual, /rendererProbe \? GOOGLE_RENDERER_PROBE_MODEL\.scale : scale/);
   assert.match(visual, /rendererModelUrl = GOOGLE_RENDERER_PROBE_URL/);
   assert.match(visual, /Probe source: direct Google official GLB/);
+  assert.match(visual, /Maps JS \{rendererRuntime\.mapsVersion\}/);
+  assert.match(visual, /maps3dPreloaded/);
+  assert.match(visual, /rendererResourceObservation/);
+  assert.match(visual, /Probe anchor/);
+  assert.match(visual, /!rendererProbe && flattenBaseMesh/);
   assert.doesNotMatch(
     visual,
     /fetch\(\s*GOOGLE_RENDERER_PROBE_URL/,
