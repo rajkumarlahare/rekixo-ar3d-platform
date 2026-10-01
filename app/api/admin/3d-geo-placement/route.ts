@@ -14,6 +14,7 @@ import {
   project3DLink,
   publishedEngineProject,
 } from "@/modules/engine-integration";
+import { geo3DRenderPolicy } from "@/app/geo-3d-render-policy";
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
@@ -38,6 +39,7 @@ async function state(projectId: string) {
     ]);
   const engine = link ? await publishedEngineProject(link.engineSlug) : null;
   const renderModel = preferredEngineGeoRenderModel(engine);
+  const renderPolicy = geo3DRenderPolicy(engine?.project);
   return {
     schemaReady: await geo3DPlacementSchemaReady(),
     scope: {
@@ -85,6 +87,7 @@ async function state(projectId: string) {
             engine.geoModel && renderModel === engine.geoModel
               ? "geo-optimized"
               : "source",
+          renderPolicy,
           release: engine.release ?? null,
           previewModelUrl:
             renderModel?.mimeType === "model/gltf-binary" &&
