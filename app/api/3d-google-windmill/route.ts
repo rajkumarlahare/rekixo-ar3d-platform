@@ -10,6 +10,7 @@ function responseHeaders(upstream: Response) {
     "accept-ranges",
     "etag",
     "last-modified",
+    "content-encoding",
   ]) {
     const value = upstream.headers.get(name);
     if (value) headers.set(name, value);
@@ -38,7 +39,9 @@ async function proxy(request: Request) {
   const range = request.headers.get("range");
   const upstream = await fetch(WINDMILL_URL, {
     method: request.method,
-    headers: range ? { Range: range } : undefined,
+    headers: range
+      ? { Range: range, "Accept-Encoding": "identity" }
+      : { "Accept-Encoding": "identity" },
     cache: "no-store",
     redirect: "follow",
   });
