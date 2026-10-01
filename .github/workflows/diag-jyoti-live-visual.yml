@@ -1,0 +1,60 @@
+name: Diagnostic Jyoti Live Visual
+
+on:
+  push:
+    branches:
+      - diag/live-jyoti-super-admin-20261001
+    paths:
+      - .github/workflows/diag-jyoti-live-visual.yml
+      - scripts/diag-jyoti-live-visual.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Read browser Maps key without logging it
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute tiyansh-production --remote --json \
+            --command "SELECT value FROM platform_settings WHERE key='google_maps_browser_key' LIMIT 1;" \
+            > /tmp/maps-key.json
+          MAPS_KEY="$(node --input-type=module -e 'import fs from "node:fs"; const p=JSON.parse(fs.readFileSync("/tmp/maps-key.json","utf8")); const r=p.flatMap(x=>x.results||[])[0]; if(!r?.value) process.exit(2); process.stdout.write(String(r.value));')"
+          echo "::add-mask::$MAPS_KEY"
+          echo "MAPS_KEY=$MAPS_KEY" >> "$GITHUB_ENV"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Install isolated browser tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix /tmp/rekixo-live-diag --no-package-lock playwright@1.55.0 pngjs@7.0.0 pixelmatch@7.1.0
+          /tmp/rekixo-live-diag/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Prove live Jyoti model changes rendered pixels
+        run: node scripts/diag-jyoti-live-visual.mjs
+        env:
+          SUPER_ORIGIN: https://rekixo-super-admin.ai-8f3.workers.dev
+          PLAYWRIGHT_MODULE: /tmp/rekixo-live-diag/node_modules/playwright/index.mjs
+          PNG_MODULE: /tmp/rekixo-live-diag/node_modules/pngjs/lib/png.js
+          PIXELMATCH_MODULE: /tmp/rekixo-live-diag/node_modules/pixelmatch/index.js
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jyoti-live-visual
+          path: artifacts/
+          if-no-files-found: ignore
