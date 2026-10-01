@@ -96,10 +96,6 @@ const GOOGLE_RENDERER_PROBE_URL =
 
 let mapsPromise: Promise<GoogleRoot> | null = null;
 
-function libraryMarkerStatus(_rendererProbe: boolean) {
-  return "enabled";
-}
-
 function browserWindow() {
   return window as RekixoWindow;
 }
@@ -708,14 +704,16 @@ export default function Geo3DPlacementVisual({
       model3DRef.current.position = {
         lat: latitude,
         lng: longitude,
-        altitude: altitudeM,
+        altitude: rendererProbe ? 0 : altitudeM,
       };
-      model3DRef.current.orientation = {
-        heading: headingDeg,
-        tilt: pitchDeg,
-        roll: rollDeg,
-      };
-      model3DRef.current.scale = scale;
+      model3DRef.current.orientation = rendererProbe
+        ? { heading: 0, tilt: 270, roll: 90 }
+        : {
+            heading: headingDeg,
+            tilt: pitchDeg,
+            roll: rollDeg,
+          };
+      model3DRef.current.scale = rendererProbe ? 0.15 : scale;
     }
   }, [
     mode,
@@ -727,6 +725,7 @@ export default function Geo3DPlacementVisual({
     pitchDeg,
     rollDeg,
     scale,
+    rendererProbe,
     flattenBaseMesh,
     flattenHalfSizeM,
   ]);
@@ -831,8 +830,11 @@ export default function Geo3DPlacementVisual({
         {mode === "three-d" ? (
           <>
             <span>
-              Geo GLB: {modelDiagnostic.glbVerified ? "verified" : "checking"}
-              {modelByteSize ? ` · ${(modelByteSize / 1_000_000).toFixed(2)} MB` : ""}
+              {rendererProbe ? "Probe GLB" : "Geo GLB"}:{" "}
+              {modelDiagnostic.glbVerified ? "verified" : "checking"}
+              {!rendererProbe && modelByteSize
+                ? ` · ${(modelByteSize / 1_000_000).toFixed(2)} MB`
+                : ""}
             </span>
             {modelDiagnostic.httpStatus ? (
               <span>
@@ -847,7 +849,6 @@ export default function Geo3DPlacementVisual({
             ) : modelFingerprint ? (
               <span>Geo build: {modelFingerprint.slice(0, 12)}</span>
             ) : null}
-            <span>Anchor beacon: {libraryMarkerStatus(rendererProbe)}</span>
             <span>
               Model element:{" "}
               {modelDiagnostic.stage === "model-attached"
