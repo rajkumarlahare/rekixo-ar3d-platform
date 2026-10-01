@@ -6,6 +6,7 @@ if (!playwrightPath) throw new Error("PLOT_PLAYWRIGHT_MODULE missing");
 const { chromium } = await import(playwrightPath);
 
 const baseUrl = "https://admin.rekixo.com";
+// Re-run after the Engine core-map-v3/content-addressed derivative production deploy.
 const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) throw new Error("SESSION_SECRET missing");
 
