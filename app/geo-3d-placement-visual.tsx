@@ -6,6 +6,7 @@ import styles from "./geo-3d-placement-visual.module.css";
 import {
   createGeo3DThreeOverlay,
   type Geo3DOverlayBounds,
+  type Geo3DOverlayHandle,
   type Geo3DOverlayPlacement,
 } from "./geo-3d-three-overlay";
 
@@ -385,6 +386,7 @@ export default function Geo3DPlacementVisual({
   const satelliteRef = useRef<HTMLDivElement | null>(null);
   const threeDRef = useRef<HTMLDivElement | null>(null);
   const threeOverlayRef = useRef<HTMLDivElement | null>(null);
+  const threeOverlayHandleRef = useRef<Geo3DOverlayHandle | null>(null);
   const placementRef = useRef<Geo3DOverlayPlacement>({
     longitude,
     latitude,
@@ -812,7 +814,12 @@ export default function Geo3DPlacementVisual({
             overlay.dispose();
             return;
           }
-          overlayCleanup = overlay.dispose;
+          threeOverlayHandleRef.current = overlay;
+          overlayCleanup = () => {
+            if (threeOverlayHandleRef.current === overlay)
+              threeOverlayHandleRef.current = null;
+            overlay.dispose();
+          };
           overlayReady = true;
           setOverlayBounds(overlay.bounds);
           if (projectElementsAttached) markAttached(false);
@@ -870,6 +877,7 @@ export default function Geo3DPlacementVisual({
       map3DRef.current = null;
       model3DRef.current = null;
       flattener3DRef.current = null;
+      threeOverlayHandleRef.current = null;
       threeDRef.current?.replaceChildren();
     };
   }, [
@@ -1022,6 +1030,13 @@ export default function Geo3DPlacementVisual({
                   <button
                     type="button"
                     onClick={() => {
+                      if (
+                        projectRenderer === "rekixo-overlay" &&
+                        threeOverlayHandleRef.current
+                      ) {
+                        threeOverlayHandleRef.current.rotateViewBy(90);
+                        return;
+                      }
                       const map = map3DRef.current;
                       if (!map) return;
                       const currentHeading = Number(map.heading);
@@ -1047,6 +1062,13 @@ export default function Geo3DPlacementVisual({
                   <button
                     type="button"
                     onClick={() => {
+                      if (
+                        projectRenderer === "rekixo-overlay" &&
+                        threeOverlayHandleRef.current
+                      ) {
+                        threeOverlayHandleRef.current.focusView(headingDeg);
+                        return;
+                      }
                       if (map3DRef.current)
                         focus3DMap(
                           map3DRef.current,
