@@ -765,7 +765,14 @@ export default function Geo3DPlacementVisual({
         const attachProjectModel = () => {
           if (cancelled || projectElementsAttached) return;
           projectElementsAttached = true;
-          focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
+          if (
+            projectRenderer === "rekixo-overlay" &&
+            threeOverlayHandleRef.current
+          ) {
+            threeOverlayHandleRef.current.focusView(headingDeg, 68, 190);
+          } else {
+            focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
+          }
           if (flattener) {
             map.append(flattener);
             flattener3DRef.current = flattener;
@@ -780,8 +787,15 @@ export default function Geo3DPlacementVisual({
           // Re-focus after custom elements are attached. This avoids a stale
           // broad camera target surviving the initial terrain steady-state.
           window.requestAnimationFrame(() => {
-            if (!cancelled)
+            if (cancelled) return;
+            if (
+              projectRenderer === "rekixo-overlay" &&
+              threeOverlayHandleRef.current
+            ) {
+              threeOverlayHandleRef.current.focusView(headingDeg, 68, 190);
+            } else {
               focus3DMap(map, latitude, longitude, altitudeM, headingDeg);
+            }
           });
         };
         const steadyListener = (event: Event) => {
@@ -822,6 +836,9 @@ export default function Geo3DPlacementVisual({
           };
           overlayReady = true;
           setOverlayBounds(overlay.bounds);
+          // Use the GLB's real height to aim Google at the building midpoint.
+          // This keeps the model base visually seated at ground offset 0.
+          overlay.focusView(headingDeg, 68, 190);
           if (projectElementsAttached) markAttached(false);
         }
 
@@ -896,13 +913,26 @@ export default function Geo3DPlacementVisual({
   useEffect(() => {
     if (mode !== "three-d" || !validPosition || rendererProbe) return;
     if (map3DRef.current) {
-      focus3DMap(
-        map3DRef.current,
-        latitude,
-        longitude,
-        altitudeM,
-        headingDeg,
-      );
+      if (
+        projectRenderer === "rekixo-overlay" &&
+        threeOverlayHandleRef.current
+      ) {
+        const currentTilt = Number(map3DRef.current.tilt);
+        const currentRange = Number(map3DRef.current.range);
+        threeOverlayHandleRef.current.focusView(
+          headingDeg,
+          Number.isFinite(currentTilt) ? currentTilt : 68,
+          Number.isFinite(currentRange) ? currentRange : 190,
+        );
+      } else {
+        focus3DMap(
+          map3DRef.current,
+          latitude,
+          longitude,
+          altitudeM,
+          headingDeg,
+        );
+      }
     }
     if (flattener3DRef.current && flattenBaseMesh) {
       flattener3DRef.current.path = flatteningSquarePath(
@@ -937,6 +967,7 @@ export default function Geo3DPlacementVisual({
     pitchDeg,
     rollDeg,
     scale,
+    projectRenderer,
     rendererProbe,
     flattenBaseMesh,
     flattenHalfSizeM,
