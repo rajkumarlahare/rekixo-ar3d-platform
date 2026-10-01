@@ -123,15 +123,23 @@ test("Super Admin Geo 3D has an independent Google renderer probe and anchor foc
 
   assert.match(visual, /maps-docs-team\.web\.app\/assets\/windmill\.glb/);
   assert.match(visual, /Google model test/);
-  assert.match(visual, /Renderer probe: Google official windmill/);
+  assert.match(visual, /Renderer probe: exact Google docs sample · Colorado/);
   assert.match(visual, /Marker3DElement/);
   assert.match(visual, /label: "ANCHOR"/);
   assert.match(visual, /Focus building/);
   assert.match(visual, /window\.requestAnimationFrame\(\(\) => \{/);
   assert.match(visual, /focus3DMap\(map, latitude, longitude, altitudeM, headingDeg\)/);
+  assert.match(visual, /center: \{ lat: 39\.1178, lng: -106\.4452, altitude: 4395\.4952 \}/);
+  assert.match(visual, /position: \{ lat: 39\.1178, lng: -106\.4452, altitude: 4495\.4952 \}/);
   assert.match(visual, /tilt: 270/);
   assert.match(visual, /roll: 90/);
-  assert.match(visual, /rendererProbe \? 0\.15 : scale/);
+  assert.match(visual, /range: 1500/);
+  assert.match(visual, /!rendererProbe && flattenBaseMesh/);
+  assert.match(visual, /if \(rendererProbe\) \{/);
+  assert.match(visual, /map\.append\(model\);/);
+  assert.match(visual, /no flattener, marker, steady wait or camera helper/);
+  assert.match(visual, /scale: 0\.15/);
+  assert.match(visual, /rendererProbe \? GOOGLE_RENDERER_PROBE_MODEL\.scale : scale/);
   assert.match(visual, /rendererModelUrl = GOOGLE_RENDERER_PROBE_URL/);
   assert.match(visual, /Probe source: direct Google official GLB/);
   assert.doesNotMatch(
