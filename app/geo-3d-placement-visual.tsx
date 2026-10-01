@@ -164,7 +164,7 @@ function rendererResourceObservation() {
   try {
     const entry = performance
       .getEntriesByType("resource")
-      .find((item) => item.name.includes("/assets/windmill.glb"));
+      .find((item) => item.name.includes("windmill.glb"));
     if (!entry) return {};
     return {
       resourceObserved: true,
