@@ -525,7 +525,7 @@ export default function Geo3DPlacementVisual({
             `3D model unavailable (${modelCheck.status}${detail})`,
           );
         }
-        const finalModelUrl = modelCheck.url || effectiveModelUrl;
+        const finalModelUrl = modelCheck.url || modelUrl;
         const contentType = modelCheck.headers.get("content-type") || "";
         const modelStatus = modelCheck.status;
         const magicBytes = await readResponsePrefix(modelCheck, 4);
