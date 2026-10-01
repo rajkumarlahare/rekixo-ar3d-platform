@@ -190,7 +190,7 @@ test("isolated Google Model3D probe compares stable/current/beta Maps JS globals
 });
 
 
-test("Google windmill proxy preserves identity GLB bytes and Engine preview avoids Platform binary hopping", () => {
+test("Google windmill proxy preserves encoded body metadata and Engine preview avoids Platform binary hopping", () => {
   const placement = read("app/api/admin/3d-geo-placement/route.ts");
   const integration = read("app/engine-integration.ts");
   const windmill = read("app/api/3d-google-windmill/route.ts");
@@ -203,7 +203,10 @@ test("Google windmill proxy preserves identity GLB bytes and Engine preview avoi
 
   assert.match(windmill, /maps-docs-team\.web\.app\/assets\/windmill\.glb/);
   assert.match(windmill, /"Accept-Encoding": "identity"/);
-  assert.match(windmill, /headers\.set\("Range", range\)/);
+  assert.match(windmill, /"content-encoding"/);
+  assert.match(windmill, /x-rekixo-upstream-content-encoding/);
+  assert.match(windmill, /status: 200/);
+  assert.doesNotMatch(windmill, /headers\.set\("Range", range\)/);
   assert.match(windmill, /x-rekixo-model-proxy", "google-windmill"/);
   assert.match(isolated, /src: "\/api\/3d-google-windmill"/);
 });
