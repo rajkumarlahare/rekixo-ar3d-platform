@@ -246,25 +246,6 @@ function finite(value: number) {
   return Number.isFinite(value);
 }
 
-async function readResponsePrefix(response: Response, byteCount: number) {
-  if (!response.body) return new Uint8Array();
-  const reader = response.body.getReader();
-  const output = new Uint8Array(byteCount);
-  let offset = 0;
-  try {
-    while (offset < byteCount) {
-      const { value, done } = await reader.read();
-      if (done || !value) break;
-      const take = Math.min(value.byteLength, byteCount - offset);
-      output.set(value.subarray(0, take), offset);
-      offset += take;
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
-  return output.subarray(0, offset);
-}
-
 function focus3DMap(
   map: Mutable3DMap,
   latitude: number,
