@@ -64,8 +64,14 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(visual, /Controls: drag orbit\/tilt/);
 });
 
-test("Geo orbit mirrors Google's actual camera without release snap-back", () => {
+test("Geo orbit drives Google and Rekixo from one deterministic camera state", () => {
   const overlay = read("app/geo-3d-three-overlay.ts");
+
+  assert.match(overlay, /lockedCenterAltitudeM/);
+  assert.match(overlay, /deterministicCameraPosition/);
+  assert.match(overlay, /map\.cameraPosition =/);
+  assert.match(overlay, /northM = -Math\.cos\(heading\) \* horizontalM/);
+  assert.match(overlay, /eastM = -Math\.sin\(heading\) \* horizontalM/);
 
   const applyStart = overlay.indexOf("const applyBuildingCenteredCamera");
   const pointerStart = overlay.indexOf("const pointerSeparation", applyStart);
@@ -86,11 +92,12 @@ test("Geo orbit mirrors Google's actual camera without release snap-back", () =>
   const frameStart = overlay.indexOf("const frame =", renderStart);
   assert.ok(renderStart >= 0 && frameStart > renderStart);
   const renderBlock = overlay.slice(renderStart, frameStart);
-  assert.match(renderBlock, /const cameraPosition = map\.cameraPosition/);
-  assert.match(renderBlock, /const hasExactGoogleCamera/);
-  assert.match(renderBlock, /cameraAlt - centerAlt/);
-  assert.match(renderBlock, /cameraLng - centerLng/);
-  assert.match(renderBlock, /cameraLat - centerLat/);
+  assert.match(renderBlock, /orbitHeading \?\?/);
+  assert.match(renderBlock, /orbitTilt \?\?/);
+  assert.match(renderBlock, /orbitRange \?\?/);
+  assert.doesNotMatch(renderBlock, /const cameraPosition = map\.cameraPosition/);
+  assert.doesNotMatch(renderBlock, /const center = map\.center/);
+  assert.match(renderBlock, /Never read asynchronous Google camera values back/);
   assert.match(renderBlock, /finite\(map\.fov, overlayFovDeg\)/);
 });
 
