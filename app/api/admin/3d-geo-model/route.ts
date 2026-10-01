@@ -4,6 +4,7 @@ import {
 } from "@/modules/geo";
 import {
   enginePublishedModelUrl,
+  preferredEngineGeoRenderModel,
   project3DLink,
   publishedEngineProject,
 } from "@/modules/engine-integration";
@@ -38,9 +39,23 @@ async function resolvePreview(projectId: string) {
   )
     return null;
 
-  const sourceModelUrl = enginePublishedModelUrl(engine.model.url);
+  const renderModel = preferredEngineGeoRenderModel(engine);
+  if (
+    !renderModel ||
+    renderModel.mimeType !== "model/gltf-binary" ||
+    renderModel.available === false
+  )
+    return null;
+
+  const sourceModelUrl = enginePublishedModelUrl(renderModel.url);
   if (!sourceModelUrl) return null;
-  return { sourceModelUrl };
+  return {
+    sourceModelUrl,
+    variant:
+      engine.geoModel && renderModel === engine.geoModel
+        ? "geo-optimized"
+        : "source",
+  };
 }
 
 export async function GET(request: Request) {

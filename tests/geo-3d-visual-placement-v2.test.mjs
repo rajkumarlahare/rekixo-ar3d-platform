@@ -23,7 +23,9 @@ test("authenticated preview model redirect is project-scoped and not an arbitrar
   assert.match(route, /resolveGeo3DPlacementScope\(projectId\)/);
   assert.match(route, /project3DLink\(scope\.platformProject\.id\)/);
   assert.match(route, /publishedEngineProject\(link\.engineSlug\)/);
-  assert.match(route, /enginePublishedModelUrl\(engine\.model\.url\)/);
+  assert.match(route, /preferredEngineGeoRenderModel\(engine\)/);
+  assert.match(route, /enginePublishedModelUrl\(renderModel\.url\)/);
+  assert.match(route, /engine\.geoModel && renderModel === engine\.geoModel/);
   assert.match(route, /status: 307/);
   assert.match(route, /location: sourceModelUrl/);
   assert.doesNotMatch(route, /fetchEnginePublishedModel/);

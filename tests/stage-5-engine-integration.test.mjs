@@ -90,3 +90,14 @@ test("immutable release model proxy exhausts isolated transports before public H
   assert.match(integration, /x-rekixo-engine-model-transport/);
   assert.doesNotMatch(integration, /if \(response\.status < 500\) return response/);
 });
+
+test("Platform consumes optional Engine Geo derivative without replacing source model identity", () => {
+  const integration = read("app/engine-integration.ts");
+  assert.match(integration, /export type EngineGeoModel = EnginePublishedModel/);
+  assert.match(integration, /variant: "geo-optimized"/);
+  assert.match(integration, /geoModel\?: EngineGeoModel/);
+  assert.match(integration, /preferredEngineGeoRenderModel/);
+  assert.match(integration, /geo\.sourceModelId === source\.id/);
+  assert.match(integration, /geo\.projectId === source\.projectId/);
+  assert.match(integration, /return source/);
+});
