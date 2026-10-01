@@ -108,19 +108,172 @@ const select = page.locator("#workspace-project");
 await select.waitFor({ state: "visible", timeout: 30_000 });
 await select.selectOption(project.projectId);
 await page.getByText("3D Building on Geo Map", { exact: true }).waitFor({ state: "visible", timeout: 30_000 });
-await page.getByRole("button", { name: "3D Preview" }).click();
-await page.getByText(/Geo GLB: verified/).waitFor({ state: "visible", timeout: 45_000 });
+
+const liveState = await page.evaluate(async (projectId) => {
+  const response = await fetch(
+    `/api/admin/3d-geo-placement?projectId=${encodeURIComponent(projectId)}`,
+    { cache: "no-store", credentials: "same-origin" },
+  );
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload?.error || `placement API ${response.status}`);
+  return payload;
+}, project.projectId);
+
+const render = liveState.placement || {
+  longitude: liveState.suggestedCenter?.longitude,
+  latitude: liveState.suggestedCenter?.latitude,
+  altitudeM: 0,
+  headingDeg: 0,
+  pitchDeg: 0,
+  rollDeg: 0,
+  scale: 1,
+};
+if (!Number.isFinite(Number(render.longitude)) || !Number.isFinite(Number(render.latitude)))
+  throw new Error("Live render coordinates unavailable");
+if (!liveState.engine?.previewModelUrl)
+  throw new Error("Live preview model URL unavailable");
+
+const sanitizedState = JSON.parse(JSON.stringify(liveState));
+if (sanitizedState.maps) delete sanitizedState.maps.apiKey;
+await writeFile(
+  "artifacts/jyoti-live-geo-debug/admin-placement-state.json",
+  JSON.stringify(sanitizedState, null, 2),
+);
+
+await page.evaluate(
+  async ({ previewModelUrl, render, flattenBaseMesh, flattenHalfSizeM }) => {
+    const deadline = Date.now() + 30_000;
+    while (!window.google?.maps?.importLibrary && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    if (!window.google?.maps?.importLibrary)
+      throw new Error("Google Maps library not available on live admin page");
+
+    const library = await window.google.maps.importLibrary("maps3d");
+    const preflight = await fetch(previewModelUrl, {
+      method: "GET",
+      headers: { Range: "bytes=0-3" },
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (preflight.status !== 200 && preflight.status !== 206)
+      throw new Error(`GLB preflight failed ${preflight.status}`);
+    const finalUrl = preflight.url || previewModelUrl;
+    const magic = new TextDecoder().decode(new Uint8Array(await preflight.arrayBuffer()).slice(0, 4));
+    if (magic !== "glTF") throw new Error("GLB magic invalid");
+
+    const latitude = Number(render.latitude);
+    const longitude = Number(render.longitude);
+    const half = Math.max(1, Number(flattenHalfSizeM || 20));
+    const latDelta = half / 111_320;
+    const cosLat = Math.max(0.2, Math.cos((latitude * Math.PI) / 180));
+    const lngDelta = half / (111_320 * cosLat);
+    const square = [
+      { lat: latitude + latDelta, lng: longitude - lngDelta },
+      { lat: latitude + latDelta, lng: longitude + lngDelta },
+      { lat: latitude - latDelta, lng: longitude + lngDelta },
+      { lat: latitude - latDelta, lng: longitude - lngDelta },
+    ];
+
+    document.getElementById("jyoti-live-diag-host")?.remove();
+    const host = document.createElement("div");
+    host.id = "jyoti-live-diag-host";
+    Object.assign(host.style, {
+      position: "fixed",
+      inset: "0",
+      zIndex: "2147483647",
+      width: "100vw",
+      height: "100vh",
+      background: "#000",
+    });
+    document.body.append(host);
+
+    const map = new library.Map3DElement({
+      center: { lat: latitude, lng: longitude },
+      range: 220,
+      tilt: 68,
+      heading: Number(render.headingDeg || 0),
+      mode: "HYBRID",
+      gestureHandling: "GREEDY",
+    });
+    Object.assign(map.style, { width: "100%", height: "100%", display: "block" });
+    host.append(map);
+
+    let flattener = null;
+    if (flattenBaseMesh && library.FlattenerElement) {
+      flattener = new library.FlattenerElement({ path: square });
+      map.append(flattener);
+    }
+    let footprint = null;
+    if (library.Polygon3DElement) {
+      footprint = new library.Polygon3DElement({
+        path: square,
+        fillColor: "rgba(255,0,0,0.18)",
+        strokeColor: "#ff2020",
+        strokeWidth: 5,
+        altitudeMode: "CLAMP_TO_GROUND",
+        drawsOccludedSegments: true,
+      });
+      map.append(footprint);
+    }
+
+    const model = new library.Model3DElement({
+      src: finalUrl,
+      position: {
+        lat: latitude,
+        lng: longitude,
+        altitude: Number(render.altitudeM || 0),
+      },
+      orientation: {
+        heading: Number(render.headingDeg || 0),
+        tilt: Number(render.pitchDeg || 0),
+        roll: Number(render.rollDeg || 0),
+      },
+      scale: Number(render.scale || 1),
+      altitudeMode: "RELATIVE_TO_GROUND",
+    });
+    map.append(model);
+
+    window.__jyotiGeoDiag = {
+      map,
+      model,
+      flattener,
+      footprint,
+      anchor: { lat: latitude, lng: longitude },
+      finalUrl,
+      preflightStatus: preflight.status,
+    };
+    if (typeof map.flyCameraTo === "function") {
+      await map.flyCameraTo({
+        endCamera: {
+          center: { lat: latitude, lng: longitude, altitude: 12 },
+          altitudeMode: "RELATIVE_TO_GROUND",
+          range: 130,
+          tilt: 68,
+          heading: Number(render.headingDeg || 0),
+        },
+        durationMillis: 0,
+      });
+    }
+  },
+  {
+    previewModelUrl: liveState.engine.previewModelUrl,
+    render,
+    flattenBaseMesh: liveState.engine?.renderPolicy?.flattenBaseMesh === true,
+    flattenHalfSizeM: liveState.engine?.renderPolicy?.flattenHalfSizeM || 0,
+  },
+);
 await page.waitForTimeout(7000);
 
 async function state(label) {
   const value = await page.evaluate(() => {
+    const diagnostic = window.__jyotiGeoDiag || {};
     const maps = Array.from(document.querySelectorAll("gmp-map-3d"));
-    const map = maps.find((candidate) => {
+    const map = diagnostic.map || maps.find((candidate) => {
       const rect = candidate.getBoundingClientRect();
       return rect.width > 200 && rect.height > 200;
     }) || maps[0] || null;
-    const model = map?.querySelector("gmp-model-3d") || null;
-    const flattener = map?.querySelector("gmp-flattener") || null;
+    const model = diagnostic.model || map?.querySelector("gmp-model-3d") || null;
+    const flattener = diagnostic.flattener || map?.querySelector("gmp-flattener") || null;
     const position = model?.position;
     const orientation = model?.orientation;
     const center = map?.center;
@@ -198,57 +351,78 @@ async function mutate(name, mutation) {
 }
 
 await mutate("02-clamp-current-orientation", () => {
-  const map = Array.from(document.querySelectorAll("gmp-map-3d")).find((candidate) => {
-    const r = candidate.getBoundingClientRect();
-    return r.width > 200 && r.height > 200;
-  });
-  const model = map?.querySelector("gmp-model-3d");
+  const map = window.__jyotiGeoDiag?.map;
+  const model = window.__jyotiGeoDiag?.model;
   if (!model) throw new Error("model missing");
   model.altitudeMode = "CLAMP_TO_GROUND";
   model.position = { lat: Number(model.position.lat), lng: Number(model.position.lng) };
-  map.center = { lat: Number(model.position.lat), lng: Number(model.position.lng), altitude: 0 };
+  map.center = { lat: Number(model.position.lat), lng: Number(model.position.lng) };
   map.range = 120;
   map.tilt = 68;
+  if (typeof map.flyCameraTo === "function")
+    void map.flyCameraTo({
+      endCamera: {
+        center: { lat: Number(model.position.lat), lng: Number(model.position.lng), altitude: 12 },
+        altitudeMode: "RELATIVE_TO_GROUND",
+        range: 120,
+        tilt: 68,
+        heading: Number(model.orientation?.heading || 0),
+      },
+      durationMillis: 0,
+    });
 });
 
 await mutate("03-google-example-orientation", () => {
-  const map = Array.from(document.querySelectorAll("gmp-map-3d")).find((candidate) => {
-    const r = candidate.getBoundingClientRect();
-    return r.width > 200 && r.height > 200;
-  });
-  const model = map?.querySelector("gmp-model-3d");
+  const map = window.__jyotiGeoDiag?.map;
+  const model = window.__jyotiGeoDiag?.model;
   if (!model) throw new Error("model missing");
   model.orientation = { heading: 0, tilt: 270, roll: 90 };
   model.scale = 1;
   model.altitudeMode = "CLAMP_TO_GROUND";
-  map.center = { lat: Number(model.position.lat), lng: Number(model.position.lng), altitude: 0 };
+  map.center = { lat: Number(model.position.lat), lng: Number(model.position.lng) };
   map.range = 120;
   map.tilt = 68;
   map.heading = 0;
+  if (typeof map.flyCameraTo === "function")
+    void map.flyCameraTo({
+      endCamera: {
+        center: { lat: Number(model.position.lat), lng: Number(model.position.lng), altitude: 12 },
+        altitudeMode: "RELATIVE_TO_GROUND",
+        range: 120,
+        tilt: 68,
+        heading: 0,
+      },
+      durationMillis: 0,
+    });
 });
 
 await mutate("04-scale-5-current-anchor", () => {
-  const map = Array.from(document.querySelectorAll("gmp-map-3d")).find((candidate) => {
-    const r = candidate.getBoundingClientRect();
-    return r.width > 200 && r.height > 200;
-  });
-  const model = map?.querySelector("gmp-model-3d");
+  const map = window.__jyotiGeoDiag?.map;
+  const model = window.__jyotiGeoDiag?.model;
   if (!model) throw new Error("model missing");
   model.orientation = { heading: 0, tilt: 0, roll: 0 };
   model.scale = 5;
   model.altitudeMode = "CLAMP_TO_GROUND";
-  map.center = { lat: Number(model.position.lat), lng: Number(model.position.lng), altitude: 0 };
+  map.center = { lat: Number(model.position.lat), lng: Number(model.position.lng) };
   map.range = 220;
   map.tilt = 68;
   map.heading = 0;
+  if (typeof map.flyCameraTo === "function")
+    void map.flyCameraTo({
+      endCamera: {
+        center: { lat: Number(model.position.lat), lng: Number(model.position.lng), altitude: 12 },
+        altitudeMode: "RELATIVE_TO_GROUND",
+        range: 220,
+        tilt: 68,
+        heading: 0,
+      },
+      durationMillis: 0,
+    });
 });
 
 await mutate("05-model-at-current-map-center", () => {
-  const map = Array.from(document.querySelectorAll("gmp-map-3d")).find((candidate) => {
-    const r = candidate.getBoundingClientRect();
-    return r.width > 200 && r.height > 200;
-  });
-  const model = map?.querySelector("gmp-model-3d");
+  const map = window.__jyotiGeoDiag?.map;
+  const model = window.__jyotiGeoDiag?.model;
   if (!model || !map?.center) throw new Error("model/map missing");
   model.position = { lat: Number(map.center.lat), lng: Number(map.center.lng) };
   model.orientation = { heading: 0, tilt: 0, roll: 0 };
