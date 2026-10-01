@@ -76,6 +76,8 @@ type Mutable3DFlattener = HTMLElement & {
   path?: unknown;
 };
 
+type IsolatedProbeVersion = "3.65" | "3.66" | "beta";
+
 type ModelDiagnosticStage =
   | "idle"
   | "loading-map"
@@ -376,6 +378,8 @@ export default function Geo3DPlacementVisual({
 }) {
   const [mode, setMode] = useState<"satellite" | "three-d">("satellite");
   const [rendererProbe, setRendererProbe] = useState(false);
+  const [isolatedProbeVersion, setIsolatedProbeVersion] =
+    useState<IsolatedProbeVersion | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [modelDiagnostic, setModelDiagnostic] = useState<ModelDiagnostic>({
@@ -536,7 +540,8 @@ export default function Geo3DPlacementVisual({
       !modelUrl ||
       !validPosition ||
       mode !== "three-d" ||
-      !threeDRef.current
+      !threeDRef.current ||
+      (rendererProbe && isolatedProbeVersion)
     )
       return;
 
@@ -811,6 +816,7 @@ export default function Geo3DPlacementVisual({
     modelUrl,
     modelFingerprint,
     rendererProbe,
+    isolatedProbeVersion,
     mode,
     validPosition,
     flattenBaseMesh,
@@ -909,10 +915,32 @@ export default function Geo3DPlacementVisual({
               <button
                 type="button"
                 aria-pressed={rendererProbe}
-                onClick={() => setRendererProbe((current) => !current)}
+                onClick={() => {
+                  if (rendererProbe) {
+                    setRendererProbe(false);
+                    setIsolatedProbeVersion(null);
+                  } else {
+                    setRendererProbe(true);
+                    setIsolatedProbeVersion("3.65");
+                  }
+                }}
               >
                 {rendererProbe ? "Project model" : "Google model test"}
               </button>
+              {rendererProbe ? (
+                <>
+                  {(["3.65", "3.66", "beta"] as const).map((version) => (
+                    <button
+                      key={version}
+                      type="button"
+                      aria-pressed={isolatedProbeVersion === version}
+                      onClick={() => setIsolatedProbeVersion(version)}
+                    >
+                      Maps {version}
+                    </button>
+                  ))}
+                </>
+              ) : null}
               {!rendererProbe ? (
                 <button
                   type="button"
@@ -942,9 +970,22 @@ export default function Geo3DPlacementVisual({
         />
         <div
           ref={threeDRef}
-          className={mode === "three-d" ? styles.canvas : styles.hidden}
+          className={
+            mode === "three-d" && !(rendererProbe && isolatedProbeVersion)
+              ? styles.canvas
+              : styles.hidden
+          }
         />
-        {!ready && !error ? (
+        {mode === "three-d" && rendererProbe && isolatedProbeVersion ? (
+          <iframe
+            key={isolatedProbeVersion}
+            className={styles.canvas}
+            style={{ border: 0 }}
+            title={`Google Maps 3D ${isolatedProbeVersion} isolated probe`}
+            src={`/api/admin/3d-google-model-probe?v=${encodeURIComponent(isolatedProbeVersion)}`}
+          />
+        ) : null}
+        {!ready && !error && !(rendererProbe && isolatedProbeVersion) ? (
           <div className={styles.loading}>
             {mode === "three-d"
               ? modelDiagnostic.stage === "loading-model"
@@ -971,9 +1012,19 @@ export default function Geo3DPlacementVisual({
             : longitude
           ).toFixed(7)}
         </span>
-        <span>Heading {headingDeg.toFixed(1)}°</span>
-        <span>Scale {scale.toFixed(3)}</span>
-        <span>Ground {altitudeM.toFixed(2)} m</span>
+        {rendererProbe ? (
+          <>
+            <span>Orientation 0° / 270° / 90°</span>
+            <span>Scale {GOOGLE_RENDERER_PROBE_MODEL.scale.toFixed(3)}</span>
+            <span>Altitude mode CLAMP_TO_GROUND</span>
+          </>
+        ) : (
+          <>
+            <span>Heading {headingDeg.toFixed(1)}°</span>
+            <span>Scale {scale.toFixed(3)}</span>
+            <span>Ground {altitudeM.toFixed(2)} m</span>
+          </>
+        )}
         {mode === "three-d" ? (
           <>
             {rendererProbe ? (
@@ -995,26 +1046,35 @@ export default function Geo3DPlacementVisual({
               </span>
             ) : null}
             {rendererProbe ? (
-              <span>Renderer probe: exact Google docs sample · Colorado</span>
+              <span>
+                Renderer probe: exact Google docs sample · Colorado
+                {isolatedProbeVersion
+                  ? ` · isolated Maps ${isolatedProbeVersion}`
+                  : ""}
+              </span>
             ) : modelFingerprint ? (
               <span>Geo build: {modelFingerprint.slice(0, 12)}</span>
             ) : null}
-            <span>
-              Model element:{" "}
-              {modelDiagnostic.stage === "model-attached"
-                ? "attached"
-                : modelDiagnostic.stage === "model-error"
-                  ? "error"
-                  : "pending"}
-            </span>
-            {rendererProbe && rendererRuntime.mapsVersion ? (
+            {rendererProbe && isolatedProbeVersion ? (
+              <span>Isolated iframe · separate Maps JS global</span>
+            ) : (
+              <span>
+                Model element:{" "}
+                {modelDiagnostic.stage === "model-attached"
+                  ? "attached"
+                  : modelDiagnostic.stage === "model-error"
+                    ? "error"
+                    : "pending"}
+              </span>
+            )}
+            {!isolatedProbeVersion && rendererProbe && rendererRuntime.mapsVersion ? (
               <span>
                 Maps JS {rendererRuntime.mapsVersion} · loader{" "}
                 {rendererRuntime.loaderVersion || "unknown"} · maps3d{" "}
                 {rendererRuntime.maps3dPreloaded ? "preloaded" : "dynamic"}
               </span>
             ) : null}
-            {rendererProbe && rendererRuntime.modelTag ? (
+            {!isolatedProbeVersion && rendererProbe && rendererRuntime.modelTag ? (
               <span>
                 {rendererRuntime.modelTag} · DOM{" "}
                 {rendererRuntime.modelConnected ? "connected" : "detached"} · resource{" "}
@@ -1026,7 +1086,7 @@ export default function Geo3DPlacementVisual({
                   : "not exposed yet"}
               </span>
             ) : null}
-            {rendererProbe && rendererRuntime.webglRenderer ? (
+            {!isolatedProbeVersion && rendererProbe && rendererRuntime.webglRenderer ? (
               <span>GPU: {rendererRuntime.webglRenderer}</span>
             ) : null}
             {!rendererProbe && flattenBaseMesh ? (
