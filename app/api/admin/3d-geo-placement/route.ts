@@ -100,7 +100,7 @@ async function state(projectId: string) {
           previewModelUrl:
             renderModel?.mimeType === "model/gltf-binary" &&
             renderModel.available !== false
-              ? `/api/admin/3d-geo-model?projectId=${encodeURIComponent(projectId)}&release=${encodeURIComponent(String(engine.release?.id || ""))}${renderFingerprint ? `&geo=${encodeURIComponent(renderFingerprint)}` : ""}`
+              ? `/api/geo-3d-model-proxy?projectId=${encodeURIComponent(projectId)}&release=${encodeURIComponent(String(engine.release?.id || ""))}${renderFingerprint ? `&geo=${encodeURIComponent(renderFingerprint)}` : ""}`
               : null,
         }
       : null,
