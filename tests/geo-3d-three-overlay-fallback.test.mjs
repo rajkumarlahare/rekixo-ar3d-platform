@@ -40,6 +40,10 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(overlay, /map\.heading = orbitHeading/);
   assert.match(overlay, /map\.tilt = orbitTilt/);
   assert.match(overlay, /map\.range = orbitRange/);
+  assert.match(overlay, /lockedMapCenterAltitude/);
+  assert.match(overlay, /coordinate\(map\.center, "altitude"\)/);
+  assert.match(overlay, /lat: placement\.latitude/);
+  assert.match(overlay, /lng: placement\.longitude/);
   assert.match(overlay, /queueOrbitToGoogleMap/);
   assert.match(overlay, /scheduleGoogleCameraSettle/);
   assert.match(overlay, /const minFrameInterval = interactive \? 15 : 32/);

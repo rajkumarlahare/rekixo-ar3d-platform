@@ -18,6 +18,30 @@
   background: #07111e;
 }
 
+.map3dBase,
+.map3dOverlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.map3dBase {
+  z-index: 0;
+}
+
+.map3dOverlay {
+  z-index: 1;
+  overflow: hidden;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.map3dOverlay:active {
+  cursor: grabbing;
+}
+
 .header {
   position: absolute;
   z-index: 50;

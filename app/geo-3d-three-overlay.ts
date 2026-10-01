@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-type Map3DCameraSource = HTMLElement & {
+export type Map3DCameraSource = HTMLElement & {
   center?: unknown;
   heading?: number;
   tilt?: number;
@@ -48,6 +48,20 @@ export type Geo3DOverlayHandle = {
 function finite(value: unknown, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function coordinate(value: unknown, key: "lat" | "lng" | "altitude") {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = (value as Record<string, unknown>)[key];
+  if (typeof candidate === "function") {
+    try {
+      const result = (candidate as () => unknown).call(value);
+      return Number.isFinite(Number(result)) ? Number(result) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return Number.isFinite(Number(candidate)) ? Number(candidate) : undefined;
 }
 
 function applyModelOrientation(
@@ -176,6 +190,7 @@ export async function createGeo3DThreeOverlay({
   let mapCameraFrame = 0;
   let settleTimer: number | undefined;
   let smoothInteractionUntil = 0;
+  let lockedMapCenterAltitude: number | undefined;
 
   const modelSpanM = Math.max(
     bounds.widthM,
@@ -199,6 +214,7 @@ export async function createGeo3DThreeOverlay({
     orbitHeading = normalizeHeading(finite(map.heading, getPlacement().headingDeg));
     orbitTilt = clampTilt(finite(map.tilt, 68));
     orbitRange = clampRange(finite(map.range, 190));
+    lockedMapCenterAltitude = coordinate(map.center, "altitude");
   };
 
   const writeOrbitToGoogleMap = () => {
@@ -209,6 +225,15 @@ export async function createGeo3DThreeOverlay({
       orbitRange === null
     )
       return;
+    const placement = getPlacement();
+    map.center =
+      lockedMapCenterAltitude === undefined
+        ? { lat: placement.latitude, lng: placement.longitude }
+        : {
+            lat: placement.latitude,
+            lng: placement.longitude,
+            altitude: lockedMapCenterAltitude,
+          };
     map.heading = orbitHeading;
     map.tilt = orbitTilt;
     map.range = orbitRange;
@@ -246,6 +271,9 @@ export async function createGeo3DThreeOverlay({
       map.center = { lat: placement.latitude, lng: placement.longitude };
       writeOrbitToGoogleMap();
     }
+    window.requestAnimationFrame(() => {
+      lockedMapCenterAltitude = coordinate(map.center, "altitude");
+    });
   };
 
   const scheduleGoogleCameraSettle = (delayMs: number) => {
