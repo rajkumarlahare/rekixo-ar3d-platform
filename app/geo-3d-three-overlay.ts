@@ -205,13 +205,15 @@ export async function createGeo3DThreeOverlay({
       heading: orbitHeading,
     };
 
+    // Mirror the requested view onto the element immediately so the overlay
+    // and Google terrain read the same heading/tilt/range in the same frame.
+    map.heading = orbitHeading;
+    map.tilt = orbitTilt;
+    map.range = orbitRange;
     if (typeof map.flyCameraTo === "function") {
       void map.flyCameraTo({ endCamera, durationMillis: 0 });
     } else {
       map.center = { lat: placement.latitude, lng: placement.longitude };
-      map.heading = orbitHeading;
-      map.tilt = orbitTilt;
-      map.range = orbitRange;
     }
   };
 
@@ -359,10 +361,11 @@ export async function createGeo3DThreeOverlay({
       finite(placement.rollDeg, 0),
     );
 
-    const headingDeg =
-      orbitHeading ?? normalizeHeading(finite(map.heading, placement.headingDeg));
-    const tiltDeg = orbitTilt ?? clampTilt(finite(map.tilt, 68));
-    const range = orbitRange ?? clampRange(finite(map.range, 190));
+    const headingDeg = normalizeHeading(
+      finite(map.heading, orbitHeading ?? placement.headingDeg),
+    );
+    const tiltDeg = clampTilt(finite(map.tilt, orbitTilt ?? 68));
+    const range = clampRange(finite(map.range, orbitRange ?? 190));
     const heading = THREE.MathUtils.degToRad(headingDeg);
     const tilt = THREE.MathUtils.degToRad(
       THREE.MathUtils.clamp(tiltDeg, 1, 89.5),
