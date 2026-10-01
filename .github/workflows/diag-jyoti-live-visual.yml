@@ -47,7 +47,7 @@ jobs:
       - name: Prove live Jyoti model changes rendered pixels
         run: node scripts/diag-jyoti-live-visual.mjs
         env:
-          SUPER_ORIGIN: https://rekixo-super-admin.ai-8f3.workers.dev
+          SUPER_ORIGIN: https://admin.rekixo.com
           PLAYWRIGHT_MODULE: /tmp/rekixo-live-diag/node_modules/playwright/index.mjs
           PNG_MODULE: /tmp/rekixo-live-diag/node_modules/pngjs/lib/png.js
           PIXELMATCH_MODULE: /tmp/rekixo-live-diag/node_modules/pixelmatch/index.js
