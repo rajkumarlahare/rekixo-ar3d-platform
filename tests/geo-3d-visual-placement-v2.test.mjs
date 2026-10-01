@@ -103,3 +103,16 @@ test("Jyoti mesh flattening policy is exact-project scoped and never global", ()
   assert.match(route, /geo3DRenderPolicy\(engine\?\.project\)/);
   assert.match(manager, /flattenBaseMesh=\{state\?\.engine\?\.renderPolicy\?\.flattenBaseMesh === true\}/);
 });
+
+
+test("Geo derivative SHA invalidates same-release Super Admin preview cache", () => {
+  const route = read("app/api/admin/3d-geo-placement/route.ts");
+  const manager = read("app/geo-3d-placement-manager.tsx");
+  const visual = read("app/geo-3d-placement-visual.tsx");
+
+  assert.equal(route.includes("sha256: engine.geoModel.sha256"), true);
+  assert.equal(route.includes("&geo=${encodeURIComponent(renderFingerprint)}"), true);
+  assert.equal(manager.includes("modelFingerprint={state?.engine?.geoModel?.sha256}"), true);
+  assert.equal(visual.includes("modelFingerprint,"), true);
+  assert.equal(visual.includes("Geo build: {modelFingerprint.slice(0, 12)}"), true);
+});
