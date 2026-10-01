@@ -50,6 +50,7 @@ type PlacementState = {
       variant: "geo-optimized";
     } | null;
     renderVariant?: "geo-optimized" | "source";
+    renderPolicy?: { flattenBaseMesh: boolean; flattenHalfSizeM: number };
     release?: { id: string; version: number } | null;
     previewModelUrl?: string | null;
   } | null;
@@ -332,6 +333,9 @@ export default function Geo3DPlacementManager({
         <Geo3DPlacementVisual
           apiKey={state?.maps?.apiKey || null}
           modelUrl={state?.engine?.previewModelUrl || null}
+          modelByteSize={state?.engine?.geoModel?.byteSize}
+          flattenBaseMesh={state?.engine?.renderPolicy?.flattenBaseMesh === true}
+          flattenHalfSizeM={state?.engine?.renderPolicy?.flattenHalfSizeM || 0}
           features={state?.visualFeatures || []}
           longitude={numericPlacement.longitude}
           latitude={numericPlacement.latitude}
