@@ -4,4 +4,3 @@ export * from "@/app/geo-fine-alignment";
 export * from "@/app/geo-public-image";
 export * from "@/app/geo-public-manifest";
 export * from "@/app/google-maps-config";
-export * from "@/app/geo-3d-placement";

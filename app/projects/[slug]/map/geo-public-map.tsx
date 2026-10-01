@@ -2,11 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { solveHomography, type MapperPoint } from "../../../mapper-geometry";
-import {
-  createGeo3DThreeOverlay,
-  type Geo3DOverlayHandle,
-  type Map3DCameraSource,
-} from "../../../geo-3d-three-overlay";
 import styles from "./geo-public-map.module.css";
 
 type PublicFeature = {
@@ -39,23 +34,6 @@ type PublicGeoData = {
   bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number };
   features: PublicFeature[];
   counts: { total: number; available: number; booked: number; sold: number };
-  building3d?: {
-    name: string;
-    longitude: number;
-    latitude: number;
-    altitudeM: number;
-    headingDeg: number;
-    pitchDeg: number;
-    rollDeg: number;
-    scale: number;
-    flattenBaseMesh: boolean;
-    flattenHalfSizeM: number;
-    releaseId: string;
-    releaseVersion: number;
-    modelFingerprint?: string;
-    modelUrl: string;
-    experienceUrl: string;
-  };
   error?: string;
 };
 
@@ -101,13 +79,7 @@ type GoogleRoot = {
     Polygon: new (options: Record<string, unknown>) => Polygon;
     InfoWindow: new (options?: Record<string, unknown>) => InfoWindow;
     RenderingType?: { VECTOR?: unknown };
-    importLibrary?: (name: string) => Promise<unknown>;
   };
-};
-
-type Maps3DLibrary = {
-  Map3DElement: new (options: Record<string, unknown>) => Map3DCameraSource;
-  FlattenerElement?: new (options: Record<string, unknown>) => HTMLElement;
 };
 
 type RekixoWindow = Window &
@@ -201,7 +173,7 @@ function loadGoogleMaps(apiKey: string) {
     script.defer = true;
     script.src =
       `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}` +
-      `&v=weekly&loading=async&libraries=maps3d&callback=${callbackName}`;
+      `&v=weekly&loading=async&callback=${callbackName}`;
     script.onerror = () => {
       mapsPromise = null;
       reject(new Error("Google Satellite load fail hui"));
@@ -250,23 +222,6 @@ function validatePublicGeoData(payload: PublicGeoData) {
   }
 
   return payload;
-}
-
-function flatteningSquarePath(
-  latitude: number,
-  longitude: number,
-  halfSizeM: number,
-) {
-  const safeHalfSize = Math.max(1, halfSizeM);
-  const latDelta = safeHalfSize / 111_320;
-  const cosLat = Math.max(0.2, Math.cos((latitude * Math.PI) / 180));
-  const lngDelta = safeHalfSize / (111_320 * cosLat);
-  return [
-    { lat: latitude + latDelta, lng: longitude - lngDelta },
-    { lat: latitude + latDelta, lng: longitude + lngDelta },
-    { lat: latitude - latDelta, lng: longitude + lngDelta },
-    { lat: latitude - latDelta, lng: longitude - lngDelta },
-  ];
 }
 
 function googleMapsLinks(data: PublicGeoData) {
@@ -540,14 +495,8 @@ export default function GeoPublicMap({
   mapsApiKey: string | null;
 }) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
-  const map3dNodeRef = useRef<HTMLDivElement | null>(null);
-  const map3dOverlayRef = useRef<HTMLDivElement | null>(null);
-  const public3DOverlayRef = useRef<Geo3DOverlayHandle | null>(null);
   const [data, setData] = useState<PublicGeoData | null>(null);
-  const [mode, setMode] = useState<"satellite" | "three-d">("satellite");
   const [mapReady, setMapReady] = useState(false);
-  const [threeDReady, setThreeDReady] = useState(false);
-  const [threeDError, setThreeDError] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -583,7 +532,7 @@ export default function GeoPublicMap({
   }, [mapsApiKey, projectSlug]);
 
   useEffect(() => {
-    if (mode !== "satellite" || !data || !mapNodeRef.current) return;
+    if (!data || !mapNodeRef.current) return;
     const effectiveMapsKey = mapsApiKey || data.maps.apiKey;
     if (!effectiveMapsKey) {
       setError("Google Satellite key public website ke liye configured nahi hai");
@@ -692,146 +641,7 @@ export default function GeoPublicMap({
       info?.close();
       win().gm_authFailure = previousAuthFailure;
     };
-  }, [data, mapsApiKey, mode]);
-
-  useEffect(() => {
-    if (
-      mode !== "three-d" ||
-      !data?.building3d ||
-      !map3dNodeRef.current ||
-      !map3dOverlayRef.current
-    )
-      return;
-
-    const effectiveMapsKey = mapsApiKey || data.maps.apiKey;
-    if (!effectiveMapsKey) {
-      setThreeDError("Google Maps key 3D Site ke liye configured nahi hai");
-      setMode("satellite");
-      return;
-    }
-
-    let cancelled = false;
-    let overlay: Geo3DOverlayHandle | null = null;
-    setThreeDReady(false);
-    setThreeDError("");
-
-    loadGoogleMaps(effectiveMapsKey)
-      .then(async (google) => {
-        if (
-          cancelled ||
-          !map3dNodeRef.current ||
-          !map3dOverlayRef.current
-        )
-          return;
-        if (!google.maps.importLibrary)
-          throw new Error("Google 3D Maps library available nahi hai");
-
-        const library = (await google.maps.importLibrary(
-          "maps3d",
-        )) as Maps3DLibrary;
-        if (
-          cancelled ||
-          !map3dNodeRef.current ||
-          !map3dOverlayRef.current
-        )
-          return;
-
-        const building = data.building3d!;
-        const modelResponse = await fetch(building.modelUrl, {
-          method: "GET",
-          cache: "force-cache",
-        });
-        if (!modelResponse.ok)
-          throw new Error(
-            `Published 3D model load nahi hua (${modelResponse.status})`,
-          );
-        const modelBytes = await modelResponse.arrayBuffer();
-        if (modelBytes.byteLength < 12)
-          throw new Error("Published 3D model incomplete hai");
-        const magic = new TextDecoder().decode(
-          new Uint8Array(modelBytes, 0, 4),
-        );
-        if (magic !== "glTF")
-          throw new Error("Published 3D model valid GLB nahi hai");
-
-        const map = new library.Map3DElement({
-          center: {
-            lat: building.latitude,
-            lng: building.longitude,
-          },
-          range: 190,
-          tilt: 68,
-          heading: building.headingDeg,
-          mode: "HYBRID",
-          gestureHandling: "GREEDY",
-        });
-        const flattener = building.flattenBaseMesh
-          ? (() => {
-              if (!library.FlattenerElement)
-                throw new Error(
-                  "Google 3D mesh flattener is unavailable in this Maps build",
-                );
-              return new library.FlattenerElement({
-                path: flatteningSquarePath(
-                  building.latitude,
-                  building.longitude,
-                  building.flattenHalfSizeM,
-                ),
-              });
-            })()
-          : null;
-
-        map3dNodeRef.current.replaceChildren(map);
-        if (flattener) map.append(flattener);
-
-        overlay = await createGeo3DThreeOverlay({
-          host: map3dOverlayRef.current,
-          map,
-          modelBytes,
-          getPlacement: () => ({
-            longitude: building.longitude,
-            latitude: building.latitude,
-            altitudeM: building.altitudeM,
-            headingDeg: building.headingDeg,
-            pitchDeg: building.pitchDeg,
-            rollDeg: building.rollDeg,
-            scale: building.scale,
-          }),
-        });
-        if (cancelled) {
-          overlay.dispose();
-          return;
-        }
-        public3DOverlayRef.current = overlay;
-        overlay.focusView(building.headingDeg, 68, 190);
-        setThreeDReady(true);
-      })
-      .catch((reason) => {
-        if (cancelled) return;
-        setThreeDReady(false);
-        setThreeDError(
-          reason instanceof Error
-            ? reason.message
-            : "3D Site load nahi hua",
-        );
-        // Fail safe: an unavailable/incompatible 3D model must never take down
-        // the existing customer satellite/masterplan experience.
-        setMode("satellite");
-      });
-
-    return () => {
-      cancelled = true;
-      if (public3DOverlayRef.current === overlay)
-        public3DOverlayRef.current = null;
-      overlay?.dispose();
-      map3dOverlayRef.current?.replaceChildren();
-      map3dNodeRef.current?.replaceChildren();
-    };
-  }, [data, mapsApiKey, mode]);
-
-  useEffect(() => {
-    if (!data?.building3d && mode === "three-d") setMode("satellite");
-  }, [data?.building3d, mode]);
+  }, [data, mapsApiKey]);
 
   const googleLinks = data ? googleMapsLinks(data) : null;
 
@@ -839,16 +649,9 @@ export default function GeoPublicMap({
     <main className={styles.shell}>
       <div
         ref={mapNodeRef}
-        className={`${styles.map} ${mode === "satellite" ? "" : styles.mapHidden}`}
+        className={styles.map}
         aria-label={`${projectName} satellite map`}
       />
-      <div
-        className={`${styles.map} ${mode === "three-d" ? "" : styles.mapHidden}`}
-        aria-label={`${projectName} 3D site map`}
-      >
-        <div ref={map3dNodeRef} className={styles.map3dBase} />
-        <div ref={map3dOverlayRef} className={styles.map3dOverlay} />
-      </div>
 
       <header className={styles.header}>
         <div>
@@ -859,63 +662,7 @@ export default function GeoPublicMap({
         <a href={`/projects/${encodeURIComponent(projectSlug)}`}>Project site</a>
       </header>
 
-      {data?.building3d ? (
-        <nav className={styles.viewModes} aria-label="Geo view mode">
-          <button
-            type="button"
-            aria-pressed={mode === "satellite"}
-            onClick={() => {
-              setThreeDError("");
-              setMode("satellite");
-            }}
-          >
-            Satellite
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === "three-d"}
-            onClick={() => {
-              setThreeDError("");
-              setMode("three-d");
-            }}
-          >
-            3D Site
-          </button>
-          {mode === "three-d" ? (
-            <>
-              <button
-                type="button"
-                onClick={() => public3DOverlayRef.current?.rotateViewBy(-45)}
-                aria-label="Rotate 3D site left"
-              >
-                ↺ 45°
-              </button>
-              <button
-                type="button"
-                onClick={() => public3DOverlayRef.current?.rotateViewBy(45)}
-                aria-label="Rotate 3D site right"
-              >
-                45° ↻
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  public3DOverlayRef.current?.focusView(
-                    data.building3d!.headingDeg,
-                    68,
-                    190,
-                  )
-                }
-              >
-                Reset view
-              </button>
-              <a href={data.building3d.experienceUrl}>Enter Building</a>
-            </>
-          ) : null}
-        </nav>
-      ) : null}
-
-      {googleLinks && mapReady && mode === "satellite" ? (
+      {googleLinks && mapReady ? (
         <nav className={styles.mapActions} aria-label="External map actions">
           <a href={googleLinks.open} target="_blank" rel="noopener noreferrer">
             Open in Google Maps
@@ -926,7 +673,7 @@ export default function GeoPublicMap({
         </nav>
       ) : null}
 
-      {data && data.display?.showLegend !== false && mode === "satellite" ? (
+      {data && data.display?.showLegend !== false ? (
         <section className={styles.legend} aria-label="Plot availability">
           <span><i className={styles.available} /> Available <b>{data.counts.available}</b></span>
           <span><i className={styles.booked} /> Booked <b>{data.counts.booked}</b></span>
@@ -935,21 +682,11 @@ export default function GeoPublicMap({
         </section>
       ) : null}
 
-      {!error &&
-      (mode === "satellite"
-        ? !data || !mapReady
-        : !data || !threeDReady) ? (
+      {!error && (!data || !mapReady) ? (
         <div className={styles.loading}>
-          {mode === "three-d"
-            ? "3D Site initialize ho raha hai…"
-            : data
-              ? "Google Satellite initialize ho raha hai…"
-              : "Satellite map data load ho raha hai…"}
-        </div>
-      ) : null}
-      {threeDError && mode === "satellite" ? (
-        <div className={styles.threeDNotice}>
-          3D Site unavailable tha, isliye safe Satellite view dikhaya gaya. {threeDError}
+          {data
+            ? "Google Satellite initialize ho raha hai…"
+            : "Satellite map data load ho raha hai…"}
         </div>
       ) : null}
       {error ? (

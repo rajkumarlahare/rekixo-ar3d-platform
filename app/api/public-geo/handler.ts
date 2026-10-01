@@ -6,15 +6,11 @@ import {
   type GeoPublicManifest,
   type GeoPublicSnapshot,
 } from "@/modules/geo";
-import {
-  publicGoogleMapsBrowserKey,
-  resolvePublicGeo3DPlacement,
-} from "@/modules/geo";
+import { publicGoogleMapsBrowserKey } from "@/modules/geo";
 import {
   publicSiteEnabled,
   publicSiteUnavailableResponse,
 } from "@/modules/public-site-access";
-import { geo3DRenderPolicy } from "@/app/geo-3d-render-policy";
 
 const LIVE_SETTING_KEYS = [
   "geoPublicEnabled",
@@ -221,7 +217,7 @@ export async function GET(request: Request) {
       return Response.json({ error: "Geo live ownership mismatch" }, { status: 404 });
 
     const manifestStartedAt = Date.now();
-    const [manifestResult, plotRows, mapsKey, geo3d] = await Promise.all([
+    const [manifestResult, plotRows, mapsKey] = await Promise.all([
       loadPublicManifest({ labProjectId, revision, overlayKey, configuredManifestKey: manifestKey }),
       env.DB.prepare(
         "SELECT id,status,sqft,sqm,sqyd,dimensions,road FROM plots WHERE project_id=? ORDER BY id",
@@ -237,7 +233,6 @@ export async function GET(request: Request) {
           road: string;
         }>(),
       publicGoogleMapsBrowserKey(),
-      resolvePublicGeo3DPlacement(source.id),
     ]);
     const manifestMs = Date.now() - manifestStartedAt;
     const { features, counts } = decorateManifest(manifestResult.manifest, plotRows.results);
@@ -262,37 +257,6 @@ export async function GET(request: Request) {
         bounds: manifestResult.manifest.bounds,
         features,
         counts,
-        ...(geo3d
-          ? {
-              building3d: {
-                name: geo3d.engine.project.name,
-                longitude: geo3d.placement.longitude,
-                latitude: geo3d.placement.latitude,
-                altitudeM: geo3d.placement.altitudeM,
-                headingDeg: geo3d.placement.headingDeg,
-                pitchDeg: geo3d.placement.pitchDeg,
-                rollDeg: geo3d.placement.rollDeg,
-                scale: geo3d.placement.scale,
-                ...geo3DRenderPolicy(geo3d.engine.project),
-                releaseId: geo3d.placement.engineReleaseId,
-                releaseVersion: geo3d.placement.engineReleaseVersion,
-                modelFingerprint:
-                  geo3d.engine.geoModel &&
-                  geo3d.renderModel === geo3d.engine.geoModel &&
-                  typeof geo3d.engine.geoModel.sha256 === "string"
-                    ? geo3d.engine.geoModel.sha256
-                    : undefined,
-                modelUrl:
-                  `/api/public-geo-3d-model?projectSlug=${encodeURIComponent(source.slug)}&release=${encodeURIComponent(geo3d.placement.engineReleaseId)}` +
-                  (geo3d.engine.geoModel &&
-                  geo3d.renderModel === geo3d.engine.geoModel &&
-                  typeof geo3d.engine.geoModel.sha256 === "string"
-                    ? `&geo=${encodeURIComponent(geo3d.engine.geoModel.sha256)}`
-                    : ""),
-                experienceUrl: geo3d.experienceUrl,
-              },
-            }
-          : {}),
       },
       {
         headers: {

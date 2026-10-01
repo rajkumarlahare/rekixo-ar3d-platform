@@ -8,7 +8,6 @@ import {
   LogOut,
   MapPinned,
   ContactRound,
-  Cuboid,
   Share2,
   ShieldCheck,
   SlidersHorizontal,
@@ -17,10 +16,8 @@ import {
 import ClientAdminManager from "./client-admin-manager";
 import GeoLabClone from "./geo-lab-clone";
 import GeoMapper from "./geo-mapper";
-import Geo3DPlacementManager from "./geo-3d-placement-manager";
 import PlotMapper from "./plot-mapper";
 import ProjectCustomerActionsManager from "./project-customer-actions-manager";
-import Project3DLinkManager from "./project-3d-link-manager";
 import ProjectDomainManager from "./project-domain-manager";
 import ProjectPublishPanel from "./project-publish-panel";
 import ProjectProfileManager from "./project-profile-manager";
@@ -38,7 +35,7 @@ type Project = {
   adminCount: number;
 };
 
-type WorkspaceTab = "clients" | "profile" | "mapper" | "mapping-controls" | "geo" | "three-d" | "share" | "assets";
+type WorkspaceTab = "clients" | "profile" | "mapper" | "mapping-controls" | "geo" | "share" | "assets";
 
 export default function SuperAdminDashboard({
   user,
@@ -134,8 +131,6 @@ export default function SuperAdminDashboard({
             ? "Mapping Controls"
             : tab === "geo"
             ? "Geo Mapper"
-            : tab === "three-d"
-              ? "3D Engine Integration"
               : tab === "share"
                 ? "Share Preview Builder"
                 : "Project Assets";
@@ -150,8 +145,6 @@ export default function SuperAdminDashboard({
             ? "Mapped plots ke Dimensions, Area, Facing/Road aur Front/Back/Depth sizes ko manually aur safely update karein."
             : tab === "geo"
             ? "Project boundaries, GPS control points aur GIS exchange data ko isolated Geo workspace me manage karein."
-            : tab === "three-d"
-              ? "Platform project ko isolated Rekixo AR3D Engine project se safely link karein."
               : tab === "share"
                 ? "Har project ka branded WhatsApp / social link preview ek jagah se manage karein."
                 : "Selected project ka recovery-ready working data, source assets aur published snapshot safely export karein.";
@@ -199,12 +192,6 @@ export default function SuperAdminDashboard({
             onClick={() => setTab("geo")}
           >
             <Globe2 /> Geo Mapper
-          </button>
-          <button
-            className={tab === "three-d" ? "active" : ""}
-            onClick={() => setTab("three-d")}
-          >
-            <Cuboid /> 3D Engine
           </button>
           <button
             className={tab === "share" ? "active" : ""}
@@ -315,18 +302,7 @@ export default function SuperAdminDashboard({
                         notify={notify}
                       />
                       <GeoMapper key={projectId} projectId={projectId} notify={notify} />
-                      <Geo3DPlacementManager
-                        key={`geo-3d:${projectId}`}
-                        projectId={projectId}
-                        notify={notify}
-                      />
                     </>
-                  ) : tab === "three-d" ? (
-                    <Project3DLinkManager
-                      key={`3d-link:${projectId}`}
-                      projectId={projectId}
-                      notify={notify}
-                    />
                   ) : tab === "assets" ? (
                     <ProjectAssetsManager
                       key={`assets:${projectId}`}
