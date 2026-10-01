@@ -257,6 +257,8 @@ function focus3DMap(
   longitude: number,
   altitudeM: number,
   headingDeg: number,
+  tiltDeg = 68,
+  rangeM = 190,
 ) {
   // CameraOptions supports RELATIVE_TO_GROUND even though Map3DElement.center
   // itself uses absolute mean-sea-level altitude. Aim near the middle of a
@@ -268,8 +270,8 @@ function focus3DMap(
       altitude: Math.max(0, altitudeM + 10),
     },
     altitudeMode: "RELATIVE_TO_GROUND" as const,
-    range: 190,
-    tilt: 68,
+    range: rangeM,
+    tilt: tiltDeg,
     heading: headingDeg,
   };
   if (typeof map.flyCameraTo === "function") {
@@ -279,6 +281,8 @@ function focus3DMap(
   // Compatibility fallback for older Maps JS builds.
   map.center = { lat: latitude, lng: longitude };
   map.heading = headingDeg;
+  map.tilt = tiltDeg;
+  map.range = rangeM;
 }
 
 function headingEnd(
@@ -1021,9 +1025,20 @@ export default function Geo3DPlacementVisual({
                       const map = map3DRef.current;
                       if (!map) return;
                       const currentHeading = Number(map.heading);
-                      map.heading =
+                      const currentTilt = Number(map.tilt);
+                      const currentRange = Number(map.range);
+                      const nextHeading =
                         ((Number.isFinite(currentHeading) ? currentHeading : 0) + 90) %
                         360;
+                      focus3DMap(
+                        map,
+                        latitude,
+                        longitude,
+                        altitudeM,
+                        nextHeading,
+                        Number.isFinite(currentTilt) ? currentTilt : 68,
+                        Number.isFinite(currentRange) ? currentRange : 190,
+                      );
                     }}
                     title="Camera view ko building ke around 90° rotate karein"
                   >
