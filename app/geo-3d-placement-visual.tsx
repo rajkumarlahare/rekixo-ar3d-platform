@@ -547,6 +547,7 @@ export default function Geo3DPlacementVisual({
 
     let cancelled = false;
     let cleanup3D: (() => void) | undefined;
+    let modelObjectUrl: string | undefined;
     setReady(false);
     setError("");
     setModelDiagnostic({ stage: "loading-map" });
@@ -583,9 +584,11 @@ export default function Geo3DPlacementVisual({
             finalUrl: rendererModelUrl,
           });
         } else {
+          // Fetch the complete validated GLB into the page and hand
+          // Model3DElement a blob URL. This removes its internal network/CORS/
+          // cache path entirely while keeping the Engine bytes unchanged.
           const modelCheck = await fetch(modelUrl, {
             method: "GET",
-            headers: { Range: "bytes=0-3" },
             cache: "no-store",
             credentials: "same-origin",
           });
@@ -611,19 +614,26 @@ export default function Geo3DPlacementVisual({
               `3D model unavailable (${modelCheck.status}${detail})`,
             );
           }
-          const finalModelUrl = modelCheck.url || modelUrl;
-          rendererModelUrl = finalModelUrl;
+          const sourceUrl = modelCheck.url || modelUrl;
           const contentType = modelCheck.headers.get("content-type") || "";
           const modelStatus = modelCheck.status;
-          const magicBytes = await readResponsePrefix(modelCheck, 4);
-          const magic = new TextDecoder().decode(magicBytes);
+          const modelBytes = await modelCheck.arrayBuffer();
+          if (modelBytes.byteLength < 12)
+            throw new Error("3D model preview returned an incomplete GLB");
+          const magic = new TextDecoder().decode(
+            new Uint8Array(modelBytes, 0, 4),
+          );
           if (magic !== "glTF")
             throw new Error("3D model preview returned invalid GLB bytes");
+          modelObjectUrl = URL.createObjectURL(
+            new Blob([modelBytes], { type: "model/gltf-binary" }),
+          );
+          rendererModelUrl = modelObjectUrl;
           setModelDiagnostic({
             stage: "loading-model",
             httpStatus: modelStatus,
             contentType,
-            finalUrl: finalModelUrl,
+            finalUrl: sourceUrl,
             glbVerified: true,
           });
         }
@@ -806,6 +816,7 @@ export default function Geo3DPlacementVisual({
     return () => {
       cancelled = true;
       cleanup3D?.();
+      if (modelObjectUrl) URL.revokeObjectURL(modelObjectUrl);
       map3DRef.current = null;
       model3DRef.current = null;
       flattener3DRef.current = null;
