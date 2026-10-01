@@ -197,7 +197,7 @@ function loadGoogleMaps(apiKey: string) {
     script.defer = true;
     script.src =
       `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}` +
-      `&v=weekly&loading=async&callback=${callbackName}`;
+      `&v=weekly&loading=async&libraries=maps3d&callback=${callbackName}`;
     script.onerror = () => {
       mapsPromise = null;
       reject(new Error("Google Satellite load fail hui"));
