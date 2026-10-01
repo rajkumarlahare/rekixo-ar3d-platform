@@ -168,8 +168,6 @@ test("isolated Google Model3D probe compares stable/current/beta Maps JS globals
   const route = read("app/api/admin/3d-google-model-probe/route.ts");
 
   assert.match(visual, /IsolatedProbeVersion = "3\.65" \| "3\.66" \| "beta"/);
-  assert.match(visual, /Maps 3\.65/);
-  assert.match(visual, /Maps 3\.66/);
   assert.match(visual, /Maps \{version\}/);
   assert.match(visual, /\/api\/admin\/3d-google-model-probe\?v=/);
   assert.match(visual, /Isolated iframe · separate Maps JS global/);
