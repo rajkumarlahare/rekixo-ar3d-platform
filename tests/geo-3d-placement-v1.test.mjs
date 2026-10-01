@@ -20,6 +20,9 @@ test("public Geo 3D stays fail-closed and pins Engine release/model", () => {
   assert.match(resolver, /engine\.release\.id !== placement\.engineReleaseId/);
   assert.match(resolver, /engine\.model\.id !== placement\.engineModelId/);
   assert.match(resolver, /engine\.model\.mimeType !== "model\/gltf-binary"/);
+  assert.match(resolver, /preferredEngineGeoRenderModel\(engine\)/);
+  assert.match(resolver, /engine\.geoModel && renderModel === engine\.geoModel/);
+  assert.match(resolver, /enginePublishedModelUrl\(renderModel\.url\)/);
   assert.match(resolver, /link\.publicEnabled/);
 });
 
