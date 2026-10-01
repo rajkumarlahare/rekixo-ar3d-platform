@@ -183,7 +183,7 @@ test("isolated Google Model3D probe compares stable/current/beta Maps JS globals
 });
 
 
-test("same-origin Geo model proxies remove cross-origin GLB loading from the renderer path", () => {
+test("same-origin Geo model routes remove cross-origin GLB loading from the Super Admin renderer path", () => {
   const placement = read("app/api/admin/3d-geo-placement/route.ts");
   const proxy = read("app/api/geo-3d-model-proxy/route.ts");
   const windmill = read("app/api/3d-google-windmill/route.ts");
@@ -194,13 +194,17 @@ test("same-origin Geo model proxies remove cross-origin GLB loading from the ren
   assert.match(proxy, /project3DLink\(scope\.platformProject\.id\)/);
   assert.match(proxy, /publishedEngineProject\(link\.engineSlug\)/);
   assert.match(proxy, /preferredEngineGeoRenderModel\(engine\)/);
-  assert.match(proxy, /fetchEnginePublishedModel\(resolved\.modelUrl/);
-  assert.match(proxy, /headers: range \? \{ Range: range \} : undefined/);
-  assert.match(proxy, /x-rekixo-model-proxy", "same-origin-engine"/);
+  assert.match(proxy, /enginePublishedModelUrl\(renderModel\.url\)/);
+  assert.match(proxy, /parsed\.pathname\.startsWith\("\/3Dprojects\/api\/releases\/"\)/);
+  assert.match(proxy, /status: 307/);
+  assert.match(proxy, /location: resolved\.sameOriginPath/);
+  assert.match(proxy, /x-rekixo-model-proxy", "same-origin-engine-route"/);
+  assert.doesNotMatch(proxy, /fetchEnginePublishedModel/);
   assert.doesNotMatch(proxy, /searchParams\.get\("url"\)/);
 
   assert.match(windmill, /maps-docs-team\.web\.app\/assets\/windmill\.glb/);
-  assert.match(windmill, /headers: range \? \{ Range: range \} : undefined/);
+  assert.match(windmill, /"Accept-Encoding": "identity"/);
+  assert.match(windmill, /content-encoding/);
   assert.match(windmill, /x-rekixo-model-proxy", "google-windmill"/);
   assert.match(isolated, /src: "\/api\/3d-google-windmill"/);
 });
