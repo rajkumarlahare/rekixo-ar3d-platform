@@ -33,13 +33,19 @@ test("Super Admin Geo preview defaults to isolated Rekixo Three overlay", () => 
   assert.match(overlay, /addEventListener\("pointerdown", onPointerDown\)/);
   assert.match(overlay, /addEventListener\("pointermove", onPointerMove\)/);
   assert.match(overlay, /addEventListener\("wheel", onWheel/);
-  assert.match(overlay, /map\.heading = normalizeHeading/);
-  assert.match(overlay, /map\.tilt = clampTilt/);
-  assert.match(overlay, /map\.range = clampRange/);
+  assert.match(overlay, /applyBuildingCenteredCamera/);
+  assert.match(overlay, /flyCameraTo\(\{ endCamera, durationMillis: 0 \}\)/);
+  assert.match(overlay, /root\.position\.set\(0, placement\.altitudeM, 0\)/);
+  assert.doesNotMatch(overlay, /localMeters/);
+  assert.match(overlay, /map\.heading = orbitHeading/);
+  assert.match(overlay, /map\.tilt = orbitTilt/);
+  assert.match(overlay, /map\.range = orbitRange/);
   assert.match(css, /\.modelOverlay/);
   assert.match(css, /pointer-events: auto/);
   assert.match(css, /touch-action: none/);
   assert.match(visual, /View \+90°/);
+  assert.match(visual, /focus3DMap\(/);
+  assert.match(visual, /Number\.isFinite\(currentRange\) \? currentRange : 190/);
   assert.match(visual, /Controls: drag orbit\/tilt/);
 });
 
