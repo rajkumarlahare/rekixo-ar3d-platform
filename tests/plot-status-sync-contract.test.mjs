@@ -4,9 +4,17 @@ import test from "node:test";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 
-test("client status dropdown uses the dedicated status mutation path", () => {
+test("every admin role uses the dedicated verified status mutation path", () => {
   const dashboard = read("app/admin-dashboard.tsx");
-  assert.match(dashboard, /type:\"plotStatus\",plotId:plot\.id,status/);
+  assert.match(
+    dashboard,
+    /type:\"plotStatus\",projectId,plotId:plot\.id,status,expectedStatus:previous/,
+  );
+  assert.doesNotMatch(
+    dashboard,
+    /user\.role===\"client_admin\"\?\{type:\"plotStatus\"/,
+  );
+  assert.match(dashboard, /if\(data\.status!==status\)throw new Error\(\"Saved status verify nahi hua\"\)/);
   assert.match(dashboard, /value=\"available\">Available/);
   assert.match(dashboard, /value=\"booked\">Booked/);
   assert.match(dashboard, /value=\"sold\">Sold/);
@@ -37,12 +45,14 @@ test("super admin status writes are project-scoped and allowed only on dedicated
   assert.match(route, /session\.role === "super_admin" \? requestedProjectId : session\.projectId/);
 });
 
-test("optional optimistic-concurrency guard returns canonical status instead of overwriting silently", () => {
+test("optimistic-concurrency guard prevents silent stale-session overwrites", () => {
   const route = read("app/api/data/route.ts");
+  const dashboard = read("app/admin-dashboard.tsx");
   assert.match(route, /expectedStatus\?: string/);
   assert.match(route, /existing\.status !== expectedStatus/);
   assert.match(route, /currentStatus: existing\.status/);
   assert.match(route, /status: 409/);
+  assert.match(dashboard, /expectedStatus:previous/);
 });
 
 test("public live state reads the same canonical plots status and is never cached", () => {
