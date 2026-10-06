@@ -1,0 +1,74 @@
+/*
+ * REKIXO_PUBLIC_STATUS_OVERLAY_CONTRAST_V2
+ *
+ * Customer-site 2D status surfaces must remain readable over masterplans whose
+ * source plot colors vary from light to dark. The project-scoped status theme
+ * (--plot-*-rgb) stays the single color source of truth; only overlay opacity
+ * is standardized here.
+ *
+ * Selected plots intentionally use the SAME base fill as their status peers.
+ * Selection is communicated by the white edge/glow so one Sold plot never
+ * appears to have a different status color just because it is selected.
+ *
+ * Geometry, hit-testing, status data, labels and 3D rendering are untouched.
+ */
+:root{
+  --rekixo-status-overlay-alpha-available:.46;
+  --rekixo-status-overlay-alpha-booked:.58;
+  --rekixo-status-overlay-alpha-sold:.68;
+}
+
+/* STATUS toggle ON: stronger opacity reduces masterplan-color contamination. */
+.show-all .plot[data-status="available"]{
+  fill:rgba(var(--plot-available-rgb),var(--rekixo-status-overlay-alpha-available))!important;
+  stroke:rgba(var(--plot-available-rgb),.92)!important;
+}
+.show-all .plot[data-status="booked"]{
+  fill:rgba(var(--plot-booked-rgb),var(--rekixo-status-overlay-alpha-booked))!important;
+  stroke:rgba(var(--plot-booked-rgb),.95)!important;
+}
+.show-all .plot[data-status="sold"]{
+  fill:rgba(var(--plot-sold-rgb),var(--rekixo-status-overlay-alpha-sold))!important;
+  stroke:rgba(var(--plot-sold-rgb),.97)!important;
+}
+
+/* Status filters reuse the exact same fill strength as the all-status view. */
+.show-all.status-filter-available .plot[data-status="available"]{
+  fill:rgba(var(--plot-available-rgb),var(--rekixo-status-overlay-alpha-available))!important;
+  stroke:rgba(var(--plot-available-rgb),.94)!important;
+}
+.show-all.status-filter-booked .plot[data-status="booked"]{
+  fill:rgba(var(--plot-booked-rgb),var(--rekixo-status-overlay-alpha-booked))!important;
+  stroke:rgba(var(--plot-booked-rgb),.96)!important;
+}
+.show-all.status-filter-sold .plot[data-status="sold"]{
+  fill:rgba(var(--plot-sold-rgb),var(--rekixo-status-overlay-alpha-sold))!important;
+  stroke:rgba(var(--plot-sold-rgb),.98)!important;
+}
+
+/*
+ * Selection never changes the semantic fill intensity. A high-contrast edge
+ * and glow provide focus without making selected Sold look "more Sold" than
+ * the other Sold plots.
+ */
+.plot.selected[data-status="available"],
+.show-all .plot.selected[data-status="available"]{
+  fill:rgba(var(--plot-available-rgb),var(--rekixo-status-overlay-alpha-available))!important;
+  stroke:#fff!important;
+  stroke-width:2.05!important;
+  filter:drop-shadow(0 0 5px rgba(var(--plot-available-rgb),.92));
+}
+.plot.selected[data-status="booked"],
+.show-all .plot.selected[data-status="booked"]{
+  fill:rgba(var(--plot-booked-rgb),var(--rekixo-status-overlay-alpha-booked))!important;
+  stroke:#fff!important;
+  stroke-width:2.05!important;
+  filter:drop-shadow(0 0 5px rgba(var(--plot-booked-rgb),.94));
+}
+.plot.selected[data-status="sold"],
+.show-all .plot.selected[data-status="sold"]{
+  fill:rgba(var(--plot-sold-rgb),var(--rekixo-status-overlay-alpha-sold))!important;
+  stroke:#fff!important;
+  stroke-width:2.05!important;
+  filter:drop-shadow(0 0 5px rgba(var(--plot-sold-rgb),.96));
+}
