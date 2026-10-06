@@ -19,7 +19,8 @@ test("versioned structural payload is independently cacheable",()=>{
 });
 
 test("live business state is compact and no-store",()=>{
-  assert.match(liveRoute,/SELECT id,status FROM plots/);
+  assert.match(liveRoute,/SELECT id,status,updated_at AS updatedAt FROM plots/);
+  assert.match(liveRoute,/updatedAt:row\.updatedAt/);
   assert.match(liveRoute,/plot_pricing/);
   assert.match(liveRoute,/const pricingResult=pricingEnabled[\s\S]*\? await env\.DB\.prepare/);
   assert.match(liveRoute,/: \{results:\[\] as PricingRow\[\]\}/);

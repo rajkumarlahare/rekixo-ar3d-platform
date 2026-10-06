@@ -118,12 +118,6 @@ export async function POST(request: Request) {
   }
   const session = await validAdminSession();
   if (!session) return denied();
-  if (session.role === "super_admin") {
-    return Response.json(
-      { error: "Use project-specific Super Admin tools" },
-      { status: 403 },
-    );
-  }
 
   try {
     const body = (await request.json()) as {
@@ -131,23 +125,111 @@ export async function POST(request: Request) {
       plot?: Record<string, unknown>;
       settings?: Record<string, string>;
       changes?: Record<string, string>;
+      projectId?: string;
       plotId?: string;
       status?: string;
+      expectedStatus?: string;
     };
     const db = getDb();
     const now = new Date().toISOString();
-    const projectId = session.projectId;
+    const requestedProjectId = String(
+      body.projectId || body.plot?.projectId || "",
+    ).trim();
+    const projectId =
+      session.role === "super_admin" ? requestedProjectId : session.projectId;
+
+    if (!projectId) {
+      return Response.json({ error: "Project required" }, { status: 400 });
+    }
+    if (session.role === "super_admin") {
+      const project = await env.DB.prepare(
+        "SELECT id FROM projects WHERE id=? AND status!='deleted' LIMIT 1",
+      )
+        .bind(projectId)
+        .first<{ id: string }>();
+      if (!project) return Response.json({ error: "Project nahi mila" }, { status: 404 });
+    }
 
     if (body.type === "plotStatus") {
       const plotId = String(body.plotId || "").trim();
       const status = String(body.status || "");
+      const expectedStatus = String(body.expectedStatus || "").trim();
       if (!plotId || plotId.length > 80 || !validClientPlotStatus(status))
         return Response.json({ error: "Invalid plot status" }, { status: 400 });
-      const existing = await env.DB.prepare("SELECT id FROM plots WHERE project_id=? AND id=? LIMIT 1").bind(projectId, plotId).first();
+      if (expectedStatus && !validClientPlotStatus(expectedStatus))
+        return Response.json({ error: "Invalid previous plot status" }, { status: 400 });
+
+      const existing = await env.DB.prepare(
+        "SELECT id,status,updated_at AS updatedAt FROM plots WHERE project_id=? AND id=? LIMIT 1",
+      )
+        .bind(projectId, plotId)
+        .first<{ id: string; status: string; updatedAt: string | null }>();
       if (!existing) return Response.json({ error: "Plot nahi mila" }, { status: 404 });
-      await env.DB.prepare("UPDATE plots SET status=?, updated_at=? WHERE project_id=? AND id=?").bind(status, now, projectId, plotId).run();
-      await writeAudit(session, "project.plot_status_updated", projectId, plotId, { status });
-      return Response.json({ ok: true, plotId, status });
+
+      if (expectedStatus && existing.status !== expectedStatus) {
+        return Response.json(
+          {
+            error: "Plot status kisi aur session se badal chuka hai",
+            plotId,
+            currentStatus: existing.status,
+            updatedAt: existing.updatedAt,
+          },
+          { status: 409, headers: { "cache-control": "no-store" } },
+        );
+      }
+
+      await env.DB.prepare(
+        "UPDATE plots SET status=?, updated_at=? WHERE project_id=? AND id=?",
+      )
+        .bind(status, now, projectId, plotId)
+        .run();
+
+      const persisted = await env.DB.prepare(
+        "SELECT status,updated_at AS updatedAt FROM plots WHERE project_id=? AND id=? LIMIT 1",
+      )
+        .bind(projectId, plotId)
+        .first<{ status: string; updatedAt: string | null }>();
+      if (!persisted || persisted.status !== status) {
+        console.error("Plot status read-back mismatch", {
+          projectId,
+          plotId,
+          requestedStatus: status,
+          persistedStatus: persisted?.status || null,
+        });
+        return Response.json(
+          { error: "Status verify nahi hua. Dobara try karein." },
+          { status: 500, headers: { "cache-control": "no-store" } },
+        );
+      }
+
+      await writeAudit(session, "project.plot_status_updated", projectId, plotId, {
+        previousStatus: existing.status,
+        status,
+        persistedStatus: persisted.status,
+      });
+      return Response.json(
+        {
+          ok: true,
+          projectId,
+          plotId,
+          previousStatus: existing.status,
+          status: persisted.status,
+          updatedAt: persisted.updatedAt,
+        },
+        {
+          headers: {
+            "cache-control": "no-store",
+            "x-rekixo-status-write": "1",
+          },
+        },
+      );
+    }
+
+    if (session.role === "super_admin") {
+      return Response.json(
+        { error: "Use project-specific Super Admin tools" },
+        { status: 403 },
+      );
     }
 
     if (session.role === "client_admin" && body.type === "plot")

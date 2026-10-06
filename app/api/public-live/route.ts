@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { PROJECT_CONTACT_KEYS, publicProjectId, withProjectContactFallbacks } from "@/modules/projects";
 import { publicSiteEnabled, publicSiteUnavailableResponse } from "@/modules/public-site-access";
 
-type StatusRow={id:string;status:string};
+type StatusRow={id:string;status:string;updatedAt:string|null};
 type PricingRow={plotId:string;pricingType:string;unit:string;rate:number|null;fixedPrice:number|null;currency:string};
 
 export async function GET(request:Request){
@@ -12,7 +12,7 @@ export async function GET(request:Request){
 
   const contactPlaceholders=PROJECT_CONTACT_KEYS.map(()=>"?").join(",");
   const [statusResult,pricingSetting,contactResult]=await Promise.all([
-    env.DB.prepare("SELECT id,status FROM plots WHERE project_id=?").bind(projectId).all<StatusRow>(),
+    env.DB.prepare("SELECT id,status,updated_at AS updatedAt FROM plots WHERE project_id=?").bind(projectId).all<StatusRow>(),
     env.DB.prepare("SELECT value FROM settings WHERE project_id=? AND key='pricingEnabled' LIMIT 1").bind(projectId).first<{value:string}>(),
     env.DB.prepare(`SELECT key,value FROM settings WHERE project_id=? AND key IN (${contactPlaceholders})`).bind(projectId,...PROJECT_CONTACT_KEYS).all<{key:string;value:string}>(),
   ]);
@@ -24,7 +24,11 @@ export async function GET(request:Request){
   return Response.json(
     {
       projectId,
-      statuses:statusResult.results,
+      statuses:statusResult.results.map(row=>({
+        id:row.id,
+        status:row.status==="booked"||row.status==="sold"?row.status:"available",
+        updatedAt:row.updatedAt,
+      })),
       pricingEnabled,
       pricing:pricingEnabled?pricingResult.results:[],
       settings,
