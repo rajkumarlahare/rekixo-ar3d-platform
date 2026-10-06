@@ -58,7 +58,9 @@ test("optimistic-concurrency guard prevents silent stale-session overwrites", ()
 test("public live state reads the same canonical plots status and is never cached", () => {
   const live = read("app/api/public-live/route.ts");
   const deploy = read("scripts/prepare-cloudflare-deploy.mjs");
-  assert.match(live, /SELECT id,status FROM plots WHERE project_id=\?/);
+  assert.match(live, /SELECT id,status,updated_at AS updatedAt FROM plots WHERE project_id=\?/);
+  assert.match(live, /status:row\.status===\"booked\"\|\|row\.status===\"sold\"\?row\.status:\"available\"/);
+  assert.match(live, /updatedAt:row\.updatedAt/);
   assert.match(live, /cache-control\":\"no-store/);
   assert.match(live, /x-rekixo-live-state/);
   assert.match(deploy, /\/api\/public-live\*/);
