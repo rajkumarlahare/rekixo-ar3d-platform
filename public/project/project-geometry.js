@@ -3,6 +3,36 @@
 
   const EPSILON = 1e-9;
 
+  /*
+   * REKIXO_PUBLIC_STATUS_OVERLAY_BOOTSTRAP_V2
+   * Keep the customer-site status presentation in a dedicated stylesheet.
+   * This file is already a stable, always-loaded dependency of the public
+   * project viewer, so it is the smallest backwards-compatible bootstrap for
+   * legacy/public entry points without duplicating status CSS in HTML.
+   */
+  function installStatusOverlayStyles() {
+    if (typeof document === 'undefined' || !document.head) return;
+    if (document.querySelector('link[data-rekixo-status-overlay="v2"]')) return;
+
+    const currentScript = document.currentScript;
+    let href = 'status-overlay.css?v=2';
+    try {
+      if (currentScript && currentScript.src) {
+        href = new URL('status-overlay.css?v=2', currentScript.src).toString();
+      }
+    } catch {
+      // Relative same-origin fallback remains valid for the public viewer.
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.dataset.rekixoStatusOverlay = 'v2';
+    document.head.appendChild(link);
+  }
+
+  installStatusOverlayStyles();
+
   function validPoint(point) {
     return Array.isArray(point) && point.length >= 2 && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1]));
   }
