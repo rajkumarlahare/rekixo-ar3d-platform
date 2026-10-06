@@ -60,7 +60,8 @@ test("client admin mutation and public live reader share the same project-scoped
     dataApi,
     /UPDATE plots SET status=\?, updated_at=\? WHERE project_id=\? AND id=\?/,
   );
-  assert.match(publicLive, /SELECT id,status FROM plots WHERE project_id=\?/);
+  assert.match(publicLive, /SELECT id,status,updated_at AS updatedAt FROM plots WHERE project_id=\?/);
+  assert.match(publicLive, /updatedAt:row\.updatedAt/);
   assert.match(publicLive, /"x-rekixo-live-state":"1"/);
   assert.match(publicLive, /"cache-control":"no-store"/);
 });
