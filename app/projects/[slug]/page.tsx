@@ -92,8 +92,12 @@ async function readProjectMeta(slug: string) {
   const logoPath = settings.logoName
     ? `/api/project-asset/logo?projectId=${encodeURIComponent(project.id)}&variant=public&v=${encodeURIComponent(settings.logoVersion || settings.logoName)}`
     : "";
+  // Social crawlers should fetch the same immutable R2-backed public asset
+  // contract used by the public asset API. Avoid routing OG images through a
+  // second nested /projects/.../share-image handler; the direct asset endpoint
+  // is already tenant-scoped and has versioned R2 + canonical fallback logic.
   const shareImagePath = settings.shareImage
-    ? `/projects/${encodeURIComponent(project.slug)}/share-image/${encodeURIComponent(settings.shareVersion || "1")}`
+    ? `/api/project-asset/shareCard?projectId=${encodeURIComponent(project.id)}&v=${encodeURIComponent(settings.shareVersion || "1")}&public=1`
     : "";
   const imagePath = shareImagePath || logoPath;
   const imageUrl =
