@@ -31,6 +31,7 @@ type ShareState = {
 };
 
 const MAX_SHARE_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_WHATSAPP_SHARE_IMAGE_BYTES = 550 * 1024;
 const SHARE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 function dispatchShareUpdate(projectId: string) {
@@ -353,29 +354,23 @@ async function prepareBrandedShareImage(file: File) {
       brandBitmap.close();
     }
 
-    const preferredType =
-      file.type === "image/png"
-        ? "image/png"
-        : file.type === "image/webp"
-          ? "image/webp"
-          : "image/jpeg";
-    let blob = await canvasBlob(
-      canvas,
-      preferredType,
-      preferredType === "image/png" ? undefined : 0.9,
-    );
-    if (!blob || blob.size > MAX_SHARE_IMAGE_BYTES) {
-      blob = await canvasBlob(canvas, "image/webp", 0.86);
+    // WhatsApp link previews document an image limit below 600 KB.
+    // Keep a little headroom so the public social card remains crawler-safe.
+    let blob: Blob | null = null;
+    for (const quality of [0.86, 0.78, 0.7, 0.62, 0.54, 0.46]) {
+      blob = await canvasBlob(canvas, "image/jpeg", quality);
+      if (blob && blob.size <= MAX_WHATSAPP_SHARE_IMAGE_BYTES) break;
     }
-    if (!blob || blob.size > MAX_SHARE_IMAGE_BYTES)
-      throw new Error("Branded share image 8 MB ke andar optimize nahi hui");
+    if (!blob || blob.size > MAX_WHATSAPP_SHARE_IMAGE_BYTES) {
+      for (const quality of [0.82, 0.72, 0.62, 0.52]) {
+        blob = await canvasBlob(canvas, "image/webp", quality);
+        if (blob && blob.size <= MAX_WHATSAPP_SHARE_IMAGE_BYTES) break;
+      }
+    }
+    if (!blob || blob.size > MAX_WHATSAPP_SHARE_IMAGE_BYTES)
+      throw new Error("WhatsApp share image 550 KB ke andar optimize nahi hui");
 
-    const extension =
-      blob.type === "image/png"
-        ? "png"
-        : blob.type === "image/jpeg"
-          ? "jpg"
-          : "webp";
+    const extension = blob.type === "image/jpeg" ? "jpg" : "webp";
     return new File([blob], `share-branded.${extension}`, {
       type: blob.type,
     });
