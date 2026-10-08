@@ -131,10 +131,49 @@ async function shareState(projectId: string) {
     ? `/api/project-asset/logo?projectId=${encodeURIComponent(project.id)}&v=${encodeURIComponent(settings.logoVersion || settings.logoName)}`
     : "";
 
+  const publishedSnapshot = await env.DB.prepare(
+    `SELECT
+       s.publish_version AS snapshotVersion,
+       p.publish_version AS currentVersion,
+       MAX(CASE WHEN ps.key='shareImage' THEN ps.value END) AS shareImage,
+       MAX(CASE WHEN ps.key='shareVersion' THEN ps.value END) AS shareVersion
+     FROM projects p
+     LEFT JOIN project_public_snapshots s ON s.project_id=p.id
+     LEFT JOIN published_settings ps ON ps.project_id=p.id
+       AND ps.key IN ('shareImage','shareVersion')
+     WHERE p.id=?
+     GROUP BY p.id,s.publish_version,p.publish_version`,
+  )
+    .bind(project.id)
+    .first<{
+      snapshotVersion: number | null;
+      currentVersion: number | null;
+      shareImage: string | null;
+      shareVersion: string | null;
+    }>();
+
+  // Treat publication as ready only when the immutable snapshot points at the
+  // current publish version and contains a complete share-image version.
+  // Save operations intentionally update draft/live settings only; Publish Update
+  // is the sole transition that makes a new social preview public.
+  const publishedShareVersion = String(publishedSnapshot?.shareVersion || "").trim();
+  const publishedShareImage = Boolean(String(publishedSnapshot?.shareImage || "").trim());
+  const publishedSnapshotReady =
+    project.publicStatus === "published" &&
+    publishedSnapshot?.snapshotVersion != null &&
+    publishedSnapshot?.currentVersion != null &&
+    Number(publishedSnapshot.snapshotVersion) === Number(publishedSnapshot.currentVersion) &&
+    publishedShareImage &&
+    publishedShareVersion === String(publishedSnapshot?.shareVersion || "").trim() &&
+    /^\\d{1,20}$/.test(publishedShareVersion);
+
   return {
     projectId: project.id,
     projectName: project.name,
     publicStatus: project.publicStatus,
+    publishedShareVersion,
+    publishedShareImage,
+    publishedSnapshotReady,
     shareTitle,
     shareDescription,
     shareVersion,
