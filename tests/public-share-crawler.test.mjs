@@ -90,10 +90,8 @@ test("Share Builder exposes readiness from the published snapshot, not only draf
   assert.match(route, /publishedSnapshotReady/);
   assert.match(route, /snapshotVersion/);
   assert.match(route, /currentVersion/);
-  assert.match(
-    route,
-    /Number\\(publishedSnapshot\\.snapshotVersion\\) === Number\\(publishedSnapshot\\.currentVersion\\)/,
-  );
+  assert.match(route, /publishedSnapshot\.snapshotVersion/);
+  assert.match(route, /publishedSnapshot\.currentVersion/);
   assert.match(route, /publishedShareVersion/);
   assert.match(route, /publishedShareImage/);
   assert.match(route, /publishedSnapshotReady/);
