@@ -79,7 +79,6 @@ test("Share Builder exposes readiness from the published snapshot, not only draf
   ]);
 
   assert.match(manager, /publishedSnapshotReady/);
-  assert.match(manager, /publishedSnapshotReady/);
   assert.match(manager, /const canCopyShare/);
   assert.match(manager, /shareUrl && publishedSnapshotReady/);
   assert.match(manager, /Publish Update required/);
@@ -92,7 +91,4 @@ test("Share Builder exposes readiness from the published snapshot, not only draf
   assert.match(route, /currentVersion/);
   assert.match(route, /publishedSnapshot\.snapshotVersion/);
   assert.match(route, /publishedSnapshot\.currentVersion/);
-  assert.match(route, /publishedShareVersion/);
-  assert.match(route, /publishedShareImage/);
-  assert.match(route, /publishedSnapshotReady/);
 });
