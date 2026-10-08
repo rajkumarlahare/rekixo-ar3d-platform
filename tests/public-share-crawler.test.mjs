@@ -80,7 +80,8 @@ test("Share Builder exposes readiness from the published snapshot, not only draf
 
   assert.match(manager, /publishedSnapshotReady/);
   assert.match(manager, /publishedSnapshotReady/);
-  assert.match(manager, /const canCopyShare[\\s\\S]*publishedSnapshotReady/);
+  assert.match(manager, /const canCopyShare/);
+  assert.match(manager, /shareUrl && publishedSnapshotReady/);
   assert.match(manager, /Publish Update required/);
   assert.match(manager, /Publish Update ke baad WhatsApp share link ready hoga/);
 
