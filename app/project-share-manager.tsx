@@ -441,6 +441,7 @@ export default function ProjectShareManager({
   }, [shareUrl]);
   const published = state.publicStatus === "published";
   const publishedSnapshotReady =
+    published &&
     state.publishedSnapshotReady === true &&
     Boolean(state.publishedShareImage) &&
     Boolean(state.publishedShareVersion);
