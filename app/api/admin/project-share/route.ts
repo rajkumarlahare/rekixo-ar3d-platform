@@ -135,14 +135,14 @@ async function shareState(projectId: string) {
     `SELECT
        s.publish_version AS snapshotVersion,
        p.publish_version AS currentVersion,
-       ps.shareImage AS shareImage,
-       ps.shareVersion AS shareVersion
+       MAX(CASE WHEN ps.key='shareImage' THEN ps.value END) AS shareImage,
+       MAX(CASE WHEN ps.key='shareVersion' THEN ps.value END) AS shareVersion
      FROM projects p
      LEFT JOIN project_public_snapshots s ON s.project_id=p.id
      LEFT JOIN published_settings ps ON ps.project_id=p.id
        AND ps.key IN ('shareImage','shareVersion')
      WHERE p.id=?
-     LIMIT 1`,
+     GROUP BY p.id,s.publish_version,p.publish_version`,
   )
     .bind(project.id)
     .first<{
