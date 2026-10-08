@@ -94,7 +94,7 @@ async function readProjectMeta(slug: string) {
     : "";
   // Social crawlers should fetch the same immutable R2-backed public asset
   // contract used by the public asset API. Avoid routing OG images through a
-  // second nested /projects/.../share-image handler; the direct asset endpoint
+  // second nested share-image handler; the direct asset endpoint
   // is already tenant-scoped and has versioned R2 + canonical fallback logic.
   const shareImagePath = settings.shareImage
     ? `/api/project-asset/shareCard?projectId=${encodeURIComponent(project.id)}&v=${encodeURIComponent(settings.shareVersion || "1")}&public=1`
