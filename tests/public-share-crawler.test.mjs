@@ -2,20 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("Open Graph share image uses a crawler-safe public slug/version path", async () => {
+test("Open Graph share image uses the versioned public asset API", async () => {
   const page = await readFile(
     new URL("../app/projects/[slug]/page.tsx", import.meta.url),
     "utf8",
   );
 
   assert.ok(page.includes("'shareVersion'"));
-  assert.ok(page.includes("/share-image/"));
-  assert.ok(page.includes("project.slug"));
+  assert.ok(page.includes("/api/project-asset/shareCard?"));
+  assert.ok(page.includes("project.id"));
   assert.ok(page.includes("settings.shareVersion"));
-  assert.ok(!page.includes("settings.shareImage || logoPath"));
+  assert.ok(page.includes("&public=1"));
+  assert.ok(page.includes("versioned R2"));
+  assert.ok(!page.includes("/share-image/"));
 });
 
-test("public share-image route is session-free, GET+HEAD capable and immutable", async () => {
+test("legacy public share-image route remains session-free, GET+HEAD capable and immutable", async () => {
   const route = await readFile(
     new URL(
       "../app/projects/[slug]/share-image/[version]/route.ts",
@@ -49,6 +51,9 @@ test("share uploads persist immutable versioned R2 snapshots plus canonical fall
   assert.ok(route.includes("share/source"));
   assert.ok(route.includes("share/sources/${version}"));
   assert.ok(route.includes('source: "original-upload"'));
+  assert.ok(route.includes("MAX_PUBLIC_SHARE_IMAGE_BYTES"));
+  assert.ok(route.includes("550 * 1024"));
+  assert.ok(route.includes("MAX_SOURCE_IMAGE_BYTES"));
 });
 
 test("shared platform explicit project selectors win before exact-domain fallback", async () => {

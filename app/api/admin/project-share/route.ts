@@ -8,6 +8,9 @@ import { freezeCurrentPublishedShareCard } from "@/modules/public-publish-snapsh
 
 const denied = () =>
   Response.json({ error: "Super Admin access required" }, { status: 403 });
+const MAX_SOURCE_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_PUBLIC_SHARE_IMAGE_BYTES = 550 * 1024;
+
 const SHARE_KEYS = [
   "projectName",
   "brandName",
@@ -238,10 +241,13 @@ export async function POST(request: Request) {
     if (
       !detectedMime ||
       file.size < 1 ||
-      file.size > 8 * 1024 * 1024
+      file.size > MAX_PUBLIC_SHARE_IMAGE_BYTES
     )
       return Response.json(
-        { error: "Branded share image JPG, PNG ya WebP me aur 8 MB se chhoti honi chahiye" },
+        {
+          error:
+            "Branded WhatsApp share image JPG, PNG ya WebP me aur 550 KB se chhoti honi chahiye",
+        },
         { status: 400 },
       );
     if (!(sourceFile instanceof File))
@@ -253,7 +259,7 @@ export async function POST(request: Request) {
     if (
       !sourceDetectedMime ||
       sourceFile.size < 1 ||
-      sourceFile.size > 8 * 1024 * 1024
+      sourceFile.size > MAX_SOURCE_IMAGE_BYTES
     )
       return Response.json(
         { error: "Original share image JPG, PNG ya WebP me aur 8 MB se chhoti honi chahiye" },
