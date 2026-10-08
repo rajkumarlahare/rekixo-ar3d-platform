@@ -71,6 +71,7 @@ jobs:
           stop_server
 
           sed -i 's/^PANEL_MODE=super$/PANEL_MODE=client/' .dev.vars
+          printf '\nCLIENT_PLATFORM_HOST=localhost\nCLIENT_SHARED_ADMIN_HOST=localhost\n' >> .dev.vars
           setsid npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 4174 > artifacts/full-admin-e2e/client-server.log 2>&1 &
           SERVER_PID=$!
           node scripts/wait-http.mjs http://localhost:4174/projects/phase-11-e2e

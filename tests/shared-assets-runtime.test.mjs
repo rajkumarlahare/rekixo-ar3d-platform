@@ -4,6 +4,7 @@ import {
   SHARED_ASSET_PREFIX,
   isPrefixedFrameworkAssetPath,
   isSharedAssetPath,
+  rewriteAssetBodyStream,
   rewriteAssetReferences,
   shouldRewriteAssetBody,
   stripSharedAssetPath,
@@ -39,4 +40,24 @@ test("only textual response types are compatibility-rewritten", () => {
   }
   assert.equal(shouldRewriteAssetBody("image/webp"), false);
   assert.equal(shouldRewriteAssetBody("font/woff2"), false);
+});
+
+test("shared textual responses are rewritten as a stream without buffering React Flight", async () => {
+  const encoder = new TextEncoder();
+  const chunks = [
+    '<script src="/_ne',
+    'xt/static/chunk.js"></script><a href="/assets/font.woff2">x</a>',
+  ];
+  const body = new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+  const rewritten = await new Response(
+    rewriteAssetBodyStream(body),
+  ).text();
+
+  assert.match(rewritten, /\/__rekixo\/_next\/static\/chunk\.js/);
+  assert.match(rewritten, /\/__rekixo\/assets\/font\.woff2/);
 });

@@ -6,6 +6,7 @@ import {
   isPrefixedFrameworkAssetPath,
   isSharedAssetPath,
   sharedPublicRuntimeAssetPath,
+  rewriteAssetBodyStream,
   rewriteAssetReferences,
   shouldRewriteAssetBody,
   stripSharedAssetPath,
@@ -69,12 +70,11 @@ async function rewriteSharedAssets(response: Response) {
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   }
 
-  const body = rewriteAssetReferences(await response.text());
   headers.delete("content-length");
   headers.delete("content-encoding");
   headers.delete("etag");
 
-  return new Response(body, {
+  return new Response(rewriteAssetBodyStream(response.body), {
     status: response.status,
     statusText: response.statusText,
     headers,
