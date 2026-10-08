@@ -65,3 +65,32 @@ test("shared platform explicit project selectors win before exact-domain fallbac
   assert.ok(context.includes("requestedId"));
   assert.ok(context.includes("requestedSlug"));
 });
+
+test("Share Builder exposes readiness from the published snapshot, not only draft/live settings", async () => {
+  const [manager, route] = await Promise.all([
+    readFile(
+      new URL("../app/project-share-manager.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/api/admin/project-share/route.ts", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(manager, /publishedSnapshotReady/);
+  assert.match(manager, /canCopyShare[\\s\\S]*publishedSnapshotReady/);
+  assert.match(manager, /Publish Update required/);
+  assert.match(manager, /Publish Update ke baad WhatsApp share link ready hoga/);
+
+  assert.match(route, /publishedShareVersion/);
+  assert.match(route, /publishedShareImage/);
+  assert.match(route, /publishedSnapshotReady/);
+  assert.match(route, /snapshotVersion/);
+  assert.match(route, /currentVersion/);
+  assert.match(
+    route,
+    /Number\\(publishedSnapshot\\.snapshotVersion\\) === Number\\(publishedSnapshot\\.currentVersion\\)/,
+  );
+  assert.match(route, /\\\\d\\{1,20\\}/);
+});
