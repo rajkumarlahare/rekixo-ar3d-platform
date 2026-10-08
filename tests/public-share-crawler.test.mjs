@@ -51,6 +51,9 @@ test("share uploads persist immutable versioned R2 snapshots plus canonical fall
   assert.ok(route.includes("share/source"));
   assert.ok(route.includes("share/sources/${version}"));
   assert.ok(route.includes('source: "original-upload"'));
+  assert.ok(route.includes("MAX_PUBLIC_SHARE_IMAGE_BYTES"));
+  assert.ok(route.includes("550 * 1024"));
+  assert.ok(route.includes("MAX_SOURCE_IMAGE_BYTES"));
 });
 
 test("shared platform explicit project selectors win before exact-domain fallback", async () => {
