@@ -660,7 +660,7 @@ export default function ProjectShareManager({
                       : "Choose final share image"}
               </b>
               <small>
-                JPG / PNG / WebP · max 8 MB · no crop · AR3D footer auto
+                Source max 8 MB · final WhatsApp card ≤550 KB · no crop · AR3D footer auto
               </small>
               <input
                 key={
