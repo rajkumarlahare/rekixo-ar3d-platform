@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("Open Graph share image uses a crawler-safe public slug/version path", async () => {
+test("Open Graph share image uses the versioned public asset API", async () => {
   const page = await readFile(
     new URL("../app/projects/[slug]/page.tsx", import.meta.url),
     "utf8",
