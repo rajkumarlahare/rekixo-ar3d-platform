@@ -57,3 +57,11 @@ test("shared domain still routes only the isolated Rekixo namespace, not host-wi
   assert.doesNotMatch(deploy, /`\$\{platformHost\}\/assets\/\*`/);
   assert.doesNotMatch(deploy, /`\$\{platformHost\}\/\*`/);
 });
+
+test("shared-domain rewrite does not buffer dynamic HTML/RSC responses", async () => {
+  assert.match(worker, /rewriteAssetBodyStream\(response\.body\)/);
+  assert.doesNotMatch(
+    worker,
+    /const body = rewriteAssetReferences\(await response\.text\(\)\)/,
+  );
+});
