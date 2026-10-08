@@ -164,6 +164,7 @@ async function shareState(projectId: string) {
     publishedSnapshot?.currentVersion != null &&
     Number(publishedSnapshot.snapshotVersion) === Number(publishedSnapshot.currentVersion) &&
     publishedShareImage &&
+    publishedShareVersion === String(publishedSnapshot?.shareVersion || "").trim() &&
     /^\\d{1,20}$/.test(publishedShareVersion);
 
   return {
