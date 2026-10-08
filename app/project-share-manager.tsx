@@ -25,6 +25,9 @@ type ShareState = {
   cardUrl?: string;
   shareUrl?: string;
   publicUrl?: string;
+  publishedShareVersion?: string;
+  publishedShareImage?: boolean;
+  publishedSnapshotReady?: boolean;
 };
 
 const MAX_SHARE_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -437,7 +440,13 @@ export default function ProjectShareManager({
     }
   }, [shareUrl]);
   const published = state.publicStatus === "published";
-  const canCopyShare = Boolean(published && state.cardUrl && shareUrl);
+  const publishedSnapshotReady =
+    state.publishedSnapshotReady === true &&
+    Boolean(state.publishedShareImage) &&
+    Boolean(state.publishedShareVersion);
+  const canCopyShare = Boolean(
+    published && state.cardUrl && shareUrl && publishedSnapshotReady,
+  );
   const validDetails =
     title.trim().length >= 3 && description.trim().length >= 10;
 
@@ -548,7 +557,9 @@ export default function ProjectShareManager({
     if (!canCopyShare) {
       notify(
         published
-          ? "Pehle share image save karein"
+          ? publishedSnapshotReady
+            ? "Pehle share image save karein"
+            : "Publish Update ke baad WhatsApp share link ready hoga"
           : "Project publish hone ke baad share link copy hoga",
       );
       return;
@@ -586,7 +597,11 @@ export default function ProjectShareManager({
         </span>
         <span className={published ? "ready" : "warn"}>
           {published ? <CheckCircle2 /> : <Share2 />}
-          {published ? "Link share-ready" : "Project draft"}
+          {published
+            ? publishedSnapshotReady
+              ? "Link share-ready"
+              : "Publish Update required"
+            : "Project draft"}
         </span>
       </div>
 
