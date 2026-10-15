@@ -95,6 +95,26 @@ test("public facing honors operator compass override but preserves geometric fal
   assert.match(facing, /geometric\.get\(role\)/);
 });
 
+test("compass facing follows the rotated masterplan display orientation", () => {
+  const facing = read("app/plot-facing.ts");
+  const mapper = read("app/plot-mapper.tsx");
+  const publicData = read("app/api/public-data/route.ts");
+
+  // The polygons remain in original source coordinates; direction vectors must
+  // be transformed by the same quarter-turn as the displayed masterplan.
+  assert.match(facing, /function normalizeFacingRotation/);
+  assert.match(facing, /function rotateFacingVectorForDisplay/);
+  assert.match(facing, /if \(rotation === 1\) return \[-y, x\]/);
+  assert.match(facing, /if \(rotation === 2\) return \[-x, -y\]/);
+  assert.match(facing, /if \(rotation === 3\) return \[y, -x\]/);
+  assert.match(facing, /rotateFacingVectorForDisplay\(vector, rotation\)/);
+  assert.match(facing, /plotSideDirectionResults\(points, edgeSemantics, northDirection, rotation\)/);
+
+  // The editing compass and customer-facing labels must use the same rotation.
+  assert.match(mapper, /settings\.plotNorthDirection \|\| "top",\s*rotation/);
+  assert.match(publicData, /publicSettings\.publicRotation \|\| "0"/);
+});
+
 test("side remapping and legacy CSV correction preserve compass choices", () => {
   const route = read("app/api/super-mapper/route.ts");
   const matches = route.match(/oldSemantics\?\.facingDirectionOverrides \|\| \{\}/g) || [];

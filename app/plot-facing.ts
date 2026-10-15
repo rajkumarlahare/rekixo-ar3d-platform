@@ -1,5 +1,5 @@
 import type { MapperPoint } from "./mapper-geometry";
-import type { EdgeDirection } from "./plot-edge-semantics";
+import { type EdgeDirection, type QuarterTurn } from "./plot-edge-semantics";
 import {
   parsePlotSideSemantics,
   type PlotFacingCardinalDirection,
@@ -48,6 +48,24 @@ const NORTH_ANGLES: Record<EdgeDirection, number> = {
 export function normalizePlotNorthDirection(value: unknown): EdgeDirection {
   const raw = String(value || "").trim().toLowerCase();
   return raw === "right" || raw === "bottom" || raw === "left" ? raw : "top";
+}
+
+function normalizeFacingRotation(value: unknown): QuarterTurn {
+  const parsed = Number(value);
+  return parsed === 1 || parsed === 2 || parsed === 3 ? parsed : 0;
+}
+
+// Plot polygons stay in canonical source-image coordinates, but the image and
+// polygon are displayed with publicRotation applied. Rotate direction vectors
+// through the same quarter-turn before comparing them with the selected North.
+function rotateFacingVectorForDisplay(
+  [x, y]: MapperPoint,
+  rotation: QuarterTurn,
+): MapperPoint {
+  if (rotation === 1) return [-y, x];
+  if (rotation === 2) return [-x, -y];
+  if (rotation === 3) return [y, -x];
+  return [x, y];
 }
 
 export function roadFacingRolesForPlot(
@@ -116,8 +134,10 @@ function logicalSideOutwardVector(
 function directionForVector(
   vector: MapperPoint,
   northDirection: EdgeDirection,
+  rotation: QuarterTurn = 0,
 ) {
-  const screenAngle = Math.atan2(vector[1], vector[0]);
+  const displayVector = rotateFacingVectorForDisplay(vector, rotation);
+  const screenAngle = Math.atan2(displayVector[1], displayVector[0]);
   const northAngle = NORTH_ANGLES[northDirection];
   const clockwiseFromNorth =
     ((screenAngle - northAngle) % (Math.PI * 2) + Math.PI * 2) %
@@ -130,18 +150,20 @@ export function plotSideDirectionResults(
   points: MapperPoint[],
   edgeSemantics: unknown,
   northDirection: unknown,
+  rotation: unknown = 0,
 ): PlotFacingResult[] {
   if (points.length < 3) return [];
   const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
   if (!semantics) return [];
   const north = normalizePlotNorthDirection(northDirection);
+  const displayRotation = normalizeFacingRotation(rotation);
   const output: PlotFacingResult[] = [];
   const roles: PlotSideRole[] = ["front", "depthA", "back", "depthB"];
 
   for (const role of roles) {
     const vector = logicalSideOutwardVector(points, semantics.roles[role] || []);
     if (!vector) continue;
-    const resolved = directionForVector(vector, north);
+    const resolved = directionForVector(vector, north, displayRotation);
     output.push({ ...resolved, role });
   }
   return output;
@@ -158,13 +180,14 @@ export function plotFacingResults(
   points: MapperPoint[],
   edgeSemantics: unknown,
   northDirection: unknown,
+  rotation: unknown = 0,
 ): PlotFacingResult[] {
   if (points.length < 3) return [];
   const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
   if (!semantics) return [];
   const roles = roadFacingRolesForPlot(edgeSemantics, points.length);
   const geometric = new Map(
-    plotSideDirectionResults(points, edgeSemantics, northDirection).map((item) => [
+    plotSideDirectionResults(points, edgeSemantics, northDirection, rotation).map((item) => [
       item.role,
       item,
     ]),
@@ -207,8 +230,9 @@ export function plotFacingText(
   points: MapperPoint[],
   edgeSemantics: unknown,
   northDirection: unknown,
+  rotation: unknown = 0,
 ) {
-  return plotFacingResults(points, edgeSemantics, northDirection)
+  return plotFacingResults(points, edgeSemantics, northDirection, rotation)
     .map((item) => `${item.arrow} ${item.label}`)
     .join(" · ");
 }

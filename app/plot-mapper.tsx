@@ -2011,6 +2011,7 @@ export default function PlotMapper({
       points,
       semantics,
       settings.plotNorthDirection || "top",
+      rotation,
     );
   }
 
@@ -2098,6 +2099,7 @@ export default function PlotMapper({
       points,
       semantics,
       settings.plotNorthDirection || "top",
+      rotation,
     );
     const frontFacing = facingResults.find((item) => item.role === "front");
     if (frontFacing?.direction === direction) {
@@ -2132,6 +2134,7 @@ export default function PlotMapper({
       points,
       semantics,
       settings.plotNorthDirection || "top",
+      rotation,
     ).filter((item) => item.role !== "front");
     const inactiveCandidates = sideDirections.filter(
       (item) => !roadFacingRoles.includes(item.role),
