@@ -244,7 +244,9 @@ try {
     assert.equal(await page.locator("#countSold").textContent(), "1", target.name + " sold refresh");
     assert.equal(await page.locator("#countBooked").textContent(), "0", target.name + " booked refresh");
 
-    await page.locator('.plot[data-plot-id="P-1"]').click();
+    // The floating #view3d badge can cover the polygon center at some
+    // viewport sizes. Click inside the exposed top-left area of the plot.
+    await page.locator('.plot[data-plot-id="P-1"]').click({ position: { x: 12, y: 12 } });
     await page.locator("#drawer.open").waitFor({ state: "visible" });
     const drawerBox = await page.locator("#drawer").boundingBox();
     assert.ok(drawerBox, target.name + " plot drawer should have a box");
