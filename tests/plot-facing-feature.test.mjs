@@ -85,7 +85,7 @@ test("Update plot persists compass road roles and direction overrides instead of
     /serializePlotSideSemantics\(\s*points\.length,\s*roleEdges,\s*resolvedSideLayout,\s*facingMetadata\.roadFacingRoles,\s*facingMetadata\.facingDirectionOverrides,\s*\)/,
   );
   assert.match(mapper, /function normalizedFacingMetadata/);
-  assert.match(mapper, /cleanRoadFacing\.unshift\("front"\)/);
+  assert.doesNotMatch(mapper, /cleanRoadFacing\.unshift\("front"\)/);
 });
 
 test("public facing honors operator compass override but preserves geometric fallback", () => {
