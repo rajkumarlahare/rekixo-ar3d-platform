@@ -34,15 +34,17 @@ test("semantic facing model preserves logical road roles plus optional compass o
   assert.match(semantics, /current\?\.facingDirectionOverrides \|\| \{\}/);
 });
 
-test("Front remains automatic while compass toggles only additional facing", () => {
+test("compass allows Front facing to be toggled off without clearing the logical Front edge", () => {
   const mapper = read("app/plot-mapper.tsx");
-  assert.match(mapper, /Facing-enabled projects always keep Front as the canonical primary/);
-  assert.match(mapper, /new Set<PlotSideRole>\(\["front", \.\.\.explicit\]\)/);
+  assert.match(mapper, /function currentRoadFacingRoles/);
+  assert.match(mapper, /operators must be able to untick its direction/);
+  assert.doesNotMatch(mapper, /new Set<PlotSideRole>\(\["front", \.\.\.explicit\]\)/);
   assert.match(mapper, /function toggleCompassFacing/);
-  assert.match(mapper, /Front se automatic facing hai/);
+  assert.match(mapper, /nextRoadFacing = roadFacingRoles\.filter\(\(role\) => role !== "front"\)/);
+  assert.match(mapper, /Front compass facing removed/);
   assert.match(mapper, /second facing added/);
   assert.match(mapper, /extra facing removed/);
-  assert.doesNotMatch(mapper, /function toggleRoadFacingRole/);
+  assert.doesNotMatch(mapper, /cleanRoadFacing\.unshift\("front"\)/);
   assert.doesNotMatch(mapper, /plot-facing-role-toggle/);
 });
 
