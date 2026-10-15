@@ -451,6 +451,7 @@ export async function GET(request: Request) {
                   points,
                   publicPlot.edgeSemantics,
                   plotNorthDirection,
+                  publicSettings.publicRotation || "0",
                 );
                 // Legacy projects may have only front_edge_index and no v1
                 // edge_semantics. Opt-in must still work without a migration.
@@ -470,6 +471,7 @@ export async function GET(request: Request) {
                       roles: { front: [Number(publicPlot.frontEdgeIndex)] },
                     }),
                     plotNorthDirection,
+                    publicSettings.publicRotation || "0",
                   );
                 }
               }
