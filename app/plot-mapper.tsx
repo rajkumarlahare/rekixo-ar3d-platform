@@ -1973,10 +1973,14 @@ export default function PlotMapper({
       edgeSemanticsDraft,
       points.length >= 3 ? points.length : undefined,
     );
-    // The compass selection is explicit state. Do not re-insert Front here:
-    // operators must be able to untick its direction without clearing the
-    // independent logical Front edge/measurement assignment.
-    return [...(parsed?.roadFacingRoles || [])];
+    // Front is the primary facing for every mapped plot once the feature is
+    // enabled. Additional compass directions are additive; never let choosing
+    // or toggling a secondary direction make the primary Front disappear.
+    const explicit = parsed?.roadFacingRoles || [];
+    return [...new Set<PlotSideRole>([
+      ...(parsed?.roles.front?.length ? ["front" as PlotSideRole] : []),
+      ...explicit,
+    ])];
   }
 
   function currentFacingDirectionOverrides() {
@@ -2097,13 +2101,9 @@ export default function PlotMapper({
     );
     const frontFacing = facingResults.find((item) => item.role === "front");
     if (frontFacing?.direction === direction) {
-      const nextRoadFacing = roadFacingRoles.filter((role) => role !== "front");
-      const nextOverrides = { ...overrides };
-      delete nextOverrides.front;
-      commitSemanticRoles(roles, sideLayout, nextRoadFacing, nextOverrides);
-      notify(
-        `Plot ${plotId}: ${frontFacing.arrow} ${frontFacing.label} Front compass facing removed · Update ${plotId} to save`,
-      );
+      // Front is the primary side and remains active. A click on its direction
+      // must not remove it; users can toggle only additional directions.
+      notify(`Plot ${plotId}: ${frontFacing.arrow} ${frontFacing.label} is the primary Front facing`);
       return;
     }
 
