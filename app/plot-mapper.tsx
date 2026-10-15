@@ -1973,14 +1973,10 @@ export default function PlotMapper({
       edgeSemanticsDraft,
       points.length >= 3 ? points.length : undefined,
     );
-    const explicit = parsed?.roadFacingRoles || [];
-    const frontAssigned = currentSemanticRoles().front.length > 0;
-    // Facing-enabled projects always keep Front as the canonical primary
-    // facing. Older explicit selections are preserved only as additional sides.
-    if (settings.plotFacingEnabled === "1" && frontAssigned) {
-      return [...new Set<PlotSideRole>(["front", ...explicit])];
-    }
-    return [...explicit];
+    // The compass selection is explicit state. Do not re-insert Front here:
+    // operators must be able to untick its direction without clearing the
+    // independent logical Front edge/measurement assignment.
+    return [...(parsed?.roadFacingRoles || [])];
   }
 
   function currentFacingDirectionOverrides() {
@@ -2025,13 +2021,8 @@ export default function PlotMapper({
         (layout === "four" || role !== "depthB") &&
         roles[role].length > 0,
     );
-    if (
-      settings.plotFacingEnabled === "1" &&
-      roles.front.length > 0 &&
-      !cleanRoadFacing.includes("front")
-    ) {
-      cleanRoadFacing.unshift("front");
-    }
+    // Front is a logical side, but compass-facing is an independent toggle.
+    // Do not force Front back into roadFacingRoles after the operator unticks it.
     const cleanOverrides = { ...facingDirectionOverrides };
     delete cleanOverrides.front;
     (["front", "back", "depthA", "depthB"] as PlotSideRole[]).forEach((role) => {
@@ -2106,7 +2097,13 @@ export default function PlotMapper({
     );
     const frontFacing = facingResults.find((item) => item.role === "front");
     if (frontFacing?.direction === direction) {
-      notify(`${frontFacing.arrow} ${frontFacing.label} Front se automatic facing hai`);
+      const nextRoadFacing = roadFacingRoles.filter((role) => role !== "front");
+      const nextOverrides = { ...overrides };
+      delete nextOverrides.front;
+      commitSemanticRoles(roles, sideLayout, nextRoadFacing, nextOverrides);
+      notify(
+        `Plot ${plotId}: ${frontFacing.arrow} ${frontFacing.label} Front compass facing removed · Update ${plotId} to save`,
+      );
       return;
     }
 
@@ -2159,7 +2156,7 @@ export default function PlotMapper({
     }
 
     const nextRoadFacing = [
-      ...new Set<PlotSideRole>(["front", ...roadFacingRoles, candidate.role]),
+      ...new Set<PlotSideRole>([...roadFacingRoles, candidate.role]),
     ];
     const nextOverrides = {
       ...overrides,
