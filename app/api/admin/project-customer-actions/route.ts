@@ -23,9 +23,10 @@ async function loadProjectCustomerActions(projectId: string) {
     PROJECT_CUSTOMER_ACTION_SETTING_KEYS.customerCallEnabled,
     PROJECT_CUSTOMER_ACTION_SETTING_KEYS.plotFacingEnabled,
     PROJECT_CUSTOMER_ACTION_SETTING_KEYS.plotNorthDirection,
+    PROJECT_CUSTOMER_ACTION_SETTING_KEYS.masterplanNorthAngle,
   ];
   const rows = await env.DB.prepare(
-    "SELECT key,value FROM settings WHERE project_id=? AND key IN (?,?,?)",
+    "SELECT key,value FROM settings WHERE project_id=? AND key IN (?,?,?,?)",
   )
     .bind(projectId, ...keys)
     .all<{ key: string; value: string }>();

@@ -2,18 +2,28 @@ export const PROJECT_CUSTOMER_ACTION_SETTING_KEYS = {
   customerCallEnabled: "customerCallEnabled",
   plotFacingEnabled: "plotFacingEnabled",
   plotNorthDirection: "plotNorthDirection",
+  masterplanNorthAngle: "masterplanNorthAngle",
 } as const;
 
 export type ProjectCustomerActions = {
   customerCallEnabled: boolean;
   plotFacingEnabled: boolean;
   plotNorthDirection: "top" | "right" | "bottom" | "left";
+  masterplanNorthAngle: number | null;
 };
 
 export function projectCustomerActionsFromSettings(
   values: Record<string, string | undefined>,
 ): ProjectCustomerActions {
   const north = String(values.plotNorthDirection || "top").trim().toLowerCase();
+  const rawAngle = values.masterplanNorthAngle;
+  const parsedAngle = rawAngle == null || String(rawAngle).trim() === ""
+    ? null
+    : Number(rawAngle);
+  const masterplanNorthAngle =
+    parsedAngle != null && Number.isFinite(parsedAngle) && parsedAngle >= 0 && parsedAngle < 360
+      ? parsedAngle
+      : null;
   return {
     // Backward-compatible default: every existing/future project keeps calling
     // unless Super Admin explicitly disables it for that project.
@@ -25,6 +35,7 @@ export function projectCustomerActionsFromSettings(
       north === "right" || north === "bottom" || north === "left"
         ? north
         : "top",
+    masterplanNorthAngle,
   };
 }
 

@@ -27,6 +27,7 @@ export const PUBLISHED_SETTING_KEYS = [
   "mapWidth",
   "mapHeight",
   "publicRotation",
+  "masterplanNorthAngle",
   "logoName",
   "logoVersion",
   "shareTitle",

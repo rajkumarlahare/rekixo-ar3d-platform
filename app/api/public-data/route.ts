@@ -9,7 +9,7 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getAdminSession } from "@/modules/auth";
-import { plotFacingText } from "@/modules/plots";
+import { plotFacingText, plotFacingTextForNorthAngle } from "@/modules/plots";
 import {
   PROJECT_CONTACT_KEYS,
   publicProjectId,
@@ -53,6 +53,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   "mapWidth",
   "mapHeight",
   "publicRotation",
+  "masterplanNorthAngle",
   "logoName",
   "logoVersion",
   "shareTitle",
@@ -447,12 +448,15 @@ export async function GET(request: Request) {
                 const points = polygon.map(
                   (point) => [Number(point[0]), Number(point[1])] as [number, number],
                 );
-                facing = plotFacingText(
-                  points,
-                  publicPlot.edgeSemantics,
-                  plotNorthDirection,
-                  publicSettings.publicRotation || "0",
-                );
+                const calibratedNorthAngle = publicSettings.masterplanNorthAngle;
+                facing = calibratedNorthAngle != null && String(calibratedNorthAngle).trim() !== ""
+                  ? plotFacingTextForNorthAngle(points, publicPlot.edgeSemantics, calibratedNorthAngle)
+                  : plotFacingText(
+                      points,
+                      publicPlot.edgeSemantics,
+                      plotNorthDirection,
+                      publicSettings.publicRotation || "0",
+                    );
                 // Legacy projects may have only front_edge_index and no v1
                 // edge_semantics. Opt-in must still work without a migration.
                 if (
@@ -463,16 +467,20 @@ export async function GET(request: Request) {
                   Number(publicPlot.frontEdgeIndex) >= 0 &&
                   Number(publicPlot.frontEdgeIndex) < points.length
                 ) {
-                  facing = plotFacingText(
-                    points,
-                    JSON.stringify({
-                      version: 1,
-                      pointCount: points.length,
-                      roles: { front: [Number(publicPlot.frontEdgeIndex)] },
-                    }),
-                    plotNorthDirection,
-                    publicSettings.publicRotation || "0",
-                  );
+                  const legacyFrontSemantics = JSON.stringify({
+                    version: 1,
+                    pointCount: points.length,
+                    roles: { front: [Number(publicPlot.frontEdgeIndex)] },
+                  });
+                  const calibratedNorthAngle = publicSettings.masterplanNorthAngle;
+                  facing = calibratedNorthAngle != null && String(calibratedNorthAngle).trim() !== ""
+                    ? plotFacingTextForNorthAngle(points, legacyFrontSemantics, calibratedNorthAngle)
+                    : plotFacingText(
+                        points,
+                        legacyFrontSemantics,
+                        plotNorthDirection,
+                        publicSettings.publicRotation || "0",
+                      );
                 }
               }
             } catch {
