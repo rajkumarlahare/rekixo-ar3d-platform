@@ -47,6 +47,7 @@ const SETTINGS_WHITELIST = new Set([
   "cadMatchedCount",
   "cadReviewCount",
   "publicRotation",
+  "masterplanNorthAngle",
   "address",
   "sqmToSqftFactor",
 ]);
@@ -465,6 +466,14 @@ function validatedSetting(key: string, raw: unknown) {
     if (!Number.isInteger(number) || number < 0 || number > 3)
       throw new Error("publicRotation invalid hai");
     return String(number);
+  }
+  if (key === "masterplanNorthAngle") {
+    // An empty string opts out and restores the legacy North setting.
+    if (typeof raw === "string" && raw.trim() === "") return "";
+    const number = Number(raw);
+    if (!Number.isFinite(number) || number < 0 || number >= 360)
+      throw new Error("masterplanNorthAngle 0 se 360 ke beech hona chahiye");
+    return String(Number(number.toFixed(3)));
   }
   if (key === "sqmToSqftFactor") {
     const number = Number(raw);

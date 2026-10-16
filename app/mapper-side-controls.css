@@ -163,6 +163,162 @@
 }
 
 
+/* REKIXO_NORTH_CALIBRATION_V1
+   Exact North calibration is anchored to the original masterplan coordinate
+   space; this panel lives opposite the plot-facing compass and never edits plots. */
+.mapper-v4-canvas .mapper-north-calibration-layer{
+  position:sticky;
+  top:112px;
+  z-index:8;
+  height:0;
+  display:flex;
+  justify-content:flex-start;
+  align-items:flex-start;
+  padding:8px 0 0 10px;
+  pointer-events:none;
+}
+.mapper-v4-canvas .mapper-north-calibration{
+  width:min(258px,calc(100vw - 145px));
+  padding:10px;
+  border:1px solid #3a516f;
+  border-radius:16px;
+  color:#dce7f6;
+  background:linear-gradient(145deg,#071525f4,#0b1c30ef);
+  box-shadow:0 14px 34px #0009,0 0 0 1px #ffffff08 inset;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  pointer-events:auto;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading svg{
+  flex:0 0 40px;
+  width:40px;
+  height:40px;
+  fill:none;
+  stroke:#6f87a4;
+  stroke-width:1.4;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading .mapper-north-needle{
+  fill:#5cb2ff;
+  stroke:#b5e0ff;
+  stroke-width:1;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading .mapper-north-needle-back{
+  fill:#e0e8f2;
+  stroke:#b5e0ff;
+  stroke-width:1;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading .mapper-north-pivot{
+  fill:#071525;
+  stroke:#b5e0ff;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading div{
+  display:grid;
+  gap:3px;
+  flex:1;
+  min-width:0;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading b{
+  font-size:11px;
+  line-height:1.1;
+  color:#eef5ff;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading small,
+.mapper-v4-canvas .mapper-north-calibration-note{
+  font-size:8px;
+  line-height:1.35;
+  color:#8fa5c2;
+}
+.mapper-v4-canvas .mapper-north-calibration-heading strong{
+  font-size:12px;
+  color:#83c8ff;
+  font-variant-numeric:tabular-nums;
+}
+.mapper-v4-canvas .mapper-north-calibration-controls{
+  display:grid;
+  grid-template-columns:40px minmax(45px,1fr) 40px;
+  align-items:center;
+  gap:5px;
+  margin-top:8px;
+}
+.mapper-v4-canvas .mapper-north-calibration-controls button,
+.mapper-v4-canvas .mapper-north-calibration-actions button{
+  min-height:28px;
+  min-width:0;
+  padding:4px 5px;
+  border:1px solid #304866;
+  border-radius:8px;
+  background:#10243a;
+  color:#c7d9ed;
+  font-size:9px;
+  line-height:1.1;
+  font-weight:800;
+  touch-action:manipulation;
+}
+.mapper-v4-canvas .mapper-north-calibration-controls input[type="range"]{
+  width:100%;
+  min-width:0;
+  accent-color:#5cb2ff;
+  cursor:pointer;
+}
+.mapper-v4-canvas .mapper-north-calibration-actions{
+  display:flex;
+  gap:6px;
+  margin-top:7px;
+}
+.mapper-v4-canvas .mapper-north-calibration-actions .mapper-north-save{
+  flex:1;
+  background:#164c76;
+  border-color:#3c8ac4;
+  color:#eef8ff;
+}
+.mapper-v4-canvas .mapper-north-calibration-actions .mapper-north-reset{
+  background:#17273b;
+  color:#9eb4ce;
+}
+.mapper-v4-canvas .mapper-north-calibration-actions button:disabled,
+.mapper-v4-canvas .mapper-north-calibration-controls button:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+.mapper-v4-canvas .mapper-north-calibration-note{
+  display:block;
+  margin-top:7px;
+}
+@media(max-width:620px){
+  .mapper-v4-canvas .mapper-north-calibration-layer{
+    top:116px;
+    padding:7px 0 0 7px;
+  }
+  .mapper-v4-canvas .mapper-north-calibration{
+    width:min(208px,calc(100vw - 122px));
+    padding:7px;
+    border-radius:12px;
+  }
+  .mapper-v4-canvas .mapper-north-calibration-heading svg{
+    flex-basis:32px;
+    width:32px;
+    height:32px;
+  }
+  .mapper-v4-canvas .mapper-north-calibration-heading b{font-size:9px}
+  .mapper-v4-canvas .mapper-north-calibration-heading small{font-size:7px}
+  .mapper-v4-canvas .mapper-north-calibration-heading strong{font-size:10px}
+  .mapper-v4-canvas .mapper-north-calibration-controls{
+    grid-template-columns:34px minmax(40px,1fr) 34px;
+    gap:3px;
+  }
+  .mapper-v4-canvas .mapper-north-calibration-controls button,
+  .mapper-v4-canvas .mapper-north-calibration-actions button{
+    font-size:8px;
+    min-height:25px;
+  }
+  .mapper-v4-canvas .mapper-north-calibration-note{font-size:7px}
+}
+
 /* REKIXO_PLOT_FACING_COMPASS_V1
    Project-facing is intentionally separate from the semantic side dock.
    Front remains automatic; this compact overlay is only for an additional

@@ -64,8 +64,14 @@ import {
 } from "./plot-side-semantics";
 import {
   cardinalDirectionDistance,
+  displayNorthAngleFromSource,
+  normalizeMasterplanNorthAngle,
   plotFacingResults,
+  plotFacingResultsForNorthAngle,
+  plotNorthDirectionToAngle,
   plotSideDirectionResults,
+  plotSideDirectionResultsForNorthAngle,
+  sourceNorthAngleFromDisplay,
 } from "./plot-facing";
 
 function FourCornerIcon() {
@@ -154,6 +160,7 @@ type MapperSettings = {
   cadMatchedCount?: string;
   cadReviewCount?: string;
   publicRotation?: string;
+  masterplanNorthAngle?: string;
   logoName?: string;
   logoVersion?: string;
   address?: string;
@@ -1104,6 +1111,8 @@ export default function PlotMapper({
 
   const [plots, setPlots] = useState<Plot[]>([]);
   const [settings, setSettings] = useState<MapperSettings>({});
+  const [northCalibrationDraftSourceAngle, setNorthCalibrationDraftSourceAngle] = useState<number | null>(null);
+  const [northCalibrationSaving, setNorthCalibrationSaving] = useState(false);
   const [cadGeometry, setCadGeometry] = useState<CadGeometry | null>(null);
   const [imageUrl, setImageUrl] = useState(() => assetUrl("masterplan"));
   const [imageReady, setImageReady] = useState(false);
@@ -1488,6 +1497,7 @@ export default function PlotMapper({
     zoomRef.current = 1;
     setZoom(1);
     reload().catch(() => notify("Project mapper data load नहीं हुआ"));
+    setNorthCalibrationDraftSourceAngle(null);
     // Restore this device's preferred mapping orientation for the project.
     try {
       const saved = Number(window.localStorage.getItem(`rekixo:mapper-rotation:${projectId}`));
@@ -2004,15 +2014,80 @@ export default function PlotMapper({
     ) || "";
   }
 
+  function hasSavedMasterplanNorthAngle() {
+    return settings.masterplanNorthAngle != null &&
+      String(settings.masterplanNorthAngle).trim() !== "";
+  }
+
+  function currentMasterplanNorthSourceAngle() {
+    if (northCalibrationDraftSourceAngle !== null) {
+      return normalizeMasterplanNorthAngle(northCalibrationDraftSourceAngle);
+    }
+    if (hasSavedMasterplanNorthAngle()) {
+      return normalizeMasterplanNorthAngle(settings.masterplanNorthAngle);
+    }
+    return plotNorthDirectionToAngle(settings.plotNorthDirection || "top");
+  }
+
+  function currentMasterplanNorthDisplayAngle() {
+    return displayNorthAngleFromSource(currentMasterplanNorthSourceAngle(), rotation);
+  }
+
+  function stepNorthCalibration(degrees: number) {
+    setNorthCalibrationDraftSourceAngle(
+      normalizeMasterplanNorthAngle(currentMasterplanNorthSourceAngle() + degrees),
+    );
+  }
+
+  async function saveNorthCalibration() {
+    if (completedProject || settings.plotFacingEnabled !== "1" || northCalibrationSaving) return;
+    const sourceAngle = currentMasterplanNorthSourceAngle();
+    setNorthCalibrationSaving(true);
+    try {
+      await persistMapperSettings({ masterplanNorthAngle: String(sourceAngle) });
+      setNorthCalibrationDraftSourceAngle(null);
+      notify(
+        `North calibration saved · source bearing ${sourceAngle}° · verify facing, then Publish Update`,
+      );
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "North calibration save nahi hui");
+    } finally {
+      setNorthCalibrationSaving(false);
+    }
+  }
+
+  async function resetNorthCalibration() {
+    if (completedProject || northCalibrationSaving || !hasSavedMasterplanNorthAngle()) return;
+    setNorthCalibrationSaving(true);
+    try {
+      // Empty setting opts out and restores legacy four-direction North behavior.
+      // This edits project settings only; it never rewrites plot polygons or sides.
+      await persistMapperSettings({ masterplanNorthAngle: "" });
+      setNorthCalibrationDraftSourceAngle(null);
+      notify("Exact North calibration cleared · legacy North setting is active");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "North calibration reset nahi hui");
+    } finally {
+      setNorthCalibrationSaving(false);
+    }
+  }
+
+  function facingResultsForCurrentNorth(semantics: unknown) {
+    return hasSavedMasterplanNorthAngle()
+      ? plotFacingResultsForNorthAngle(points, semantics, settings.masterplanNorthAngle)
+      : plotFacingResults(points, semantics, settings.plotNorthDirection || "top", rotation);
+  }
+
+  function sideDirectionsForCurrentNorth(semantics: unknown) {
+    return hasSavedMasterplanNorthAngle()
+      ? plotSideDirectionResultsForNorthAngle(points, semantics, settings.masterplanNorthAngle)
+      : plotSideDirectionResults(points, semantics, settings.plotNorthDirection || "top", rotation);
+  }
+
   function currentCompassFacingResults() {
     if (settings.plotFacingEnabled !== "1" || points.length < 3) return [];
     const semantics = serializedCurrentFacingSemantics();
-    return plotFacingResults(
-      points,
-      semantics,
-      settings.plotNorthDirection || "top",
-      rotation,
-    );
+    return facingResultsForCurrentNorth(semantics);
   }
 
   function normalizedFacingMetadata(
@@ -2095,12 +2170,7 @@ export default function PlotMapper({
     );
     if (!semantics) return;
 
-    const facingResults = plotFacingResults(
-      points,
-      semantics,
-      settings.plotNorthDirection || "top",
-      rotation,
-    );
+    const facingResults = facingResultsForCurrentNorth(semantics);
     const frontFacing = facingResults.find((item) => item.role === "front");
     if (frontFacing?.direction === direction) {
       // Front is the primary side and remains active. A click on its direction
@@ -2130,12 +2200,8 @@ export default function PlotMapper({
       return;
     }
 
-    const sideDirections = plotSideDirectionResults(
-      points,
-      semantics,
-      settings.plotNorthDirection || "top",
-      rotation,
-    ).filter((item) => item.role !== "front");
+    const sideDirections = sideDirectionsForCurrentNorth(semantics)
+      .filter((item) => item.role !== "front");
     const inactiveCandidates = sideDirections.filter(
       (item) => !roadFacingRoles.includes(item.role),
     );
@@ -4741,6 +4807,75 @@ export default function PlotMapper({
               title="Remove every saved clickable boundary; plot details and status stay safe"
             ><Trash2 />Clear all selections</button>
           </div>
+
+          {settings.plotFacingEnabled === "1" && !completedProject && hasMasterplan && (
+            <div className="mapper-north-calibration-layer" aria-label="Masterplan North calibration">
+              <div className="mapper-north-calibration">
+                <div className="mapper-north-calibration-heading">
+                  <svg viewBox="0 0 48 48" aria-hidden="true">
+                    <circle cx="24" cy="24" r="21" />
+                    <circle cx="24" cy="24" r="15" />
+                    <g transform={`rotate(${currentMasterplanNorthDisplayAngle()} 24 24)`}>
+                      <path d="M24 7 L17 26 L24 21 L31 26 Z" className="mapper-north-needle" />
+                      <path d="M17 26 L24 21 L24 39 Z" className="mapper-north-needle-back" />
+                    </g>
+                    <circle cx="24" cy="24" r="2.8" className="mapper-north-pivot" />
+                  </svg>
+                  <div>
+                    <b>North calibration</b>
+                    <small>{hasSavedMasterplanNorthAngle() ? "Exact bearing active" : "Four-way North fallback"}</small>
+                  </div>
+                  <strong>{Math.round(currentMasterplanNorthDisplayAngle()) % 360}°</strong>
+                </div>
+                <div className="mapper-north-calibration-controls">
+                  <button
+                    type="button"
+                    aria-label="Rotate North marker counterclockwise 15 degrees"
+                    disabled={northCalibrationSaving}
+                    onClick={() => stepNorthCalibration(-15)}
+                  >−15°</button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="359"
+                    step="1"
+                    value={Math.round(currentMasterplanNorthDisplayAngle()) % 360}
+                    aria-label="North bearing on displayed masterplan"
+                    aria-valuetext={`${Math.round(currentMasterplanNorthDisplayAngle()) % 360} degrees clockwise from screen-up`}
+                    onChange={(event) => setNorthCalibrationDraftSourceAngle(
+                      sourceNorthAngleFromDisplay(Number(event.target.value), rotation),
+                    )}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Rotate North marker clockwise 15 degrees"
+                    disabled={northCalibrationSaving}
+                    onClick={() => stepNorthCalibration(15)}
+                  >+15°</button>
+                </div>
+                <div className="mapper-north-calibration-actions">
+                  <button
+                    type="button"
+                    className="mapper-north-save"
+                    disabled={northCalibrationSaving || (hasSavedMasterplanNorthAngle() &&
+                      northCalibrationDraftSourceAngle === null)}
+                    onClick={() => void saveNorthCalibration()}
+                  ><Save />{northCalibrationSaving ? "Saving…" : "Save North"}</button>
+                  {hasSavedMasterplanNorthAngle() && (
+                    <button
+                      type="button"
+                      className="mapper-north-reset"
+                      disabled={northCalibrationSaving}
+                      onClick={() => void resetNorthCalibration()}
+                    >Use legacy North</button>
+                  )}
+                </div>
+                <small className="mapper-north-calibration-note">
+                  Bearing is saved against the original image. Display rotation never alters plot geometry. Existing manual facing overrides stay untouched—review them after calibration. Publish Update is required for customer display.
+                </small>
+              </div>
+            </div>
+          )}
 
           {settings.plotFacingEnabled === "1" &&
             !completedProject &&

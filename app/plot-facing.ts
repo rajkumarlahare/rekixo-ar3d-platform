@@ -55,6 +55,36 @@ function normalizeFacingRotation(value: unknown): QuarterTurn {
   return parsed === 1 || parsed === 2 || parsed === 3 ? parsed : 0;
 }
 
+/**
+ * Exact North bearing measured clockwise from the top edge of the ORIGINAL
+ * uploaded masterplan (0=up, 90=right, 180=down, 270=left).
+ * It is deliberately stored independently from publicRotation.
+ */
+export function normalizeMasterplanNorthAngle(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return ((parsed % 360) + 360) % 360;
+}
+
+export function plotNorthDirectionToAngle(value: unknown): number {
+  const direction = normalizePlotNorthDirection(value);
+  return direction === "right" ? 90 : direction === "bottom" ? 180 : direction === "left" ? 270 : 0;
+}
+
+/** Convert a source-image North bearing into the currently displayed image frame. */
+export function displayNorthAngleFromSource(sourceAngle: unknown, rotation: unknown): number {
+  return normalizeMasterplanNorthAngle(
+    normalizeMasterplanNorthAngle(sourceAngle) + normalizeFacingRotation(rotation) * 90,
+  );
+}
+
+/** Convert a compass marker placed on the displayed image back to source coordinates. */
+export function sourceNorthAngleFromDisplay(displayAngle: unknown, rotation: unknown): number {
+  return normalizeMasterplanNorthAngle(
+    normalizeMasterplanNorthAngle(displayAngle) - normalizeFacingRotation(rotation) * 90,
+  );
+}
+
 // Plot polygons stay in canonical source-image coordinates, but the image and
 // polygon are displayed with publicRotation applied. Rotate direction vectors
 // through the same quarter-turn before comparing them with the selected North.
@@ -169,6 +199,42 @@ export function plotSideDirectionResults(
   return output;
 }
 
+function directionForNorthAngle(
+  vector: MapperPoint,
+  sourceNorthAngle: unknown,
+) {
+  // Bearings are clockwise from source-image top. Convert into atan2's screen
+  // angle convention (x right, y down), then classify the side relative to true North.
+  const screenAngle = Math.atan2(vector[1], vector[0]);
+  const northAngle =
+    (normalizeMasterplanNorthAngle(sourceNorthAngle) - 90) * (Math.PI / 180);
+  const clockwiseFromNorth =
+    ((screenAngle - northAngle) % (Math.PI * 2) + Math.PI * 2) %
+    (Math.PI * 2);
+  const octant = Math.round(clockwiseFromNorth / (Math.PI / 4)) % 8;
+  return PLOT_FACING_ORDER[octant];
+}
+
+export function plotSideDirectionResultsForNorthAngle(
+  points: MapperPoint[],
+  edgeSemantics: unknown,
+  sourceNorthAngle: unknown,
+): PlotFacingResult[] {
+  if (points.length < 3) return [];
+  const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
+  if (!semantics) return [];
+  const output: PlotFacingResult[] = [];
+  const roles: PlotSideRole[] = ["front", "depthA", "back", "depthB"];
+
+  for (const role of roles) {
+    const vector = logicalSideOutwardVector(points, semantics.roles[role] || []);
+    if (!vector) continue;
+    const resolved = directionForNorthAngle(vector, sourceNorthAngle);
+    output.push({ ...resolved, role });
+  }
+  return output;
+}
+
 function facingMetadata(direction: PlotFacingDirection) {
   return (
     PLOT_FACING_ORDER.find((item) => item.direction === direction) ||
@@ -215,6 +281,48 @@ export function plotFacingResults(
   return output;
 }
 
+/**
+ * Compute compass facing in canonical source-image coordinates. Both the plot
+ * vector and North are in the SAME frame, so view rotation cannot change labels.
+ */
+export function plotFacingResultsForNorthAngle(
+  points: MapperPoint[],
+  edgeSemantics: unknown,
+  sourceNorthAngle: unknown,
+): PlotFacingResult[] {
+  if (points.length < 3) return [];
+  const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
+  if (!semantics) return [];
+  const roles = roadFacingRolesForPlot(edgeSemantics, points.length);
+  const geometric = new Map(
+    plotSideDirectionResultsForNorthAngle(points, edgeSemantics, sourceNorthAngle).map((item) => [
+      item.role,
+      item,
+    ]),
+  );
+  const output: PlotFacingResult[] = [];
+  const seen = new Set<PlotFacingDirection>();
+
+  for (const role of roles) {
+    const override = semantics.facingDirectionOverrides?.[role] as
+      | PlotFacingCardinalDirection
+      | undefined;
+    const resolved = override
+      ? { ...facingMetadata(override), role }
+      : geometric.get(role);
+    if (!resolved || seen.has(resolved.direction)) continue;
+    seen.add(resolved.direction);
+    output.push(resolved);
+  }
+
+  output.sort(
+    (a, b) =>
+      PLOT_FACING_ORDER.findIndex((item) => item.direction === a.direction) -
+      PLOT_FACING_ORDER.findIndex((item) => item.direction === b.direction),
+  );
+  return output;
+}
+
 export function cardinalDirectionDistance(
   from: PlotFacingDirection,
   to: PlotFacingCardinalDirection,
@@ -233,6 +341,16 @@ export function plotFacingText(
   rotation: unknown = 0,
 ) {
   return plotFacingResults(points, edgeSemantics, northDirection, rotation)
+    .map((item) => `${item.arrow} ${item.label}`)
+    .join(" · ");
+}
+
+export function plotFacingTextForNorthAngle(
+  points: MapperPoint[],
+  edgeSemantics: unknown,
+  sourceNorthAngle: unknown,
+) {
+  return plotFacingResultsForNorthAngle(points, edgeSemantics, sourceNorthAngle)
     .map((item) => `${item.arrow} ${item.label}`)
     .join(" · ");
 }

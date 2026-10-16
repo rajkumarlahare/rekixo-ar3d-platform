@@ -15,6 +15,7 @@ const DEFAULT_ACTIONS: ProjectCustomerActions = {
   customerCallEnabled: true,
   plotFacingEnabled: false,
   plotNorthDirection: "top",
+  masterplanNorthAngle: null,
 };
 
 export default function ProjectCustomerActionsManager({
@@ -181,11 +182,13 @@ export default function ProjectCustomerActionsManager({
       >
         <b>Masterplan North direction</b>
         <span style={{ fontSize: 12, color: "#8fa0bb" }}>
-          Masterplan image me North kis taraf hai. Public website rotation se ye value change nahi hogi.
+          {actions.masterplanNorthAngle !== null
+            ? `Exact North calibration active (${actions.masterplanNorthAngle}° clockwise from the original image top). Change it in Plot Mapper; this 4-way selector is a fallback.`
+            : "Fallback for older projects. For exact North, open Plot Mapper and rotate the calibration compass against the sanctioned masterplan."}
         </span>
         <select
           value={actions.plotNorthDirection}
-          disabled={!actions.plotFacingEnabled}
+          disabled={!actions.plotFacingEnabled || actions.masterplanNorthAngle !== null}
           onChange={(event) =>
             setActions((current) => ({
               ...current,
