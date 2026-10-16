@@ -2019,6 +2019,11 @@ export default function PlotMapper({
       String(settings.masterplanNorthAngle).trim() !== "";
   }
 
+  function hasActiveMasterplanNorthAngle() {
+    // Drafts preview exact calibration; only Save persists them.
+    return hasSavedMasterplanNorthAngle() || northCalibrationDraftSourceAngle !== null;
+  }
+
   function currentMasterplanNorthSourceAngle() {
     if (northCalibrationDraftSourceAngle !== null) {
       return normalizeMasterplanNorthAngle(northCalibrationDraftSourceAngle);
@@ -2073,14 +2078,14 @@ export default function PlotMapper({
   }
 
   function facingResultsForCurrentNorth(semantics: unknown) {
-    return hasSavedMasterplanNorthAngle()
-      ? plotFacingResultsForNorthAngle(points, semantics, settings.masterplanNorthAngle)
+    return hasActiveMasterplanNorthAngle()
+      ? plotFacingResultsForNorthAngle(points, semantics, currentMasterplanNorthSourceAngle())
       : plotFacingResults(points, semantics, settings.plotNorthDirection || "top", rotation);
   }
 
   function sideDirectionsForCurrentNorth(semantics: unknown) {
-    return hasSavedMasterplanNorthAngle()
-      ? plotSideDirectionResultsForNorthAngle(points, semantics, settings.masterplanNorthAngle)
+    return hasActiveMasterplanNorthAngle()
+      ? plotSideDirectionResultsForNorthAngle(points, semantics, currentMasterplanNorthSourceAngle())
       : plotSideDirectionResults(points, semantics, settings.plotNorthDirection || "top", rotation);
   }
 
@@ -4888,6 +4893,15 @@ export default function PlotMapper({
               const activeDirections = new Set(
                 facingResults.map((item) => item.direction),
               );
+              const calibratedCompassAngle = hasActiveMasterplanNorthAngle()
+                ? currentMasterplanNorthDisplayAngle()
+                : 0;
+              const compassOffsets: Record<PlotFacingCardinalDirection, number> = {
+                north: 0,
+                east: 90,
+                south: 180,
+                west: 270,
+              };
               const compassButtons: Array<{
                 direction: PlotFacingCardinalDirection;
                 label: string;
@@ -4908,11 +4922,17 @@ export default function PlotMapper({
                     {compassButtons.map((item) => {
                       const active = activeDirections.has(item.direction);
                       const primary = primaryDirection === item.direction;
+                      const visualBearing = calibratedCompassAngle + compassOffsets[item.direction];
+                      const radians = (visualBearing * Math.PI) / 180;
                       return (
                         <button
                           key={item.direction}
                           type="button"
                           className={`${item.className}${active ? " active" : ""}${primary ? " primary-facing" : ""}`}
+                          style={{
+                            left: `calc(50% - 16.7% + ${(29.4 * Math.sin(radians)).toFixed(4)}%)`,
+                            top: `calc(50% - 16.7% - ${(29.4 * Math.cos(radians)).toFixed(4)}%)`,
+                          }}
                           onClick={() => toggleCompassFacing(item.direction)}
                           aria-pressed={active}
                           title={
@@ -4923,7 +4943,7 @@ export default function PlotMapper({
                                 : `Add ${item.label} as second facing`
                           }
                         >
-                          <strong>{item.arrow}</strong>
+                          <strong style={{ transform: `rotate(${calibratedCompassAngle}deg)` }}>{item.arrow}</strong>
                           <span>{item.label}</span>
                         </button>
                       );

@@ -53,6 +53,18 @@ test("North calibration is project-scoped, exact-angle, persisted and published 
   assert.doesNotMatch(saveFunction, /confirmPlot\(|polygon: JSON\.stringify|front_edge_index|edgeSemantics/);
 });
 
+test("calibrated North rotates the visible plot-facing compass without rotating saved plot geometry", () => {
+  const mapper = read("app/plot-mapper.tsx");
+  assert.match(mapper, /hasActiveMasterplanNorthAngle\(\)/);
+  assert.match(mapper, /const calibratedCompassAngle = hasActiveMasterplanNorthAngle\(\)/);
+  assert.match(mapper, /const visualBearing = calibratedCompassAngle \+ compassOffsets\[item\.direction\]/);
+  assert.match(mapper, /left: `calc\(50% - 16\.7% \+/);
+  assert.match(mapper, /top: `calc\(50% - 16\.7% -/);
+  assert.match(mapper, /rotate\(\$\{calibratedCompassAngle\}deg\)/);
+  assert.match(mapper, /plotFacingResultsForNorthAngle\(points, semantics, currentMasterplanNorthSourceAngle\(\)\)/);
+  assert.match(mapper, /Display rotation never alters plot geometry/);
+});
+
 test("semantic facing model preserves logical road roles plus optional compass override", () => {
   const semantics = read("app/plot-side-semantics.ts");
   assert.match(semantics, /roadFacingRoles\?: PlotSideRole\[\]/);
