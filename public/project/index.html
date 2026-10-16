@@ -1027,11 +1027,13 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
   <div class="map-badge compass" aria-hidden="true">
     <svg viewBox="0 0 64 64">
       <circle cx="32" cy="32" r="26" fill="#0b1322" stroke="#2b3447"/>
-      <g id="compassNeedle"><path d="M32 9 38 31 32 27 26 31Z" fill="#e43143"/><path d="M32 55 26 33 32 37 38 33Z" fill="#f5f7fb"/></g>
-      <text x="32" y="8" text-anchor="middle" fill="#e9edf5" font-size="7" font-weight="700">N</text>
-      <text x="32" y="62" text-anchor="middle" fill="#e9edf5" font-size="7" font-weight="700">S</text>
-      <text x="4" y="35" fill="#e9edf5" font-size="7" font-weight="700">W</text>
-      <text x="56" y="35" fill="#e9edf5" font-size="7" font-weight="700">E</text>
+      <g id="compassRose">
+        <g id="compassNeedle"><path d="M32 9 38 31 32 27 26 31Z" fill="#e43143"/><path d="M32 55 26 33 32 37 38 33Z" fill="#f5f7fb"/></g>
+        <text x="32" y="8" text-anchor="middle" fill="#e9edf5" font-size="7" font-weight="700">N</text>
+        <text x="32" y="62" text-anchor="middle" fill="#e9edf5" font-size="7" font-weight="700">S</text>
+        <text x="4" y="35" fill="#e9edf5" font-size="7" font-weight="700">W</text>
+        <text x="56" y="35" fill="#e9edf5" font-size="7" font-weight="700">E</text>
+      </g>
     </svg>
   </div>
   <button class="map-badge view-mode" id="view3d">3D</button>
@@ -1470,6 +1472,7 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   let toastTimer = null, mode3D = false, engine3D = null, mapRaf = 0, resizeRaf = 0;
   let PUBLIC_READY = false, HAS_MASTERPLAN = false;
   let publicRotation = 0;
+  let publicNorthSourceAngle = 0;
   let publicInitialViewMode='legacy', publicInitialFocusX=.5, publicInitialFocusY=.5;
   world.style.visibility = 'hidden';
   let gesture = null;
@@ -1487,6 +1490,25 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   function normalizeQuarterTurn(value){
     const n=Number(value);
     return n===0||n===1||n===2||n===3?n:0;
+  }
+  function normalizeCompassBearing(value){
+    const n=Number(value);
+    return Number.isFinite(n)?((n%360)+360)%360:0
+  }
+  function northBearingFromSettings(settings){
+    const exact=settings&&settings.masterplanNorthAngle;
+    if(exact!=null&&String(exact).trim()!==''&&Number.isFinite(Number(exact))&&Number(exact)>=0&&Number(exact)<360){
+      return normalizeCompassBearing(exact)
+    }
+    const direction=String(settings&&settings.plotNorthDirection||'top').trim().toLowerCase();
+    return direction==='right'?90:direction==='bottom'?180:direction==='left'?270:0
+  }
+  function setCompassRoseAngle(degrees){
+    const rose=q('#compassRose');
+    if(rose)rose.setAttribute('transform',`rotate(${normalizeCompassBearing(degrees).toFixed(3)} 32 32)`)
+  }
+  function updateMapCompassOrientation(){
+    setCompassRoseAngle(publicNorthSourceAngle+publicRotation*90)
   }
   function rotateOffset(x,y,turns){
     const t=((turns%4)+4)%4;
@@ -2314,7 +2336,12 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
   q('#waBtn').onclick=openWhatsApp;
   const waTop=q('#waTop');if(waTop)waTop.onclick=openWhatsApp;
 
-  function hud3D(s){q('#percent').textContent=s.zoomPercent+'%';const n=document.getElementById('compassNeedle');if(n)n.setAttribute('transform',`rotate(${(-s.yaw*180/Math.PI).toFixed(1)} 32 32)`)}
+  function hud3D(s){
+    q('#percent').textContent=s.zoomPercent+'%';
+    // In 3D, orient the full compass rose to calibrated project North and subtract camera yaw.
+    const yawDegrees=Number.isFinite(Number(s.yaw))?Number(s.yaw)*180/Math.PI:0;
+    setCompassRoseAngle(publicNorthSourceAngle-yawDegrees)
+  }
   function set3D(on){
     if(on&&!PUBLIC_READY){toast('Project data load ho raha hai');return}
     if(on&&!HAS_MASTERPLAN){toast('Masterplan upload hone ke baad 3D ready hoga');return}
@@ -2325,7 +2352,10 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
       if(!engine3D){try{engine3D=new RekixoPlot3D(q('#threeHost'),{plots,imageSrc:q('.master').src,mapWidth:W,mapHeight:H,onSelect:p=>{selected=p;setSelected(p.id);openPlot(p,false)},onPreview:(p,x,y)=>showPlotPeek(p,x,y),onPreviewEnd:()=>hidePlotPeek(),onCamera:hud3D})}catch(e){mode3D=false;viewport.classList.remove('mode3d');q('#view3d').textContent='3D';toast('3D is not supported on this device');return}}
       engine3D.setShowAll(showAll);engine3D.setStatusFilter?.(statusFilter);engine3D.activate();if(selected)engine3D.select(selected.id,false,false);hud3D({yaw:engine3D.cam.yaw,zoomPercent:Math.round(34*engine3D.baseDistance/engine3D.cam.distance)});
     }else{
-      engine3D?.deactivate();const n=document.getElementById('compassNeedle');if(n)n.removeAttribute('transform');q('#percent').textContent=Math.round(scale/fit*100)+'%';render();
+      engine3D?.deactivate();
+      updateMapCompassOrientation();
+      q('#percent').textContent=Math.round(scale/fit*100)+'%';
+      render();
     }
   }
   q('#view3d').onclick=()=>set3D(!mode3D);
@@ -2375,7 +2405,9 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
     const s=data&&data.settings||{};
     applyPlotStatusTheme(s);
     publicRotation=normalizeQuarterTurn(s.publicRotation);
-    publicInitialViewMode=normalizeInitialViewMode(s.publicInitialViewMode);
+    publicNorthSourceAngle=northBearingFromSettings(s);
+    updateMapCompassOrientation();
+    publicInitialViewMode=normalizeInitialViewMode(s);
     publicInitialFocusX=normalizeUnitFocus(s.publicInitialFocusX,.5);
     publicInitialFocusY=normalizeUnitFocus(s.publicInitialFocusY,.5);
     // Saved polygons stay canonical. Only the shared presentation world rotates.

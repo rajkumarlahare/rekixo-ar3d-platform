@@ -2079,13 +2079,13 @@ export default function PlotMapper({
 
   function facingResultsForCurrentNorth(semantics: unknown) {
     return hasActiveMasterplanNorthAngle()
-      ? plotFacingResultsForNorthAngle(points, semantics, currentMasterplanNorthSourceAngle())
+      ? plotFacingResultsForNorthAngle(points, semantics, currentMasterplanNorthSourceAngle(), rotation)
       : plotFacingResults(points, semantics, settings.plotNorthDirection || "top", rotation);
   }
 
   function sideDirectionsForCurrentNorth(semantics: unknown) {
     return hasActiveMasterplanNorthAngle()
-      ? plotSideDirectionResultsForNorthAngle(points, semantics, currentMasterplanNorthSourceAngle())
+      ? plotSideDirectionResultsForNorthAngle(points, semantics, currentMasterplanNorthSourceAngle(), rotation)
       : plotSideDirectionResults(points, semantics, settings.plotNorthDirection || "top", rotation);
   }
 

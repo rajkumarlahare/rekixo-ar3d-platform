@@ -45,6 +45,7 @@ test("North calibration is project-scoped, exact-angle, persisted and published 
   assert.match(actions, /masterplanNorthAngle: number \| null/);
   assert.match(manager, /actions\.masterplanNorthAngle !== null/);
   assert.match(publicData, /plotFacingTextForNorthAngle/);
+  assert.match(publicData, /plotFacingTextForNorthAngle\([\s\S]*publicSettings\.publicRotation/);
   assert.match(snapshot, /"masterplanNorthAngle"/);
 
   const saveStart = mapper.indexOf("async function saveNorthCalibration()");
@@ -61,7 +62,7 @@ test("calibrated North rotates the visible plot-facing compass without rotating 
   assert.match(mapper, /left: `calc\(50% - 16\.7% \+/);
   assert.match(mapper, /top: `calc\(50% - 16\.7% -/);
   assert.match(mapper, /rotate\(\$\{calibratedCompassAngle\}deg\)/);
-  assert.match(mapper, /plotFacingResultsForNorthAngle\(points, semantics, currentMasterplanNorthSourceAngle\(\)\)/);
+  assert.match(mapper, /plotFacingResultsForNorthAngle\(points, semantics, currentMasterplanNorthSourceAngle\(\), rotation\)/);
   assert.match(mapper, /Display rotation never alters plot geometry/);
 });
 
@@ -182,6 +183,11 @@ test("customer drawer and diagram continue to show computed one-side or corner f
   assert.match(html, /const facing=String\(p\.facing\|\|''\)\.trim\(\)/);
   assert.match(html, /roadLabel\.textContent=facing\?'FACING':'ROAD ACCESS'/);
   assert.match(html, /facing\.textContent=facingText/);
+  assert.match(html, /function northBearingFromSettings\(settings\)/);
+  assert.match(html, /publicNorthSourceAngle=northBearingFromSettings\(s\)/);
+  assert.match(html, /setCompassRoseAngle\(publicNorthSourceAngle\+publicRotation\*90\)/);
+  assert.match(html, /setCompassRoseAngle\(publicNorthSourceAngle-yawDegrees\)/);
+  assert.match(html, /id="compassRose"/);
 });
 
 test("floating compass styling is map-overlay, touch-safe and not toolbar content", () => {
