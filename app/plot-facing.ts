@@ -55,6 +55,28 @@ function normalizeFacingRotation(value: unknown): QuarterTurn {
   return parsed === 1 || parsed === 2 || parsed === 3 ? parsed : 0;
 }
 
+const SCREEN_ARROWS = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"] as const;
+
+/** Direction arrow in the currently displayed image coordinate system. */
+function arrowForVector([x, y]: MapperPoint) {
+  const bearing = normalizeMasterplanNorthAngle((Math.atan2(x, -y) * 180) / Math.PI);
+  return SCREEN_ARROWS[Math.round(bearing / 45) % 8];
+}
+
+/** Arrow for an explicit compass direction, transformed into the displayed image frame. */
+function arrowForDirectionAtNorthBearing(
+  direction: PlotFacingDirection,
+  northBearing: unknown,
+  rotation: QuarterTurn = 0,
+) {
+  const index = PLOT_FACING_ORDER.findIndex((item) => item.direction === direction);
+  if (index < 0) return SCREEN_ARROWS[0];
+  const displayedBearing = normalizeMasterplanNorthAngle(
+    normalizeMasterplanNorthAngle(northBearing) + index * 45 + rotation * 90,
+  );
+  return SCREEN_ARROWS[Math.round(displayedBearing / 45) % 8];
+}
+
 /**
  * Exact North bearing measured clockwise from the top edge of the ORIGINAL
  * uploaded masterplan (0=up, 90=right, 180=down, 270=left).
@@ -168,12 +190,14 @@ function directionForVector(
 ) {
   const displayVector = rotateFacingVectorForDisplay(vector, rotation);
   const screenAngle = Math.atan2(displayVector[1], displayVector[0]);
-  const northAngle = NORTH_ANGLES[northDirection];
+  // North is anchored to the original masterplan too. Rotate both North and
+  // polygon normals into the same display frame before resolving the label.
+  const northAngle = NORTH_ANGLES[northDirection] + rotation * (Math.PI / 2);
   const clockwiseFromNorth =
     ((screenAngle - northAngle) % (Math.PI * 2) + Math.PI * 2) %
     (Math.PI * 2);
   const octant = Math.round(clockwiseFromNorth / (Math.PI / 4)) % 8;
-  return PLOT_FACING_ORDER[octant];
+  return { ...PLOT_FACING_ORDER[octant], arrow: arrowForVector(displayVector) };
 }
 
 export function plotSideDirectionResults(
@@ -202,9 +226,9 @@ export function plotSideDirectionResults(
 function directionForNorthAngle(
   vector: MapperPoint,
   sourceNorthAngle: unknown,
+  rotation: QuarterTurn = 0,
 ) {
-  // Bearings are clockwise from source-image top. Convert into atan2's screen
-  // angle convention (x right, y down), then classify the side relative to true North.
+  // Cardinal labels are calculated in the canonical source-image frame.
   const screenAngle = Math.atan2(vector[1], vector[0]);
   const northAngle =
     (normalizeMasterplanNorthAngle(sourceNorthAngle) - 90) * (Math.PI / 180);
@@ -212,24 +236,29 @@ function directionForNorthAngle(
     ((screenAngle - northAngle) % (Math.PI * 2) + Math.PI * 2) %
     (Math.PI * 2);
   const octant = Math.round(clockwiseFromNorth / (Math.PI / 4)) % 8;
-  return PLOT_FACING_ORDER[octant];
+  // Arrows are presentation directions: follow the physical side normal as
+  // the displayed masterplan rotates, without changing its geographic label.
+  const displayVector = rotateFacingVectorForDisplay(vector, rotation);
+  return { ...PLOT_FACING_ORDER[octant], arrow: arrowForVector(displayVector) };
 }
 
 export function plotSideDirectionResultsForNorthAngle(
   points: MapperPoint[],
   edgeSemantics: unknown,
   sourceNorthAngle: unknown,
+  rotation: unknown = 0,
 ): PlotFacingResult[] {
   if (points.length < 3) return [];
   const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
   if (!semantics) return [];
+  const displayRotation = normalizeFacingRotation(rotation);
   const output: PlotFacingResult[] = [];
   const roles: PlotSideRole[] = ["front", "depthA", "back", "depthB"];
 
   for (const role of roles) {
     const vector = logicalSideOutwardVector(points, semantics.roles[role] || []);
     if (!vector) continue;
-    const resolved = directionForNorthAngle(vector, sourceNorthAngle);
+    const resolved = directionForNorthAngle(vector, sourceNorthAngle, displayRotation);
     output.push({ ...resolved, role });
   }
   return output;
@@ -266,7 +295,15 @@ export function plotFacingResults(
       | PlotFacingCardinalDirection
       | undefined;
     const resolved = override
-      ? { ...facingMetadata(override), role }
+      ? {
+          ...facingMetadata(override),
+          arrow: arrowForDirectionAtNorthBearing(
+            override,
+            plotNorthDirectionToAngle(northDirection),
+            normalizeFacingRotation(rotation),
+          ),
+          role,
+        }
       : geometric.get(role);
     if (!resolved || seen.has(resolved.direction)) continue;
     seen.add(resolved.direction);
@@ -289,13 +326,14 @@ export function plotFacingResultsForNorthAngle(
   points: MapperPoint[],
   edgeSemantics: unknown,
   sourceNorthAngle: unknown,
+  rotation: unknown = 0,
 ): PlotFacingResult[] {
   if (points.length < 3) return [];
   const semantics = parsePlotSideSemantics(edgeSemantics, points.length);
   if (!semantics) return [];
   const roles = roadFacingRolesForPlot(edgeSemantics, points.length);
   const geometric = new Map(
-    plotSideDirectionResultsForNorthAngle(points, edgeSemantics, sourceNorthAngle).map((item) => [
+    plotSideDirectionResultsForNorthAngle(points, edgeSemantics, sourceNorthAngle, rotation).map((item) => [
       item.role,
       item,
     ]),
@@ -308,7 +346,15 @@ export function plotFacingResultsForNorthAngle(
       | PlotFacingCardinalDirection
       | undefined;
     const resolved = override
-      ? { ...facingMetadata(override), role }
+      ? {
+          ...facingMetadata(override),
+          arrow: arrowForDirectionAtNorthBearing(
+            override,
+            sourceNorthAngle,
+            normalizeFacingRotation(rotation),
+          ),
+          role,
+        }
       : geometric.get(role);
     if (!resolved || seen.has(resolved.direction)) continue;
     seen.add(resolved.direction);
@@ -349,8 +395,9 @@ export function plotFacingTextForNorthAngle(
   points: MapperPoint[],
   edgeSemantics: unknown,
   sourceNorthAngle: unknown,
+  rotation: unknown = 0,
 ) {
-  return plotFacingResultsForNorthAngle(points, edgeSemantics, sourceNorthAngle)
+  return plotFacingResultsForNorthAngle(points, edgeSemantics, sourceNorthAngle, rotation)
     .map((item) => `${item.arrow} ${item.label}`)
     .join(" · ");
 }

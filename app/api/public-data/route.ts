@@ -450,7 +450,12 @@ export async function GET(request: Request) {
                 );
                 const calibratedNorthAngle = publicSettings.masterplanNorthAngle;
                 facing = calibratedNorthAngle != null && String(calibratedNorthAngle).trim() !== ""
-                  ? plotFacingTextForNorthAngle(points, publicPlot.edgeSemantics, calibratedNorthAngle)
+                  ? plotFacingTextForNorthAngle(
+                      points,
+                      publicPlot.edgeSemantics,
+                      calibratedNorthAngle,
+                      publicSettings.publicRotation || "0",
+                    )
                   : plotFacingText(
                       points,
                       publicPlot.edgeSemantics,
@@ -474,7 +479,12 @@ export async function GET(request: Request) {
                   });
                   const calibratedNorthAngle = publicSettings.masterplanNorthAngle;
                   facing = calibratedNorthAngle != null && String(calibratedNorthAngle).trim() !== ""
-                    ? plotFacingTextForNorthAngle(points, legacyFrontSemantics, calibratedNorthAngle)
+                    ? plotFacingTextForNorthAngle(
+                        points,
+                        legacyFrontSemantics,
+                        calibratedNorthAngle,
+                        publicSettings.publicRotation || "0",
+                      )
                     : plotFacingText(
                         points,
                         legacyFrontSemantics,

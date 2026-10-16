@@ -30,11 +30,20 @@ const semantics = {
   roles: { front: [0], depthA: [1], back: [2], depthB: [3] },
   roadFacingRoles: ["front", "depthA", "back", "depthB"],
 };
-function directionsFor(northAngle, edgeSemantics = semantics) {
+function resultsFor(northAngle, rotation = 0, edgeSemantics = semantics) {
+  return facing.plotFacingResultsForNorthAngle(
+    polygon, JSON.stringify(edgeSemantics), northAngle, rotation,
+  );
+}
+function directionsFor(northAngle, edgeSemantics = semantics, rotation = 0) {
   return Object.fromEntries(
-    facing.plotFacingResultsForNorthAngle(polygon, JSON.stringify(edgeSemantics), northAngle)
+    resultsFor(northAngle, rotation, edgeSemantics)
       .map(({ role, direction }) => [role, direction]),
   );
+}
+function arrowsFor(northAngle, rotation = 0) {
+  return Object.fromEntries(resultsFor(northAngle, rotation)
+    .map(({ role, arrow }) => [role, arrow]));
 }
 
 test("source North at top resolves four mapped sides to N/E/S/W", () => {
@@ -46,6 +55,36 @@ test("source North at right rotates side labels by one quadrant", () => {
 test("45 degree North bearing resolves diagonal-facing sides deterministically", () => {
   assert.deepEqual(directionsFor(45), { front:"north-west", depthA:"north-east", back:"south-east", depthB:"south-west" });
 });
+test("cardinal labels stay geographical while polygon arrows rotate with the displayed plan", () => {
+  assert.deepEqual(directionsFor(0, semantics, 0), {
+    front:"north", depthA:"east", back:"south", depthB:"west",
+  });
+  assert.deepEqual(arrowsFor(0, 0), { front:"↑", depthA:"→", back:"↓", depthB:"←" });
+  assert.deepEqual(directionsFor(0, semantics, 1), {
+    front:"north", depthA:"east", back:"south", depthB:"west",
+  });
+  assert.deepEqual(arrowsFor(0, 1), { front:"→", depthA:"↓", back:"←", depthB:"↑" });
+  assert.deepEqual(arrowsFor(0, 2), { front:"↓", depthA:"←", back:"↑", depthB:"→" });
+  assert.deepEqual(arrowsFor(0, 3), { front:"←", depthA:"↑", back:"→", depthB:"↓" });
+});
+
+test("legacy four-way North and display rotation stay in the same coordinate frame", () => {
+  const legacy = facing.plotFacingResults(polygon, JSON.stringify(semantics), "right", 0);
+  assert.equal(legacy.find(item => item.role === "front").direction, "west");
+  assert.equal(legacy.find(item => item.role === "front").arrow, "↑");
+  const rotated = facing.plotFacingResults(polygon, JSON.stringify(semantics), "right", 1);
+  assert.equal(rotated.find(item => item.role === "front").direction, "west");
+  assert.equal(rotated.find(item => item.role === "front").arrow, "→");
+});
+
+test("explicit cardinal overrides orient arrows relative to calibrated North", () => {
+  const overridden = resultsFor(90, 0, {
+    ...semantics, facingDirectionOverrides: { front: "east" },
+  }).find(item => item.role === "front");
+  assert.equal(overridden.direction, "east");
+  assert.equal(overridden.arrow, "↓");
+});
+
 test("calibration and display rotation conversions round-trip for all quarter turns", () => {
   const baseline = directionsFor(37);
   for (const rotation of [0,1,2,3]) {
