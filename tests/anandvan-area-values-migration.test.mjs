@@ -12,7 +12,7 @@ test("Anandvan live area migration is scoped and guarded to the workbook's 47 pl
   assert.match(migration, /inventory_active=1 AND id IN/);
   assert.match(migration, /CHECK \(ok = 1\)/);
   assert.match(migration, /published_plots/);
-  assert.match(migration, /'SHOP-1'/, "Migration documents shops must remain outside the update");
+  assert.doesNotMatch(migration, /\('SHOP-[1-5]'/, "Added shops are excluded from the 47-row area correction");
   const blocks = [...migration.matchAll(/WITH correction\(id,sqft,sqm,sqyd\) AS \(VALUES([\s\S]*?)\n\)/g)];
   assert.equal(blocks.length, 2, "Both current and published area tables are updated");
   for (const block of blocks) {
