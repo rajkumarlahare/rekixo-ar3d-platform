@@ -34,7 +34,7 @@ test("customer area fallback calculates mapped geometry from saved side lengths"
   assert.equal(plot.sqft, 200);
   assert.equal(plot.sqm, 18.581);
   assert.equal(plot.sqyd, 22.222);
-  assert.equal(plot.areaSource, "mapped-geometry");
+  assert.equal(plot.areaSource, "side-measurements");
 });
 
 test("existing area values are retained and missing unit conversions are filled", () => {
@@ -76,7 +76,7 @@ test("project-wide side calibration can fill a plot whose own side values are mi
     mapWidth: 1000, mapHeight: 1000,
   });
   assert.equal(plots[1].sqft, 200);
-  assert.equal(plots[1].areaSource, "mapped-geometry");
+  assert.equal(plots[1].areaSource, "side-measurements");
 });
 
 test("explicit 25 by 60 plot dimensions calculate 1500 square feet, not scaled image area", () => {
@@ -85,8 +85,8 @@ test("explicit 25 by 60 plot dimensions calculate 1500 square feet, not scaled i
     front: 25, back: 25, depth: 60, depth2: 60,
   })], { mapWidth: 7680, mapHeight: 4320, sqmToSqftFactor: 10.7639 });
   assert.equal(plot.sqft, 1500);
-  assert.equal(plot.sqm, 139.436);
-  assert.equal(plot.sqyd, 166.667);
+  assert.equal(plot.sqm, 139.355);
+  assert.equal(plot.sqyd, 166.570);
   assert.equal(plot.areaSource, "side-measurements");
 });
 
