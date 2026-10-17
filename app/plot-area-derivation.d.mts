@@ -38,4 +38,4 @@ export type CustomerPlotAreaOptions = {
 export function deriveCustomerPlotAreas<T extends AreaDerivationPlot>(
   plots: T[],
   options?: CustomerPlotAreaOptions,
-): Array<T & { sqft: number; sqm: number; sqyd: number; areaSource?: "mapped-geometry" }>;
+): Array<T & { sqft: number; sqm: number; sqyd: number; areaSource?: "mapped-geometry" | "side-measurements" }>;
