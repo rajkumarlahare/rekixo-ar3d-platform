@@ -53,6 +53,7 @@ const PUBLIC_SETTING_KEYS = new Set([
   "masterplanName",
   "mapWidth",
   "mapHeight",
+  "sqmToSqftFactor",
   "publicRotation",
   "masterplanNorthAngle",
   "logoName",
