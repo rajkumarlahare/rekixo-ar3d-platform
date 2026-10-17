@@ -86,7 +86,7 @@ test("explicit 25 by 60 plot dimensions calculate 1500 square feet, not scaled i
   })], { mapWidth: 7680, mapHeight: 4320, sqmToSqftFactor: 10.7639 });
   assert.equal(plot.sqft, 1500);
   assert.equal(plot.sqm, 139.355);
-  assert.equal(plot.sqyd, 166.570);
+  assert.equal(plot.sqyd, 166.667);
   assert.equal(plot.areaSource, "side-measurements");
 });
 
