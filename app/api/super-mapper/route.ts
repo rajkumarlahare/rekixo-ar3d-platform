@@ -1608,7 +1608,8 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as {
     projectId?: string;
-    action?: "clear_all_polygons" | "clear_plot_boundary";
+    action?: "clear_all_polygons" | "clear_plot_boundary" | "add_inventory_plots";
+    newPlots?: Record<string, unknown>[];
     confirmation?: string;
     plot?: Record<string, unknown>;
     plots?: Record<string, unknown>[];
@@ -1619,6 +1620,71 @@ export async function POST(request: Request) {
     return Response.json({ error: "Project नहीं मिला" }, { status: 404 });
   if (projectId === COMPLETED_PROJECT_ID)
     return Response.json({ error: "Completed Tiyansh mapper locked है" }, { status: 409 });
+
+  if (body.action === "add_inventory_plots") {
+    const rows = Array.isArray(body.newPlots) ? body.newPlots : [];
+    if (!rows.length || rows.length > 100) {
+      return Response.json({ error: "1 se 100 new plot rows required hain" }, { status: 400 });
+    }
+    const now = new Date().toISOString();
+    let cleaned;
+    try {
+      cleaned = rows.map((row) => {
+        const id = cleanPlotId(String(row.id || ""));
+        const front = optionalPositiveMeasure(row.front);
+        const back = optionalPositiveMeasure(row.back);
+        const depth = optionalPositiveMeasure(row.depth);
+        const depth2 = optionalPositiveMeasure(row.depth2);
+        const unit = String(row.dimensionUnit || "").trim().toLowerCase();
+        const hasDimensions = [front, back, depth, depth2].some((value) => value !== null);
+        const area = Number(row.sqft || 0);
+        const dimensions = String(row.dimensions || "").trim();
+        if (!id) throw new Error("New plot ID missing hai");
+        if (hasDimensions && unit !== "ft" && unit !== "m") {
+          throw new Error(`Plot ${id}: dimensions ke liye Dimension Unit ft/m required hai`);
+        }
+        if (![front, back, depth, depth2].every((value) => value === null || (Number.isFinite(value) && value > 0))) {
+          throw new Error(`Plot ${id}: side measurements positive numbers hone chahiye`);
+        }
+        if (!Number.isFinite(area) || area < 0) throw new Error(`Plot ${id}: area invalid hai`);
+        return { id, front, back, depth, depth2, unit: hasDimensions ? unit : null, area, dimensions, road: String(row.road || "").trim().slice(0,160), notes: String(row.notes || "").trim().slice(0,2000) };
+      });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "New shop data invalid hai" }, { status: 400 });
+    }
+    const ids = cleaned.map((row) => row.id);
+    if (new Set(ids).size !== ids.length) {
+      return Response.json({ error: "New plot rows me duplicate ID hai" }, { status: 400 });
+    }
+    const existing = await env.DB.prepare(
+      `SELECT id FROM plots WHERE project_id=? AND id IN (${ids.map(() => "?").join(",")})`
+    ).bind(projectId, ...ids).all<{ id: string }>();
+    const existingIds = new Set(existing.results.map((row) => row.id));
+    const collisions = ids.filter((id) => existingIds.has(id));
+    if (collisions.length) {
+      return Response.json({ error: "Ye plot IDs pehle se maujood hain: " + collisions.join(", ") }, { status: 409 });
+    }
+    const factor = await projectSqmToSqftFactor(projectId);
+    const statements = cleaned.map((row) => {
+      const sqm = row.area > 0 ? row.area / factor : 0;
+      const sqyd = sqm > 0 ? sqm * 1.1959900463 : 0;
+      return env.DB.prepare(
+        "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,inventory_active,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).bind(projectId,row.id,row.area,sqm,sqyd,row.dimensions,row.road,row.front,row.depth,row.back,row.depth2,row.unit,null,null,null,null,null,null,null,null,null,null,"","available",row.notes,0,1,now);
+    });
+    try {
+      await env.DB.batch(statements);
+    } catch {
+      return Response.json({ error: "New shop inventory create nahi hui; existing rows untouched rahe" }, { status: 409 });
+    }
+    await writeAudit(actor, "mapper.inventory_plots_added", projectId, null, {
+      count: cleaned.length, ids, polygonInitializedEmpty: true,
+    });
+    const created = await env.DB.prepare(
+      `SELECT project_id AS projectId,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,back_label AS backLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,polygon,status,notes,featured,inventory_active AS inventoryActive,updated_at AS updatedAt FROM plots WHERE project_id=? AND id IN (${ids.map(() => "?").join(",")}) ORDER BY id`
+    ).bind(projectId, ...ids).all();
+    return Response.json({ ok: true, count: created.results.length, plots: created.results });
+  }
 
   if (body.action === "clear_plot_boundary") {
     const plotId = String(body.plot?.id || "").trim();
