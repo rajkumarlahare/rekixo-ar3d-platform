@@ -91,7 +91,7 @@ test("runtime cache is bumped so public clients receive measurement v2", () => {
     "app/preview/[projectId]/page.tsx",
     "app/projects/[slug]/page.tsx",
   ]) {
-    assert.match(read(file), /v=68/);
+    assert.match(read(file), /v=69/);
   }
 });
 
@@ -105,6 +105,6 @@ test("customer plot drawer receives derived areas when published area columns ar
   assert.match(api, /edgeMeasurements: edgeMeasurementsByPlot\.get\(plot\.id\)/);
   assert.match(area, /polygonAreaPixels/);
   assert.match(area, /mapped-geometry/);
-  assert.match(html, /id="areaCalculationNote"/);
-  assert.match(html, /p\.areaSource==='mapped-geometry'/);
+  assert.doesNotMatch(html, /id="areaCalculationNote"/);
+  assert.doesNotMatch(html, /Calculated from mapped boundaries and saved side measurements/);
 });

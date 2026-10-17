@@ -1096,7 +1096,6 @@ html:not(.rekixo-project-loading):not(.rekixo-project-error) .controls{animation
     <div class="fact"><span>SQ. METERS</span><b id="sqm">—</b></div>
     <div class="fact"><span>SQ. FEET</span><b id="sqft">—</b></div>
     <div class="fact"><span>SQ. YARDS</span><b id="sqyd">—</b></div>
-    <div class="fact area-calculation-note" id="areaCalculationNote" style="display:none"><span>AREA BASIS</span><b>Calculated from mapped boundaries and saved side measurements</b></div>
     <div class="fact pricing-fact" id="pricingRateRow" style="display:none"><span id="pricingRateLabel">RATE</span><b id="pricingRate">—</b></div>
     <div class="fact pricing-fact" id="pricingBaseRow" style="display:none"><span>BASE PRICE</span><b id="pricingBase">—</b></div>
     <div class="fact"><span>DIMENSIONS</span><b id="dims">—</b></div>
@@ -2126,8 +2125,6 @@ window.REKIXO_PUBLIC_BOOT_PROMISE=rekixoStartPublicBoot();
     q('#sqm').textContent=Number(p.sqm).toLocaleString('en-IN')+' Sq.M';
     q('#sqft').textContent=Number(p.sqft).toLocaleString('en-IN')+' Sq.Ft';
     q('#sqyd').textContent=Number(p.sqyd).toLocaleString('en-IN')+' Sq.Yd';
-    const areaBasis=q('#areaCalculationNote');
-    if(areaBasis)areaBasis.style.display=p.areaSource==='mapped-geometry'?'flex':'none';
     syncPlotPricing(p);
     q('#dims').textContent=p.dimensions||'—';
     syncFrontDepthFacts(p);
