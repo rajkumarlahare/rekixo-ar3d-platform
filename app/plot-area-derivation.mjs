@@ -134,11 +134,11 @@ function polygonAreaPixels(points, width, height) {
   return Math.abs(twiceArea) / 2;
 }
 
-function dimensionsAreaSqft(plot, factor) {
+function dimensionsAreaSqft(plot) {
   const dimensions = String(plot.dimensions || "").replace(/,/g, "").trim();
-  // Treat simple approved-plan dimensions such as "25' × 60'", "25 x 60 ft",
-  // or "25 ft by 60 ft" as authoritative for a rectangular plot.
-  const match = dimensions.match(/^\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet|foot)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet|foot)?\s*$/i);
+  // Accept ordinary plot-size notations, including 25' × 60', 25 x 60,
+  // 25' x 60', 25 ft by 60 ft, and 25 × 60 ft.
+  const match = dimensions.match(/^\s*(\d+(?:\.\d+)?)\s*(?:'|ft\.?|feet|foot)?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:'|ft\.?|feet|foot)?\s*$/i);
   if (!match) return 0;
   const first = Number(match[1]), second = Number(match[2]);
   if (!(first > 0 && second > 0)) return 0;
@@ -217,7 +217,7 @@ export function deriveCustomerPlotAreas(plots, options = {}) {
     if (!(sqft > 0) && sqm > 0) sqft = sqm * factor;
 
     if (!(sqft > 0) && !(sqm > 0) && !(sqyd > 0)) {
-      const dimensionsArea = dimensionsAreaSqft(plot, factor);
+      const dimensionsArea = dimensionsAreaSqft(plot);
       const sideArea = dimensionsArea > 0 ? 0 : sideRectangleAreaSqft(plot);
       const explicitArea = dimensionsArea > 0 ? dimensionsArea : sideArea;
       if (explicitArea > 0 && explicitArea <= 100_000_000) {
