@@ -91,6 +91,20 @@ test("runtime cache is bumped so public clients receive measurement v2", () => {
     "app/preview/[projectId]/page.tsx",
     "app/projects/[slug]/page.tsx",
   ]) {
-    assert.match(read(file), /v=67/);
+    assert.match(read(file), /v=68/);
   }
+});
+
+test("customer plot drawer receives derived areas when published area columns are unknown", () => {
+  const api = read("app/api/public-data/route.ts");
+  const area = read("app/plot-area-derivation.mjs");
+  const html = read("public/project/index.html");
+  assert.match(api, /deriveCustomerPlotAreas/);
+  assert.match(api, /mapWidth: publicSettings\.mapWidth/);
+  assert.match(api, /mapHeight: publicSettings\.mapHeight/);
+  assert.match(api, /edgeMeasurements: edgeMeasurementsByPlot\.get\(plot\.id\)/);
+  assert.match(area, /polygonAreaPixels/);
+  assert.match(area, /mapped-geometry/);
+  assert.match(html, /id="areaCalculationNote"/);
+  assert.match(html, /p\.areaSource==='mapped-geometry'/);
 });
