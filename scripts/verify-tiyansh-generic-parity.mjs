@@ -125,7 +125,7 @@ async function verifyPublicLive(origin, data, query) {
 async function verifySharedProjectRuntime(origin, data) {
   const publishVersion = Number(data?.publishVersion || 0);
   const url =
-    `${origin}/__rekixo/project/?projectSlug=${encodeURIComponent(projectSlug)}&pv=${encodeURIComponent(String(publishVersion))}&v=68`;
+    `${origin}/__rekixo/project/?projectSlug=${encodeURIComponent(projectSlug)}&pv=${encodeURIComponent(String(publishVersion))}&v=69`;
   const response = await read(url, {
     headers: { accept: "text/html" },
     redirect: "manual",
@@ -197,7 +197,7 @@ if (phase === "generic" || phase === "post-legacy") {
   assert.equal(projectPage.status, 200, "generic Tiyansh project page failed");
   const html = await projectPage.text();
   assert.match(html, /projectSlug=tiyansh-prime-square/);
-  assert.match(html, /v=68/);
+  assert.match(html, /v=69/);
   await verifySharedProjectRuntime(genericOrigin, generic.data);
 }
 
