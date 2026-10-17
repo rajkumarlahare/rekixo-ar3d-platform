@@ -3702,13 +3702,29 @@ export default function PlotMapper({
         body: JSON.stringify({ projectId, action: "add_inventory_plots", newPlots: rows }),
       });
       const result = await apiResult(response);
-      await reload();
-      notify(`${Number(result.count || 0)} new shops inventory me add hui. Ab dropdown se ek-ek shop select karke boundary map karein.`);
       const created = (result.plots || []) as Plot[];
+      setPlots((current) => [...current, ...created].sort(plotSort));
+      setLastVerifiedId("");
       const first = [...created].sort(plotSort)[0];
-      if (first) loadPlotDetails(first, false);
-      setManualPhase("select");
-      setToolMode("select");
+      if (first) {
+        setPlotId(first.id);
+        setDimensions(first.dimensions || "");
+        setSqft(first.sqft ? String(first.sqft) : "");
+        setRoad(first.road || "");
+        setFront(first.front == null ? "" : String(first.front));
+        setBack(first.back == null ? "" : String(first.back));
+        setDepth(first.depth == null ? "" : String(first.depth));
+        setDepth2(first.depth2 == null ? "" : String(first.depth2));
+        setDimensionUnit("ft");
+        setPoints([]);
+        setEditingId("");
+        setSideLayout("four");
+        resetGeometryDerivedSideAssignments();
+        setManualPhase("select");
+        setToolMode("select");
+      }
+      notify(`${Number(result.count || 0)} new shops inventory me add hui. Ab dropdown se ek-ek shop select karke boundary map karein.`);
+      await reload();
     } catch (error) {
       notify(error instanceof Error ? error.message : "New shops add nahi hui");
     } finally {
