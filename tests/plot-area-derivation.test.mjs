@@ -78,3 +78,31 @@ test("project-wide side calibration can fill a plot whose own side values are mi
   assert.equal(plots[1].sqft, 200);
   assert.equal(plots[1].areaSource, "mapped-geometry");
 });
+
+test("explicit 25 by 60 plot dimensions calculate 1500 square feet, not scaled image area", () => {
+  const [plot] = deriveCustomerPlotAreas([squarePlot("46", {
+    dimensions: "25' × 60'",
+    front: 25, back: 25, depth: 60, depth2: 60,
+  })], { mapWidth: 7680, mapHeight: 4320, sqmToSqftFactor: 10.7639 });
+  assert.equal(plot.sqft, 1500);
+  assert.equal(plot.sqm, 139.436);
+  assert.equal(plot.sqyd, 166.667);
+  assert.equal(plot.areaSource, "side-measurements");
+});
+
+test("consistent saved rectangle side lengths take precedence over image pixel scaling", () => {
+  const [plot] = deriveCustomerPlotAreas([squarePlot("R", {
+    dimensions: "",
+    polygon: JSON.stringify([[0,0],[0.12,0],[0.12,0.24],[0,0.24]]),
+    front: 25, back: 25, depth: 60, depth2: 60,
+  })], { mapWidth: 7680, mapHeight: 4320 });
+  assert.equal(plot.sqft, 1500);
+  assert.equal(plot.areaSource, "side-measurements");
+});
+
+test("customer area basis label is removed from the drawer", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(new URL("../public/project/index.html", import.meta.url), "utf8");
+  assert.doesNotMatch(html, /id="areaCalculationNote"/);
+  assert.doesNotMatch(html, /Calculated from mapped boundaries and saved side measurements/);
+});
