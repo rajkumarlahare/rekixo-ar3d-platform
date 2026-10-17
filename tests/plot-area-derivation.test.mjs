@@ -42,7 +42,7 @@ test("existing area values are retained and missing unit conversions are filled"
     mapWidth: 1000, mapHeight: 1000,
   });
   assert.equal(plot.sqft, 500);
-  assert.equal(plot.sqm, 46.449);
+  assert.equal(plot.sqm, 46.452);
   assert.equal(plot.sqyd, 55.556);
   assert.equal(plot.areaSource, undefined);
 });
