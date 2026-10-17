@@ -57,12 +57,17 @@ test('three-side semantics omit phantom Depth B and legacy four-side fallback st
 
 test('both mapper SQL paths save four sides and preserve sales state',()=>{
   const api=fs.readFileSync('app/api/super-mapper/route.ts','utf8');
-  const sqls=[...api.matchAll(/"(INSERT INTO plots [^"\n]+)"/g)].map(m=>m[1]);
+  const sqls=[...api.matchAll(/"(INSERT INTO plots [^"\n]+)"/g)].map(m=>m[1]).filter(sql=>sql.includes("ON CONFLICT(project_id,id) DO UPDATE SET"));
   const names=('project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,'+
     'dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,'+
     'front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,'+
     'polygon,status,notes,featured,inventory_active,updated_at').split(',');
   assert.equal(sqls.length,2);
+  const additiveSql=[...api.matchAll(/"(INSERT INTO plots [^"\n]+)"/g)]
+    .map(m=>m[1])
+    .find(sql=>!sql.includes("ON CONFLICT(project_id,id) DO UPDATE SET"));
+  assert.ok(additiveSql,"New inventory action must use a distinct insert-only SQL path");
+  assert.match(api,/body\.action === "add_inventory_plots"/);
   for(const [index,sql] of sqls.entries()){
     const db=new DatabaseSync(':memory:');
     try{

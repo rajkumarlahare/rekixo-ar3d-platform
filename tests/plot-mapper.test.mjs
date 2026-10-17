@@ -81,3 +81,16 @@ test("auto CAD mapper is owner-only, project-native and keeps precise manual fal
   assert.match(superAdmin, /PlotMapper/);
   assert.match(superAdmin, /projectId=\{projectId\}/);
 });
+
+test("safe shop inventory addition is additive and initializes only new polygons empty", async () => {
+  const api = await source("../app/api/super-mapper/route.ts");
+  const mapper = await source("../app/plot-mapper.tsx");
+  assert.match(api, /body\.action === "add_inventory_plots"/);
+  assert.match(api, /INSERT INTO plots \(project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2/);
+  assert.match(api, /collisions = ids\.filter/);
+  assert.match(api, /mapper\.inventory_plots_added/);
+  assert.match(api, /created\.results\.some/);
+  assert.match(mapper, /Add 5 Shops \(8 x 15 ft\)/);
+  assert.match(mapper, /function createInventoryPlots/);
+  assert.match(mapper, /window\.confirm\("Shop-1 se Shop-5 tak paanch inventory rows add karni hain/);
+});
