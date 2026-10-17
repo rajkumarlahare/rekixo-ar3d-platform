@@ -63,6 +63,7 @@ test("geometry fallback is fail-closed when there is no usable side calibration"
 
 test("project-wide side calibration can fill a plot whose own side values are missing", () => {
   const calibrated = squarePlot("A");
+  const calibratedAgain = squarePlot("A2", { polygon: JSON.stringify([[0.4,0],[0.5,0],[0.5,0.2],[0.4,0.2]]) });
   const missingSides = squarePlot("B", {
     front: null, depth: null, back: null, depth2: null,
     dimensionUnit: "",
@@ -71,7 +72,7 @@ test("project-wide side calibration can fill a plot whose own side values are mi
     frontEdgeIndex: null, backEdgeIndex: null, depthEdgeIndex: null, depth2EdgeIndex: null,
     polygon: JSON.stringify([[0.2,0],[0.3,0],[0.3,0.2],[0.2,0.2]]),
   });
-  const plots = deriveCustomerPlotAreas([calibrated, missingSides], {
+  const plots = deriveCustomerPlotAreas([calibrated, calibratedAgain, missingSides], {
     mapWidth: 1000, mapHeight: 1000,
   });
   assert.equal(plots[1].sqft, 200);
