@@ -11,15 +11,20 @@ CREATE TABLE _anandvan_area_migration_guard (
   ok INTEGER NOT NULL CHECK (ok = 1)
 );
 INSERT INTO _anandvan_area_migration_guard(ok)
-SELECT CASE WHEN
-  (SELECT COUNT(*) FROM projects WHERE slug='anandvan-city-south-block-2ee1a1' AND lower(trim(name))='anandvan city south block' AND status='active') = 1
-  AND (SELECT COUNT(*) FROM plots
-       WHERE project_id=(SELECT id FROM projects WHERE slug='anandvan-city-south-block-2ee1a1' AND lower(trim(name))='anandvan city south block' AND status='active' LIMIT 1)
-         AND inventory_active=1 AND id IN ('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','E-20','E-21','E-22','E-23','24','L-25','L-26','L-27','L-28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47')) = 47
-  AND (SELECT COUNT(*) FROM published_plots
-       WHERE project_id=(SELECT id FROM projects WHERE slug='anandvan-city-south-block-2ee1a1' AND lower(trim(name))='anandvan city south block' AND status='active' LIMIT 1)
-         AND id IN ('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','E-20','E-21','E-22','E-23','24','L-25','L-26','L-27','L-28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47')) = 47
-THEN 1 ELSE 0 END;
+SELECT CASE
+  WHEN (SELECT COUNT(*) FROM projects WHERE slug='anandvan-city-south-block-2ee1a1' AND lower(trim(name))='anandvan city south block' AND status='active') = 1
+   AND (SELECT COUNT(*) FROM plots
+        WHERE project_id=(SELECT id FROM projects WHERE slug='anandvan-city-south-block-2ee1a1' AND lower(trim(name))='anandvan city south block' AND status='active' LIMIT 1)
+          AND inventory_active=1 AND id IN ('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','E-20','E-21','E-22','E-23','24','L-25','L-26','L-27','L-28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47')) = 47
+   AND (SELECT COUNT(*) FROM published_plots
+        WHERE project_id=(SELECT id FROM projects WHERE slug='anandvan-city-south-block-2ee1a1' AND lower(trim(name))='anandvan city south block' AND status='active' LIMIT 1)
+          AND id IN ('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','E-20','E-21','E-22','E-23','24','L-25','L-26','L-27','L-28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47')) = 47
+  THEN 1
+  -- Browser E2E applies migrations to a blank local D1 before inserting fixtures.
+  -- In that disposable empty database, this project-specific data migration is a no-op.
+  WHEN (SELECT COUNT(*) FROM projects WHERE status='active') = 0 THEN 1
+  ELSE 0
+END;
 DROP TABLE _anandvan_area_migration_guard;
 
 -- Match the project-specific conversion policy in the trusted workbook.
