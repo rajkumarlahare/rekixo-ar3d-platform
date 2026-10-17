@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migration = await readFile(new URL("../drizzle/0036_anandvan_area_values_from_workbook.sql", import.meta.url), "utf8");
+const script = await readFile(new URL("../scripts/sql/apply-anandvan-area-values-once.sql", import.meta.url), "utf8");
 const publicRoute = await readFile(new URL("../app/api/public-data/route.ts", import.meta.url), "utf8");
 const snapshot = await readFile(new URL("../app/public-publish-snapshot.ts", import.meta.url), "utf8");
 
