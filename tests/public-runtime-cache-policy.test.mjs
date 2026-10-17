@@ -6,6 +6,7 @@ const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "u
 const rootPage = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 const previewPage = await readFile(new URL("../app/preview/[projectId]/page.tsx", import.meta.url), "utf8");
 const sharedPage = await readFile(new URL("../app/projects/[slug]/page.tsx", import.meta.url), "utf8");
+const parityVerifier = await readFile(new URL("../scripts/verify-tiyansh-generic-parity.mjs", import.meta.url), "utf8");
 
 test("public project runtime shell and JS revalidate instead of staying stale in browser cache", () => {
   assert.match(worker, /function isPublicProjectRuntimeAsset/);
@@ -18,4 +19,5 @@ test("all iframe entry points share runtime v68 for this rollout", () => {
   assert.match(rootPage, /\/project\/index\.html\?projectId=.*&pv=.*&v=68/);
   assert.match(previewPage, /preview=1&v=68/);
   assert.match(sharedPage, /projectSlug=.*&pv=.*&v=68/);
+  assert.match(parityVerifier, /&v=68/);
 });
