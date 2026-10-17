@@ -10,6 +10,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getAdminSession } from "@/modules/auth";
 import { plotFacingText, plotFacingTextForNorthAngle } from "@/modules/plots";
+import { deriveCustomerPlotAreas } from "@/app/plot-area-derivation.mjs";
 import {
   PROJECT_CONTACT_KEYS,
   publicProjectId,
@@ -398,6 +399,23 @@ export async function GET(request: Request) {
       liveStatusRows.map((item) => [item.id, item.status]),
     );
 
+    // Published snapshots preserve the submitted area columns exactly. Older
+    // imports can legitimately carry 0 as "unknown"; derive those values for
+    // the public response from the mapped polygon and project side measurements
+    // instead of showing a misleading 0 Sq.Ft / 0 Sq.M / 0 Sq.Yd.
+    const areaPlots = deriveCustomerPlotAreas(
+      plotRows.map((plot) => ({
+        ...plot,
+        edgeMeasurements: edgeMeasurementsByPlot.get(plot.id) || [],
+      })),
+      {
+        mapWidth: publicSettings.mapWidth,
+        mapHeight: publicSettings.mapHeight,
+        sqmToSqftFactor: publicSettings.sqmToSqftFactor,
+      },
+    );
+    const areaPlotById = new Map(areaPlots.map((plot) => [plot.id, plot]));
+
     return Response.json(
       {
         projectId,
@@ -413,7 +431,19 @@ export async function GET(request: Request) {
         platformUrl: links.platformUrl,
         engine3d,
         plots: plotRows.map((plot) => {
-          const { notes, ...publicPlot } = plot;
+          const calculatedArea = areaPlotById.get(plot.id);
+          const plotWithArea = calculatedArea
+            ? {
+                ...plot,
+                sqft: calculatedArea.sqft,
+                sqm: calculatedArea.sqm,
+                sqyd: calculatedArea.sqyd,
+                ...(calculatedArea.areaSource
+                  ? { areaSource: calculatedArea.areaSource }
+                  : {}),
+              }
+            : plot;
+          const { notes, ...publicPlot } = plotWithArea;
           void notes;
           delete (publicPlot as { inventoryActive?: unknown }).inventoryActive;
           const edgeMeasurements = (edgeMeasurementsByPlot.get(plot.id) || []).map(
