@@ -1672,8 +1672,20 @@ export async function POST(request: Request) {
         "INSERT INTO plots (project_id,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit,front_edge_index,depth_edge_index,back_edge_index,depth2_edge_index,front_label,depth_label,back_label,depth2_label,side_dimensions,edge_semantics,polygon,status,notes,featured,inventory_active,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
       ).bind(projectId,row.id,row.area,sqm,sqyd,row.dimensions,row.road,row.front,row.depth,row.back,row.depth2,row.unit,null,null,null,null,null,null,null,null,null,null,"","available",row.notes,0,1,now);
     });
+    const beforeCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND inventory_active=1",
+    ).bind(projectId).first<{ total: number }>();
     try {
       await env.DB.batch(statements);
+      const afterCount = await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM plots WHERE project_id=? AND inventory_active=1",
+      ).bind(projectId).first<{ total: number }>();
+      if (Number(afterCount?.total || 0) !== Number(beforeCount?.total || 0) + cleaned.length) {
+        await env.DB.batch(cleaned.map((row) => env.DB.prepare(
+          "UPDATE plots SET inventory_active=0,updated_at=? WHERE project_id=? AND id=?",
+        ).bind(now, projectId, row.id)));
+        return Response.json({ error: "Shop rows verification failed; newly added rows were deactivated; existing rows untouched" }, { status: 409 });
+      }
     } catch {
       return Response.json({ error: "New shop inventory create nahi hui; existing rows untouched rahe" }, { status: 409 });
     }
@@ -1683,6 +1695,12 @@ export async function POST(request: Request) {
     const created = await env.DB.prepare(
       `SELECT project_id AS projectId,id,sqft,sqm,sqyd,dimensions,road,front,depth,back,depth2,dimension_unit AS dimensionUnit,front_edge_index AS frontEdgeIndex,depth_edge_index AS depthEdgeIndex,back_edge_index AS backEdgeIndex,depth2_edge_index AS depth2EdgeIndex,front_label AS frontLabel,depth_label AS depthLabel,back_label AS backLabel,depth2_label AS depth2Label,side_dimensions AS sideDimensions,edge_semantics AS edgeSemantics,polygon,status,notes,featured,inventory_active AS inventoryActive,updated_at AS updatedAt FROM plots WHERE project_id=? AND id IN (${ids.map(() => "?").join(",")}) ORDER BY id`
     ).bind(projectId, ...ids).all();
+    if (created.results.length !== cleaned.length || created.results.some((row) => !row.inventoryActive || row.polygon)) {
+      await env.DB.batch(cleaned.map((row) => env.DB.prepare(
+        "UPDATE plots SET inventory_active=0,updated_at=? WHERE project_id=? AND id=?",
+      ).bind(now, projectId, row.id)));
+      return Response.json({ error: "Shop create read-back verification failed; newly added rows deactivated" }, { status: 409 });
+    }
     return Response.json({ ok: true, count: created.results.length, plots: created.results });
   }
 
