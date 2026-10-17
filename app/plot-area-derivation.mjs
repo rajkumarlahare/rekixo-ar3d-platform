@@ -134,6 +134,33 @@ function polygonAreaPixels(points, width, height) {
   return Math.abs(twiceArea) / 2;
 }
 
+function dimensionsAreaSqft(plot, factor) {
+  const dimensions = String(plot.dimensions || "").replace(/,/g, "").trim();
+  // Treat simple approved-plan dimensions such as "25' × 60'", "25 x 60 ft",
+  // or "25 ft by 60 ft" as authoritative for a rectangular plot.
+  const match = dimensions.match(/^\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet|foot)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*(?:'|ft|feet|foot)?\s*$/i);
+  if (!match) return 0;
+  const first = Number(match[1]), second = Number(match[2]);
+  if (!(first > 0 && second > 0)) return 0;
+  return first * second;
+}
+
+function sideRectangleAreaSqft(plot) {
+  const unit = detectUnit(plot, Array.isArray(plot.edgeMeasurements) ? plot.edgeMeasurements : []);
+  if (!unit) return 0;
+  const front = measurementLength(plot, SIDE_ROLES[0], unit);
+  const back = measurementLength(plot, SIDE_ROLES[1], unit);
+  const depthA = measurementLength(plot, SIDE_ROLES[2], unit);
+  const depthB = measurementLength(plot, SIDE_ROLES[3], unit);
+  // Both widths and depths must agree before using a rectangle formula.
+  // This deliberately avoids applying a rectangle formula to tapered/irregular plots.
+  const close = (a, b) => a > 0 && b > 0 && Math.abs(a - b) / Math.max(a, b) <= 0.01;
+  if (close(front, back) && close(depthA, depthB)) {
+    return ((front + back) / 2) * ((depthA + depthB) / 2);
+  }
+  return 0;
+}
+
 function calibrationFor(plot, width, height) {
   const points = parsePoints(plot.polygon);
   if (!points) return { points: null, pixelArea: 0, samples: [] };
@@ -188,6 +215,18 @@ export function deriveCustomerPlotAreas(plots, options = {}) {
     if (!(sqyd > 0) && sqm > 0) sqyd = sqm * SQM_TO_SQYD_FACTOR;
     if (!(sqm > 0) && sqyd > 0) sqm = sqyd / SQM_TO_SQYD_FACTOR;
     if (!(sqft > 0) && sqm > 0) sqft = sqm * factor;
+
+    if (!(sqft > 0) && !(sqm > 0) && !(sqyd > 0)) {
+      const dimensionsArea = dimensionsAreaSqft(plot, factor);
+      const sideArea = dimensionsArea > 0 ? 0 : sideRectangleAreaSqft(plot);
+      const explicitArea = dimensionsArea > 0 ? dimensionsArea : sideArea;
+      if (explicitArea > 0 && explicitArea <= 100_000_000) {
+        sqft = explicitArea;
+        sqm = sqft / factor;
+        sqyd = sqm * SQM_TO_SQYD_FACTOR;
+        areaSource = "side-measurements";
+      }
+    }
 
     if (!(sqft > 0) && !(sqm > 0) && !(sqyd > 0) && item.pixelArea > 0) {
       const local = item.samples.filter((value) => Number.isFinite(value) && value > 0);
