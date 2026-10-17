@@ -3693,6 +3693,29 @@ export default function PlotMapper({
     );
   }
 
+  async function createInventoryPlots(rows: Array<{id:string;dimensions:string;front:number;back:number;depth:number;depth2:number;dimensionUnit:"ft";sqft:number;road:string;notes:string}>) {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/super-mapper", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId, action: "add_inventory_plots", newPlots: rows }),
+      });
+      const result = await apiResult(response);
+      await reload();
+      notify(`${Number(result.count || 0)} new shops inventory me add hui. Ab dropdown se ek-ek shop select karke boundary map karein.`);
+      const created = (result.plots || []) as Plot[];
+      const first = [...created].sort(plotSort)[0];
+      if (first) loadPlotDetails(first, false);
+      setManualPhase("select");
+      setToolMode("select");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "New shops add nahi hui");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmPlot() {
     const id = cleanPlotId(plotId);
     const existing = plots.find((plot) => plot.id === editingId || plot.id === id);
@@ -4346,6 +4369,29 @@ export default function PlotMapper({
           <span className={unmappedPlots.length ? "active" : mappedPlots.length ? "done" : ""}><b>4</b> Review</span>
           <span className={mappedPlots.length && !unmappedPlots.length ? "done" : ""}><b>5</b> Publish</span>
         </div>
+
+        {!completedProject && (
+          <div className="mapper-inventory-add card">
+            <div className="section-title">
+              <Target />
+              <div>
+                <h3>Add Shops (safe inventory addition)</h3>
+                <p>Existing plots, polygons, status, pricing aur published customer snapshot untouched rahenge. New shops un-mapped entries hongi.</p>
+              </div>
+            </div>
+            <button type="button" disabled={busy} onClick={() => {
+              const confirmed = window.confirm("Shop-1 se Shop-5 tak paanch inventory rows add karni hain? Existing plot data overwrite nahi hoga. Publish karne tak customer site unchanged rahegi.");
+              if (!confirmed) return;
+              void createInventoryPlots([
+                {id:"SHOP-1",dimensions:"8 x 15 ft",front:8,back:8,depth:15,depth2:15,dimensionUnit:"ft",sqft:120,road:"Road-facing shop frontage",notes:"Added separately; map boundary on masterplan. Source: owner-provided size 8 x 15 ft; Front 8 ft."},
+                {id:"SHOP-2",dimensions:"8 x 15 ft",front:8,back:8,depth:15,depth2:15,dimensionUnit:"ft",sqft:120,road:"Road-facing shop frontage",notes:"Added separately; map boundary on masterplan. Source: owner-provided size 8 x 15 ft; Front 8 ft."},
+                {id:"SHOP-3",dimensions:"8 x 15 ft",front:8,back:8,depth:15,depth2:15,dimensionUnit:"ft",sqft:120,road:"Road-facing shop frontage",notes:"Added separately; map boundary on masterplan. Source: owner-provided size 8 x 15 ft; Front 8 ft."},
+                {id:"SHOP-4",dimensions:"8 x 15 ft",front:8,back:8,depth:15,depth2:15,dimensionUnit:"ft",sqft:120,road:"Road-facing shop frontage",notes:"Added separately; map boundary on masterplan. Source: owner-provided size 8 x 15 ft; Front 8 ft."},
+                {id:"SHOP-5",dimensions:"8 x 15 ft",front:8,back:8,depth:15,depth2:15,dimensionUnit:"ft",sqft:120,road:"Road-facing shop frontage",notes:"Added separately; map boundary on masterplan. Source: owner-provided size 8 x 15 ft; Front 8 ft."},
+              ]);
+            }}><span>Add 5 Shops (8 x 15 ft)</span></button>
+          </div>
+        )}
 
         <div className="mapper-normal-flow">
           <b>Normal new-project flow</b>
