@@ -27,7 +27,6 @@ export type AreaDerivationPlot = {
     unit?: unknown;
     rawLabel?: unknown;
   }>;
-  [key: string]: unknown;
 };
 
 export type CustomerPlotAreaOptions = {
